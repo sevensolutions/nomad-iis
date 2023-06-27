@@ -1,0 +1,20 @@
+﻿{
+	"profiles": {
+		"Debug": {
+			"commandName": "Project",
+			"dotnetRunMessages": true,
+			"launchBrowser": false,
+			"environmentVariables": {
+				"ASPNETCORE_ENVIRONMENT": "Development"
+			}
+		},
+		"Nomad": {
+			"commandName": "Executable",
+			"executablePath": "../../../../../nomad/nomad.exe",
+			"commandLineArgs": "agent -dev -config=../../../../../examples/agent.hcl -plugin-dir=$(MSBuildProjectDirectory)\\bin\\Debug\\net7.0",
+			"environmentVariables": {
+				"ASPNETCORE_ENVIRONMENT": "Development"
+			}
+		}
+	}
+}

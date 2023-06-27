@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.6.33417.168
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NomadIIS", "NomadIIS\NomadIIS.csproj", "{F7D643AC-C040-47C1-9F69-C1A8BC540550}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{F7D643AC-C040-47C1-9F69-C1A8BC540550}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F7D643AC-C040-47C1-9F69-C1A8BC540550}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F7D643AC-C040-47C1-9F69-C1A8BC540550}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F7D643AC-C040-47C1-9F69-C1A8BC540550}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {48BDBAE2-34D7-4C6C-9F37-FB55F7EB8598}
+	EndGlobalSection
+EndGlobal
