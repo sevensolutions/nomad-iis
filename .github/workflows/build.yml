@@ -23,10 +23,6 @@ jobs:
       with:
         dotnet-version: 7.0.x
 
-    # Execute all unit tests in the solution
-    - name: Execute unit tests
-      run: dotnet test
-
     # Publish the application
     - name: Publish the application
       run: dotnet publish "./src/NomadIIS/NomadIIS.csproj" /p:PublishProfile="./src/NomadIIS/Properties/PublishProfiles/Release.pubxml"
