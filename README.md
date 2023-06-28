@@ -1,5 +1,11 @@
 ﻿# HashiCorp Nomad IIS Task Driver
 
+<p align="center" style="text-align:center;">
+  <a href="https://github.com/sevensolutions/nomad-iis">
+    <img alt="Nomad IIS Logo" src="artwork/logo.svg" width="600" />
+  </a>
+</p>
+
 This repository contains a task driver for HashiCorp Nomad to run web-applications in IIS on Windows machines. Unlike most other Nomad task drivers, this one is written in the C# language using ASP.NET 7.
 It uses the *Microsoft.Web.Administration*-API to communicate with IIS.
 Feel free to use it as-is or as a reference implementation for your own C#-based Nomad-plugins.
@@ -23,7 +29,7 @@ This Task Driver creates an IIS Application Pool and Website for every Nomad Tas
 plugin "nomad_iis" {
   config {
     enabled = true,
-	stats_interval = "1s"
+    stats_interval = "1s"
   }
 }
 ```
@@ -62,7 +68,7 @@ job "iis-test" {
   group "iis-test" {
     count = 1
 	
-	network {
+    network {
       port "httplabel" {}
     }
 
@@ -70,12 +76,12 @@ job "iis-test" {
       driver = "iis"
 
       config {
-	    path = "C:\\inetpub\\wwwroot"
+        path = "C:\\inetpub\\wwwroot"
 		
-		binding {
-		  type = "http"
-		  port = "httplabel"
-		}
+        binding {
+          type = "http"
+          port = "httplabel"
+        }
       }
 	  
       resources {
