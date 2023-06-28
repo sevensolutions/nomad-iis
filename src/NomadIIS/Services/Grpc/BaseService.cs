@@ -30,7 +30,7 @@ public sealed class BaseService : BasePluginBase
 		{
 			Type = PluginType.Driver,
 			Name = "iis",
-			PluginVersion = "1.0",
+			PluginVersion = "0.1.0",
 			PluginApiVersions =
 			{
 				{ "0.1.0" }
