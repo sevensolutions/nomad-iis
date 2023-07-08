@@ -178,16 +178,30 @@ namespace NomadIIS.Services
 
 				if ( website is not null )
 				{
-					if ( website.State != ObjectState.Stopped )
-						website.Stop();
+					try
+					{
+						if ( website.State != ObjectState.Stopped )
+							website.Stop();
+					}
+					catch ( Exception ex )
+					{
+						logger.LogWarning( ex, $"Failed to stop Website {_websiteName}." );
+					}
 
 					serverManager.Sites.Remove( website );
 				}
 
 				if ( appPool is not null )
 				{
-					if ( appPool.State != ObjectState.Stopped )
-						appPool.Stop();
+					try
+					{
+						if ( appPool.State != ObjectState.Stopped )
+							appPool.Stop();
+					}
+					catch ( Exception ex )
+					{
+						logger.LogWarning( ex, $"Failed to stop AppPool {_appPoolName}." );
+					}
 
 					serverManager.ApplicationPools.Remove( appPool );
 				}
