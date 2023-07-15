@@ -133,6 +133,17 @@ public static class ConfigSchemas
 					}
 				},
 				{
+					"enable_udp_logging", new Spec()
+					{
+						Attr = new Attr()
+						{
+							Name = "enable_udp_logging",
+							Type = "bool",
+							Required = false
+						}
+					}
+				},
+				{
 					"bindings", new Spec()
 					{
 						BlockList = new BlockList()

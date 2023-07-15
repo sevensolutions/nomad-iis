@@ -115,7 +115,7 @@ public sealed class DriverService : Driver.DriverBase
 
 		try
 		{
-			await handle.RunAsync( _logger, task );
+			await handle.RunAsync( _logger, task, context.CancellationToken );
 
 			return new StartTaskResponse()
 			{

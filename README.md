@@ -49,6 +49,7 @@ plugin "nomad_iis" {
 | idle_timeout | string | no | *IIS default* | The AppPool idle timeout in the form *HH:mm:ss* |
 | disable_overlapped_recycle | bool | no | *IIS default* | Defines whether two AppPools are allowed to run while recycling |
 | periodic_restart | string | no | *IIS default* | The AppPool periodic restart interval in the form *HH:mm:ss* |
+| enable_udp_logging | bool | no | false | **Experimental!** Enables a UDP log-sink your application can log to. See example below. |
 | *bindings* | block list | no | *none* | Defines one or two port bindings. See *binding* schema below for details. |
 
 #### `binding` Block Configuration
@@ -61,6 +62,28 @@ plugin "nomad_iis" {
 | require_sni | bool | no | *IIS default* | Defines whether SNI (Server Name Indication) is required |
 | ip_address | string | no | *IIS default* | Specifies the IP-Address of the interface to listen on |
 | certificate_hash | string | no | *none* | Specifies the hash of the certificate to use |
+
+#### UDP Logging
+
+Here is an example log4net-appender on how to log to the UDP log-sink:
+
+```xml
+<appender name="UdpAppender" type="log4net.Appender.UdpAppender">
+    <localPort value="${NOMAD_STDOUT_UDP_LOCAL_PORT}" />
+    <remoteAddress value="127.0.0.1" />
+    <remotePort value="${NOMAD_STDOUT_UDP_REMOTE_PORT}" />
+    <layout type="log4net.Layout.PatternLayout, log4net">
+        <conversionPattern value="%d{dd.MM.yy HH:mm:ss.fff} %-5p [%-8t] %-35logger - %m%newline" />
+    </layout>
+</appender>
+```
+
+The UDP log-sink exposes two more environment variables:
+
+| Name | Description |
+|---|---|
+| NOMAD_STDOUT_UDP_LOCAL_PORT | The local port the appender has to use. Only messages from this port get received and forwarded to nomad. |
+| NOMAD_STDOUT_UDP_REMOTE_PORT | The remote port of the log-sink where log events must be sent to. |
 
 #### Environment Variables
 

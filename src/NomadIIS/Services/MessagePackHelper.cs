@@ -50,6 +50,9 @@ internal static class MessagePackHelper
 		if ( config.TryGetValue( "periodic_restart", out var rawPeriodicRestart ) && rawPeriodicRestart is string strPeriodicRestart && TimeSpan.TryParse( strPeriodicRestart, out var timeout2 ) )
 			periodicRestart = timeout2;
 
+		if ( !config.TryGetValue( "enable_udp_logging", out var rawEnableUdpLogging ) || rawEnableUdpLogging is not bool enableUdpLogging )
+			enableUdpLogging = false;
+		
 		DriverTaskConfigBinding[]? bindings = null;
 
 		if ( config.TryGetValue( "bindings", out var rawBindings ) && rawBindings is object[] objBindings )
@@ -108,6 +111,7 @@ internal static class MessagePackHelper
 			IdleTimeout = idleTimeout,
 			DisabledOverlappedRecycle = disabledOverlappedRecycle,
 			PeriodicRestart = periodicRestart,
+			EnableUdpLogging = enableUdpLogging,
 			Bindings = bindings
 		};
 	}
@@ -122,6 +126,7 @@ public sealed class DriverTaskConfig
 	public required TimeSpan? IdleTimeout { get; init; }
 	public required bool DisabledOverlappedRecycle { get; init; }
 	public required TimeSpan? PeriodicRestart { get; init; }
+	public required bool EnableUdpLogging { get; init; }
 	public required DriverTaskConfigBinding[] Bindings { get; init; }
 }
 
