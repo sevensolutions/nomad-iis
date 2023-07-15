@@ -44,7 +44,7 @@ plugin "nomad_iis" {
 |---|---|---|---|---|
 | path | string | yes | *none* | Defines the path of the web application. |
 | managed_pipeline_mode | string | no | *IIS default* | Valid options are *Integrated* or *Classic* |
-| managed_runtime_version | string | no | *IIS default* | Valid options are *v4.0*, *v2.0* |
+| managed_runtime_version | string | no | *IIS default* | Valid options are *v4.0*, *v2.0*, *None* |
 | start_mode | string | no | *IIS default* | Valid options are *OnDemand* or *AlwaysRunning* |
 | idle_timeout | string | no | *IIS default* | The AppPool idle timeout in the form *HH:mm:ss* |
 | disable_overlapped_recycle | bool | no | *IIS default* | Defines whether two AppPools are allowed to run while recycling |

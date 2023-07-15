@@ -81,7 +81,12 @@ namespace NomadIIS.Services
 					}
 
 					if ( !string.IsNullOrWhiteSpace( config.ManagedRuntimeVersion ) )
-						appPool.ManagedRuntimeVersion = config.ManagedRuntimeVersion;
+					{
+						if ( config.ManagedRuntimeVersion == "None" )
+							appPool.ManagedRuntimeVersion = "";
+						else
+							appPool.ManagedRuntimeVersion = config.ManagedRuntimeVersion;
+					}
 
 					switch ( config.StartMode )
 					{
