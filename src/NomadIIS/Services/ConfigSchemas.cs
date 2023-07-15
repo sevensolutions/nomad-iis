@@ -211,6 +211,28 @@ public static class ConfigSchemas
 													Required = false
 												}
 											}
+										},
+										{
+											"certificate_file", new Spec()
+											{
+												Attr = new Attr()
+												{
+													Name = "certificate_file",
+													Type = "string",
+													Required = false
+												}
+											}
+										},
+										{
+											"certificate_password", new Spec()
+											{
+												Attr = new Attr()
+												{
+													Name = "certificate_password",
+													Type = "string",
+													Required = false
+												}
+											}
 										}
 									}
 								}

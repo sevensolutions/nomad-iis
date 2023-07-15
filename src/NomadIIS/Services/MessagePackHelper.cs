@@ -84,6 +84,14 @@ internal static class MessagePackHelper
 				if ( binding.TryGetValue( "certificate_hash", out var rawCertificateHash ) && rawCertificateHash is string vCertificateHash )
 					certificateHash = vCertificateHash;
 
+				string? certificateFile = null;
+				if ( binding.TryGetValue( "certificate_file", out var rawCertificateFile ) && rawCertificateFile is string vCertificateFile )
+					certificateFile = vCertificateFile;
+
+				string? certificatePassword = null;
+				if ( binding.TryGetValue( "certificate_password", out var rawCertificatePassword ) && rawCertificatePassword is string vCertificatePassword )
+					certificatePassword = vCertificatePassword;
+
 				return new DriverTaskConfigBinding
 				{
 					Type = type,
@@ -91,7 +99,9 @@ internal static class MessagePackHelper
 					Hostname = hostname,
 					RequireSni = requireSni,
 					IPAddress = ipAddress,
-					CertificateHash = certificateHash
+					CertificateHash = certificateHash,
+					CertificateFile = certificateFile,
+					CertificatePassword = certificatePassword
 				};
 			} ).ToArray();
 		}
@@ -133,4 +143,6 @@ public sealed class DriverTaskConfigBinding
 	public bool? RequireSni { get; init; }
 	public string? IPAddress { get; init; }
 	public string? CertificateHash { get; init; }
+	public string? CertificateFile { get; init; }
+	public string? CertificatePassword { get; init; }
 }

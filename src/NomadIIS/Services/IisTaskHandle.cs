@@ -133,25 +133,42 @@ namespace NomadIIS.Services
 
 						foreach ( var b in bindings )
 						{
+							string? certificateHashString = null;
 							string? certificateStoreName = null;
 							byte[]? certificateHash = null;
 
-							if ( b.Binding.CertificateHash is not null )
+							if ( b.Binding.CertificateFile is not null )
 							{
-								using var store = new X509Store( StoreName.My, StoreLocation.LocalMachine );
+								var certificateFilePath = b.Binding.CertificateFile;
 
-								store.Open( OpenFlags.ReadOnly );
+								if ( !Path.IsPathRooted( certificateFilePath ) )
+									certificateFilePath = Path.Combine( task.AllocDir, task.Name, certificateFilePath );
 
-								var certificate = store.Certificates
-									.FirstOrDefault( x => x.GetCertHashString().Equals( b.Binding.CertificateHash, StringComparison.InvariantCultureIgnoreCase ) );
+								if ( !File.Exists( certificateFilePath ) )
+									throw new FileNotFoundException( $"Couldn't find certificate file {certificateFilePath}." );
+
+								var certificate = CertificateServices.InstallCertificate(
+									certificateFilePath, out var installed, b.Binding.CertificatePassword );
+
+								if ( installed )
+									await SendTaskEventAsync( $"Installed certificate: {certificate.FriendlyName}" );
+
+								certificateHashString = certificate.GetCertHashString();
+							}
+							else if ( b.Binding.CertificateHash is not null )
+								certificateHashString = b.Binding.CertificateHash;
+
+							if ( certificateHashString is not null )
+							{
+								var certificate = CertificateServices.FindCertificateByHashString( certificateHashString );
 
 								if ( certificate is null )
-									throw new KeyNotFoundException( $"Couldn't find certificate with hash {b.Binding.CertificateHash}." );
+									throw new KeyNotFoundException( $"Couldn't find certificate with hash {certificateHashString}." );
 
-								await SendTaskEventAsync( $"Using certificate: {certificate.FriendlyName}" );
+								await SendTaskEventAsync( $"Using certificate: {certificate.Value.Certificate.FriendlyName}" );
 
-								certificateStoreName = store.Name;
-								certificateHash = certificate.GetCertHash();
+								certificateStoreName = certificate.Value.StoreName;
+								certificateHash = certificate.Value.Certificate.GetCertHash();
 							}
 
 							var sslFlags = SslFlags.None;

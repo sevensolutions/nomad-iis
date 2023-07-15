@@ -61,6 +61,8 @@ plugin "nomad_iis" {
 | require_sni | bool | no | *IIS default* | Defines whether SNI (Server Name Indication) is required |
 | ip_address | string | no | *IIS default* | Specifies the IP-Address of the interface to listen on |
 | certificate_hash | string | no | *none* | Specifies the hash of the certificate to use |
+| certificate_file | string | no | *none* | Specifies a certificate file to be installed and used |
+| certificate_password | string | no | *none* | Sets the password for the specified certificate_file |
 
 #### Environment Variables
 
