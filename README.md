@@ -139,5 +139,4 @@ Run the *Release.pubxml* publish profile from Visual Studio. This will create a 
 
 ## 🚧 TODOs and Known Issues
 
-- Support HTTPS. Although you can specify *https* in the `binding` block, there is no way to specify a certificate yet.
-- Recovering a task fails when deserializing the driver state.
+Check the [Open Issues here](https://github.com/sevensolutions/nomad-iis/issues).
