@@ -57,6 +57,10 @@ plugin "nomad_iis" {
 |---|---|---|---|---|
 | type | string | yes | *none* | Defines the protocol of the port binding. Allowed values are *http* or *https*. |
 | port | string | yes | *none* | Defines the port label of a `network` block configuration |
+| hostname | string | no | *IIS default* | Only listens to the specified hostname |
+| require_sni | bool | no | *IIS default* | Defines whether SNI (Server Name Indication) is required |
+| ip_address | string | no | *IIS default* | Specifies the IP-Address of the interface to listen on |
+| certificate_hash | string | no | *none* | Specifies the hash of the certificate to use |
 
 #### Environment Variables
 

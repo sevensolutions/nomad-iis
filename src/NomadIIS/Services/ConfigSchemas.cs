@@ -167,6 +167,50 @@ public static class ConfigSchemas
 													Required = true
 												}
 											}
+										},
+										{
+											"hostname", new Spec()
+											{
+												Attr = new Attr()
+												{
+													Name = "hostname",
+													Type = "string",
+													Required = false
+												}
+											}
+										},
+										{
+											"require_sni", new Spec()
+											{
+												Attr = new Attr()
+												{
+													Name = "require_sni",
+													Type = "bool",
+													Required = false
+												}
+											}
+										},
+										{
+											"ip_address", new Spec()
+											{
+												Attr = new Attr()
+												{
+													Name = "ip_address",
+													Type = "string",
+													Required = false
+												}
+											}
+										},
+										{
+											"certificate_hash", new Spec()
+											{
+												Attr = new Attr()
+												{
+													Name = "certificate_hash",
+													Type = "string",
+													Required = false
+												}
+											}
 										}
 									}
 								}

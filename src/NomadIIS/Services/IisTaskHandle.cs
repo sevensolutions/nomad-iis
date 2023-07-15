@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -55,10 +56,10 @@ namespace NomadIIS.Services
 				if ( port is null )
 					throw new KeyNotFoundException( $"Couldn't resolve binding-port with label \"{binding.PortLabel}\" in the network config." );
 
-				return new { Type = binding.Type, PortMapping = port };
+				return new { Binding = binding, PortMapping = port };
 			} ).ToArray();
 
-			await _owner.LockAsync( serverManager =>
+			await _owner.LockAsync( async serverManager =>
 			{
 				// Create AppPool
 				logger.LogInformation( $"Task {task.Id}: Creating AppPool and Website with name {_appPoolName}..." );
@@ -131,12 +132,46 @@ namespace NomadIIS.Services
 							application = website.Applications.Add( "/", appPath );
 
 						foreach ( var b in bindings )
-							website.Bindings.Add( $"*:{b.PortMapping.Value}:", b.Type );
+						{
+							string? certificateStoreName = null;
+							byte[]? certificateHash = null;
+
+							if ( b.Binding.CertificateHash is not null )
+							{
+								using var store = new X509Store( StoreName.My, StoreLocation.LocalMachine );
+
+								store.Open( OpenFlags.ReadOnly );
+
+								var certificate = store.Certificates
+									.FirstOrDefault( x => x.GetCertHashString().Equals( b.Binding.CertificateHash, StringComparison.InvariantCultureIgnoreCase ) );
+
+								if ( certificate is null )
+									throw new KeyNotFoundException( $"Couldn't find certificate with hash {b.Binding.CertificateHash}." );
+
+								await SendTaskEventAsync( $"Using certificate: {certificate.FriendlyName}" );
+
+								certificateStoreName = store.Name;
+								certificateHash = certificate.GetCertHash();
+							}
+
+							var sslFlags = SslFlags.None;
+							if ( b.Binding.RequireSni is not null && b.Binding.RequireSni.Value )
+								sslFlags |= SslFlags.Sni;
+
+							var ipAddress = b.Binding.IPAddress ?? "*";
+
+							// Note: Certificate needs to be specified in this Add() method. Otherwise it doesn't work.
+							var binding = website.Bindings.Add(
+								$"{ipAddress}:{b.PortMapping.Value}:{b.Binding.Hostname}",
+								certificateHash, certificateStoreName, sslFlags );
+							
+							binding.Protocol = b.Binding.Type;
+						}
 
 						serverManager.Sites.Add( website );
 					}
 				}
-				catch ( Exception )
+				catch ( Exception ex )
 				{
 					// Try to clean up
 					var website = serverManager.Sites.FirstOrDefault( x => x.Name == _websiteName );
@@ -147,10 +182,10 @@ namespace NomadIIS.Services
 					if ( appPool2 is not null )
 						serverManager.ApplicationPools.Remove( appPool2 );
 
+					await SendTaskEventAsync( $"Error: {ex.Message}" );
+
 					throw;
 				}
-
-				return Task.CompletedTask;
 			} );
 
 			await SendTaskEventAsync( $"Application started, Name: {_appPoolName}" );

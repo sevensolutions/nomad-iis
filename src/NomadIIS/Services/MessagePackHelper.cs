@@ -2,6 +2,7 @@
 using MessagePack;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -67,7 +68,31 @@ internal static class MessagePackHelper
 				if ( type != "http" && type != "https" )
 					throw new NotSupportedException( "Binding type must be either http or https." );
 
-				return new DriverTaskConfigBinding { Type = type, PortLabel = port };
+				string? hostname = null;
+				if ( binding.TryGetValue( "hostname", out var rawHostname ) && rawHostname is string vHostname )
+					hostname = vHostname;
+
+				bool? requireSni = null;
+				if ( binding.TryGetValue( "require_sni", out var rawRequireSni ) && rawRequireSni is bool vRequireSni )
+					requireSni = vRequireSni;
+
+				string? ipAddress = null;
+				if ( binding.TryGetValue( "ip_address", out var rawIpAddress ) && rawIpAddress is string vIpAddress )
+					ipAddress = vIpAddress;
+
+				string? certificateHash = null;
+				if ( binding.TryGetValue( "certificate_hash", out var rawCertificateHash ) && rawCertificateHash is string vCertificateHash )
+					certificateHash = vCertificateHash;
+
+				return new DriverTaskConfigBinding
+				{
+					Type = type,
+					PortLabel = port,
+					Hostname = hostname,
+					RequireSni = requireSni,
+					IPAddress = ipAddress,
+					CertificateHash = certificateHash
+				};
 			} ).ToArray();
 		}
 
@@ -104,4 +129,8 @@ public sealed class DriverTaskConfigBinding
 {
 	public required string Type { get; init; }
 	public required string PortLabel { get; init; }
+	public string? Hostname { get; init; }
+	public bool? RequireSni { get; init; }
+	public string? IPAddress { get; init; }
+	public string? CertificateHash { get; init; }
 }
