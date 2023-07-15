@@ -112,8 +112,9 @@ namespace NomadIIS.Services
 					foreach ( var env in task.Env )
 						AddEnvironmentVariable( envVarsCollection, env.Key, env.Value );
 
-					AddEnvironmentVariable( envVarsCollection, "NOMAD_STDOUT_PATH", task.StdoutPath );
-					AddEnvironmentVariable( envVarsCollection, "NOMAD_STDERR_PATH", task.StderrPath );
+					// TODOPEI: Doesn't work because of wrong permission
+					//AddEnvironmentVariable( envVarsCollection, "NOMAD_STDOUT_PATH", task.StdoutPath );
+					//AddEnvironmentVariable( envVarsCollection, "NOMAD_STDERR_PATH", task.StderrPath );
 				}
 
 				// Create Website

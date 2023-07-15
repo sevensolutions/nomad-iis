@@ -47,7 +47,6 @@ public sealed class DriverService : Driver.DriverBase
 		} );
 	}
 
-	// Called very often!
 	public override async Task Fingerprint ( FingerprintRequest request, IServerStreamWriter<FingerprintResponse> responseStream, ServerCallContext context )
 	{
 		_logger.LogDebug( nameof( Fingerprint ) );
