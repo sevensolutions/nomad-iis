@@ -47,7 +47,7 @@ namespace NomadIIS.Services
 			var appPath = config.Path;
 
 			if ( !Path.IsPathRooted( appPath ) )
-				appPath = Path.Combine( task.AllocDir, appPath );
+				appPath = Path.Combine( task.AllocDir, task.Name, appPath );
 
 			var bindings = config.Bindings.Select( binding =>
 			{
