@@ -32,14 +32,14 @@ namespace NomadIIS.Services
 
 		public string TaskId { get; }
 
-		public async Task<IisTaskHandleState> RunAsync ( ILogger<DriverService> logger, TaskConfig task )
+		public async Task RunAsync ( ILogger<DriverService> logger, TaskConfig task )
 		{
 			_taskConfig = task;
 			_startDate = DateTime.UtcNow;
 
 			var ports = task.Resources.Ports;
 
-			_appPoolName = $"nomad-{Guid.NewGuid():N}";
+			_appPoolName = GetAppPoolName( task );
 			_websiteName = _appPoolName;
 
 			var config = task.MsgpackDriverConfig.DecodeAsTaskConfig();
@@ -150,12 +150,6 @@ namespace NomadIIS.Services
 
 			await SendTaskEventAsync( $"Application started, Name: {_appPoolName}" );
 
-			return new IisTaskHandleState()
-			{
-				AppPoolName = _appPoolName,
-				WebsiteName = _websiteName
-			};
-
 			void AddEnvironmentVariable( ConfigurationElementCollection envVarsCollection, string key, string value )
 			{
 				if ( !string.IsNullOrEmpty( key ) && !string.IsNullOrEmpty( value ) )
@@ -214,12 +208,11 @@ namespace NomadIIS.Services
 			await StopAsync( logger );
 		}
 
-		public void RecoverState ( RecoverTaskRequest request, IisTaskHandleState state )
+		public void RecoverState ( RecoverTaskRequest request )
 		{
 			_taskConfig = request.Handle.Config;
-			_appPoolName = state.AppPoolName;
-			_websiteName = state.WebsiteName;
-			_startDate = state.StartDate;
+			_appPoolName = GetAppPoolName( request.Handle.Config );
+			_websiteName = _appPoolName;
 		}
 
 		public async Task SignalAsync ( ILogger<DriverService> logger, string signal )
@@ -351,6 +344,9 @@ namespace NomadIIS.Services
 
 			_owner.Delete( this );
 		}
+
+		private static string GetAppPoolName ( TaskConfig taskConfig )
+			=> $"{taskConfig.AllocId}-{taskConfig.Name}";
 
 		private ApplicationPool GetApplicationPool ( ServerManager serverManager )
 			=> FindApplicationPool( serverManager ) ?? throw new KeyNotFoundException( $"No AppPool with name {_appPoolName} found." );

@@ -116,9 +116,7 @@ public sealed class DriverService : Driver.DriverBase
 
 		try
 		{
-			var state = await handle.RunAsync( _logger, task );
-
-			var driverState = MessagePackSerializer.Serialize( state );
+			await handle.RunAsync( _logger, task );
 
 			return new StartTaskResponse()
 			{
@@ -126,7 +124,6 @@ public sealed class DriverService : Driver.DriverBase
 				{
 					State = TaskState.Running,
 					Config = task,
-					DriverState = ByteString.CopyFrom( driverState ),
 					Version = 1 // Driver State Version
 				},
 				Result = StartTaskResponse.Types.Result.Success
@@ -249,26 +246,10 @@ public sealed class DriverService : Driver.DriverBase
 	{
 		_logger.LogDebug( nameof( RecoverTask ) );
 
-		var driverState = request.Handle.DriverState;
-		if ( driverState is not null )
-		{
-			if ( request.Handle.Version != 1 )
-				throw new NotSupportedException( $"Unsupported driver state version {request.Handle.Version}." );
+		var handle = _managementService.CreateHandle( request.TaskId );
 
-			// TODOPEI
-			/*
-			13:24:09 [] ERR Grpc.AspNetCore.Server.ServerCallHandler: Error when executing service method 'RecoverTask'.
-			MessagePack.MessagePackSerializationException: Failed to deserialize TaskDriver.Services.IisTaskHandleState value.
-			 ---> System.IO.EndOfStreamException: Attempted to read past the end of the stream.
-			*/
-
-			var state = MessagePackSerializer.Deserialize<IisTaskHandleState>( driverState.Memory );
-
-			var handle = _managementService.CreateHandle( request.TaskId );
-
-			if ( handle is not null )
-				handle.RecoverState( request, state );
-		}
+		if ( handle is not null )
+			handle.RecoverState( request );
 
 		return Task.FromResult( new RecoverTaskResponse() );
 	}
