@@ -11,6 +11,7 @@ namespace NomadIIS.Services;
 
 public sealed class ManagementService
 {
+	private bool _driverEnabled;
 	private TimeSpan _statsInterval = TimeSpan.FromSeconds( 3 );
 	private readonly ConcurrentDictionary<string, IisTaskHandle> _handles = new();
 	private readonly SemaphoreSlim _lock = new( 1, 1 );
@@ -25,10 +26,12 @@ public sealed class ManagementService
 	{
 	}
 
+	public bool DriverEnabled => _driverEnabled;
 	public TimeSpan StatsInterval => _statsInterval;
 
-	public void Configure ( TimeSpan statsInterval )
+	public void Configure ( bool enabled, TimeSpan statsInterval )
 	{
+		_driverEnabled = enabled;
 		_statsInterval = statsInterval;
 	}
 

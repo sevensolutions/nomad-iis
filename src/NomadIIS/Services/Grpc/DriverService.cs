@@ -64,34 +64,43 @@ public sealed class DriverService : Driver.DriverBase
 				FingerprintResponse.Types.HealthState status = FingerprintResponse.Types.HealthState.Undetected;
 				string healthDescription = "";
 
-				try
+				if ( _managementService.DriverEnabled )
 				{
-					using var sc = new ServiceController( "w3svc" );
-
-					switch ( sc.Status )
+					try
 					{
-						case ServiceControllerStatus.Running:
-							status = FingerprintResponse.Types.HealthState.Healthy;
-							healthDescription = "Healthy";
-							break;
+						using var sc = new ServiceController( "w3svc" );
 
-						default:
-							status = FingerprintResponse.Types.HealthState.Unhealthy;
-							healthDescription = "IIS (w3svc) is not running.";
-							break;
+						switch ( sc.Status )
+						{
+							case ServiceControllerStatus.Running:
+								status = FingerprintResponse.Types.HealthState.Healthy;
+								healthDescription = "Healthy";
+								break;
+
+							default:
+								status = FingerprintResponse.Types.HealthState.Unhealthy;
+								healthDescription = "IIS (w3svc) is not running.";
+								break;
+						}
+					}
+					catch ( Exception )
+					{
+						status = FingerprintResponse.Types.HealthState.Undetected;
+						healthDescription = "An error occurred while detecting the state of w3svc.";
 					}
 				}
-				catch ( Exception )
+				else
 				{
 					status = FingerprintResponse.Types.HealthState.Undetected;
-					healthDescription = "An error occurred while detecting the state of w3svc.";
-				}
+					healthDescription = "Driver disabled";
+				}				
 
 				await responseStream.WriteAsync( new FingerprintResponse()
 				{
 					Attributes =
 					{
-						{ "driver.iis.iis_version", new Hashicorp.Nomad.Plugins.Shared.Structs.Attribute(){ StringVal = iisVersion } }
+						{ $"driver.{PluginInfo.Name}.version", new Hashicorp.Nomad.Plugins.Shared.Structs.Attribute(){ StringVal = PluginInfo.Version } },
+						{ $"driver.{PluginInfo.Name}.iis_version", new Hashicorp.Nomad.Plugins.Shared.Structs.Attribute(){ StringVal = iisVersion } }
 					},
 					Health = status,
 					HealthDescription = healthDescription

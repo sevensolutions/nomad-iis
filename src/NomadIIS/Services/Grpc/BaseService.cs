@@ -2,6 +2,7 @@
 using Hashicorp.Nomad.Plugins.Base.Proto;
 using MessagePack;
 using Microsoft.Extensions.Logging;
+using Microsoft.Web.Administration;
 using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
@@ -28,8 +29,8 @@ public sealed class BaseService : BasePluginBase
 		return Task.FromResult( new PluginInfoResponse()
 		{
 			Type = PluginType.Driver,
-			Name = "iis",
-			PluginVersion = "0.1.0",
+			Name = NomadIIS.PluginInfo.Name,
+			PluginVersion = NomadIIS.PluginInfo.Version,
 			PluginApiVersions =
 			{
 				{ "0.1.0" }
@@ -51,11 +52,15 @@ public sealed class BaseService : BasePluginBase
 	{
 		_logger.LogInformation( nameof( SetConfig ) );
 
+		var enabled = true;
 		var statsInterval = TimeSpan.FromSeconds( 3 );
 
 		if ( request.MsgpackConfig is not null )
 		{
 			var config = MessagePackSerializer.Deserialize<Dictionary<object, object>>( request.MsgpackConfig.Memory );
+			
+			if ( config.TryGetValue( "enabled", out var rawEnabled ) && rawEnabled is bool vEnabled )
+				enabled = vEnabled;
 
 			if ( config.TryGetValue( "stats_interval", out var objStatsInterval )
 				&& objStatsInterval is string strStatsInterval &&
@@ -72,7 +77,7 @@ public sealed class BaseService : BasePluginBase
 			}
 		}
 
-		_managementService.Configure( statsInterval );
+		_managementService.Configure( enabled, statsInterval );
 
 		return Task.FromResult( new SetConfigResponse() );
 	}
