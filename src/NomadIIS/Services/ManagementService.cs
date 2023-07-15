@@ -13,6 +13,7 @@ public sealed class ManagementService
 {
 	private bool _driverEnabled;
 	private TimeSpan _statsInterval = TimeSpan.FromSeconds( 3 );
+	private TimeSpan _fingerprintInterval = TimeSpan.FromSeconds( 30 );
 	private readonly ConcurrentDictionary<string, IisTaskHandle> _handles = new();
 	private readonly SemaphoreSlim _lock = new( 1, 1 );
 	private readonly Channel<DriverTaskEvent> _eventsChannel = Channel.CreateUnbounded<DriverTaskEvent>( new UnboundedChannelOptions()
@@ -28,11 +29,13 @@ public sealed class ManagementService
 
 	public bool DriverEnabled => _driverEnabled;
 	public TimeSpan StatsInterval => _statsInterval;
+	public TimeSpan FingerprintInterval => _fingerprintInterval;
 
-	public void Configure ( bool enabled, TimeSpan statsInterval )
+	public void Configure ( bool enabled, TimeSpan? statsInterval, TimeSpan? fingerprintInterval )
 	{
 		_driverEnabled = enabled;
-		_statsInterval = statsInterval;
+		_statsInterval = statsInterval ?? _statsInterval;
+		_fingerprintInterval = fingerprintInterval ?? _fingerprintInterval;
 	}
 
 	public IisTaskHandle CreateHandle ( string taskId )

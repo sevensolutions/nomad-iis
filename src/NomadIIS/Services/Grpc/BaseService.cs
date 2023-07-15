@@ -53,7 +53,8 @@ public sealed class BaseService : BasePluginBase
 		_logger.LogInformation( nameof( SetConfig ) );
 
 		var enabled = true;
-		var statsInterval = TimeSpan.FromSeconds( 3 );
+		TimeSpan? statsInterval = null;
+		TimeSpan? fingerprintInterval = null;
 
 		if ( request.MsgpackConfig is not null )
 		{
@@ -75,9 +76,23 @@ public sealed class BaseService : BasePluginBase
 
 				statsInterval = interval.Value;
 			}
+
+			if ( config.TryGetValue( "fingerprint_interval", out var objFingerprintInterval )
+				&& objFingerprintInterval is string strFingerprintInterval &&
+				!string.IsNullOrEmpty( strFingerprintInterval ) )
+			{
+				var interval = TimeSpanHelper.TryParse( strFingerprintInterval );
+
+				if ( interval is null )
+					throw new ArgumentException( $"Invalid value for fingerprint_interval configuration value" );
+				if ( interval.Value < TimeSpan.FromSeconds( 10 ) )
+					throw new ArgumentException( $"fingerprint_interval must be at least 10s." );
+
+				fingerprintInterval = interval.Value;
+			}
 		}
 
-		_managementService.Configure( enabled, statsInterval );
+		_managementService.Configure( enabled, statsInterval, fingerprintInterval );
 
 		return Task.FromResult( new SetConfigResponse() );
 	}

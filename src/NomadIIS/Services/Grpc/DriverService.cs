@@ -106,7 +106,7 @@ public sealed class DriverService : Driver.DriverBase
 					HealthDescription = healthDescription
 				} );
 
-				await Task.Delay( TimeSpan.FromSeconds( 30 ) );
+				await Task.Delay( _managementService.FingerprintInterval, context.CancellationToken );
 			}
 		}
 		catch ( OperationCanceledException )

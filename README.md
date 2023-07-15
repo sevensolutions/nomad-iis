@@ -25,7 +25,8 @@ This Task Driver creates an IIS Application Pool and Website for every Nomad Tas
 | Option | Type | Required | Default Value | Description |
 |---|---|---|---|---|
 | enabled | bool | no | true | Enables/Disables the Nomad IIS Plugin |
-| stats_interval | string | no | 3s | Defines the interval how often the plugin should report driver statistics to Nomad. |
+| stats_interval | string | no | 3s | Defines the interval how often the plugin should report driver statistics to Nomad. The smallest possible value is 1s. |
+| fingerprint_interval | string | no | 30s | Defines the interval how often the plugin should report the driver's fingerprint to Nomad. The smallest possible value is 10s. |
 
 **Example**
 
@@ -60,7 +61,7 @@ plugin "nomad_iis" {
 | hostname | string | no | *IIS default* | Only listens to the specified hostname |
 | require_sni | bool | no | *IIS default* | Defines whether SNI (Server Name Indication) is required |
 | ip_address | string | no | *IIS default* | Specifies the IP-Address of the interface to listen on |
-| certificate_hash | string | no | *none* | Specifies the hash of the certificate to use |
+| certificate_hash | string | no | *none* | Specifies the hash of the certificate to use when using type=https |
 
 #### Environment Variables
 
