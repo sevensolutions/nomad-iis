@@ -25,7 +25,7 @@ This Task Driver creates an IIS Application Pool and Website for every Nomad Tas
 | Option | Type | Required | Default Value | Description |
 |---|---|---|---|---|
 | enabled | bool | no | true | Enables/Disables the Nomad IIS Plugin |
-| stats_interval | string | no | 3s | Defines the interval how often the plugin should report driver statistics to Nomad. At the moment this only supports the *seconds*-unit. |
+| stats_interval | string | no | 3s | Defines the interval how often the plugin should report driver statistics to Nomad. |
 
 **Example**
 
@@ -46,9 +46,9 @@ plugin "nomad_iis" {
 | managed_pipeline_mode | string | no | *IIS default* | Valid options are *Integrated* or *Classic* |
 | managed_runtime_version | string | no | *IIS default* | Valid options are *v4.0*, *v2.0*, *None* |
 | start_mode | string | no | *IIS default* | Valid options are *OnDemand* or *AlwaysRunning* |
-| idle_timeout | string | no | *IIS default* | The AppPool idle timeout in the form *HH:mm:ss* |
+| idle_timeout | string | no | *IIS default* | The AppPool idle timeout in the form *HH:mm:ss* or *[00w][00d][00h][00m][00s]* |
 | disable_overlapped_recycle | bool | no | *IIS default* | Defines whether two AppPools are allowed to run while recycling |
-| periodic_restart | string | no | *IIS default* | The AppPool periodic restart interval in the form *HH:mm:ss* |
+| periodic_restart | string | no | *IIS default* | The AppPool periodic restart interval in the form *HH:mm:ss* or *[00w][00d][00h][00m][00s]* |
 | *bindings* | block list | no | *none* | Defines one or two port bindings. See *binding* schema below for details. |
 
 #### `binding` Block Configuration

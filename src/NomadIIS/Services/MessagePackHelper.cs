@@ -39,7 +39,7 @@ internal static class MessagePackHelper
 
 		TimeSpan? idleTimeout = null;
 
-		if ( config.TryGetValue( "idle_timeout", out var rawIdleTimeout ) && rawIdleTimeout is string strIdleTimeout && TimeSpan.TryParse( strIdleTimeout, out var timeout ) )
+		if ( config.TryGetValue( "idle_timeout", out var rawIdleTimeout ) && rawIdleTimeout is string strIdleTimeout && TimeSpanHelper.TryParse( strIdleTimeout, out var timeout ) )
 			idleTimeout = timeout;
 
 		if ( !config.TryGetValue( "disable_overlapped_recycle", out var rawDisableOverlappedRecycle ) || rawDisableOverlappedRecycle is not bool disabledOverlappedRecycle )
@@ -47,7 +47,7 @@ internal static class MessagePackHelper
 
 		TimeSpan? periodicRestart = null;
 
-		if ( config.TryGetValue( "periodic_restart", out var rawPeriodicRestart ) && rawPeriodicRestart is string strPeriodicRestart && TimeSpan.TryParse( strPeriodicRestart, out var timeout2 ) )
+		if ( config.TryGetValue( "periodic_restart", out var rawPeriodicRestart ) && rawPeriodicRestart is string strPeriodicRestart && TimeSpanHelper.TryParse( strPeriodicRestart, out var timeout2 ) )
 			periodicRestart = timeout2;
 
 		DriverTaskConfigBinding[]? bindings = null;

@@ -14,7 +14,6 @@ public sealed class BaseService : BasePluginBase
 {
 	private readonly ILogger<BaseService> _logger;
 	private readonly ManagementService _managementService;
-	private static readonly Regex _intervalRegex = new Regex( @"^(?<value>\d+)(?<unit>s)$" );
 
 	public BaseService ( ILogger<BaseService> logger, ManagementService managementService )
 	{
@@ -62,19 +61,14 @@ public sealed class BaseService : BasePluginBase
 				&& objStatsInterval is string strStatsInterval &&
 				!string.IsNullOrEmpty( strStatsInterval ) )
 			{
-				var match = _intervalRegex.Match( strStatsInterval );
+				var interval = TimeSpanHelper.TryParse( strStatsInterval );
 
-				if ( match.Success )
-				{
-					var value = int.Parse( match.Groups["value"].Value );
-
-					if ( value < 1 )
-						throw new ArgumentException( $"stats_interval must be at least 1s." );
-
-					statsInterval = TimeSpan.FromSeconds( value );
-				}
-				else
+				if ( interval is null )
 					throw new ArgumentException( $"Invalid value for stats_interval configuration value" );
+				if ( interval.Value < TimeSpan.FromSeconds( 1 ) )
+					throw new ArgumentException( $"stats_interval must be at least 1s." );
+
+				statsInterval = interval.Value;
 			}
 		}
 
