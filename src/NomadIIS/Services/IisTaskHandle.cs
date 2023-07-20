@@ -387,7 +387,7 @@ public sealed class IisTaskHandle : IDisposable
 	}
 
 	private static string GetAppPoolName ( TaskConfig taskConfig )
-		=> $"{taskConfig.AllocId}-{taskConfig.Name}";
+		=> $"{taskConfig.AllocId}-{taskConfig.TaskGroupName}-{taskConfig.Name}";
 
 	private ApplicationPool GetApplicationPool ( ServerManager serverManager )
 		=> FindApplicationPool( serverManager ) ?? throw new KeyNotFoundException( $"No AppPool with name {_appPoolName} found." );

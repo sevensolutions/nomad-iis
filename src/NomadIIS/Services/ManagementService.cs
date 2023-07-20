@@ -1,4 +1,5 @@
 ﻿using Hashicorp.Nomad.Plugins.Drivers.Proto;
+using Microsoft.Extensions.Logging;
 using Microsoft.Web.Administration;
 using System;
 using System.Collections.Concurrent;
@@ -11,6 +12,7 @@ namespace NomadIIS.Services;
 
 public sealed class ManagementService
 {
+	private readonly ILogger<ManagementService> _logger;
 	private bool _driverEnabled;
 	private TimeSpan _statsInterval = TimeSpan.FromSeconds( 3 );
 	private TimeSpan _fingerprintInterval = TimeSpan.FromSeconds( 30 );
@@ -23,8 +25,9 @@ public sealed class ManagementService
 		AllowSynchronousContinuations = false,
 	} );
 
-	public ManagementService ()
+	public ManagementService ( ILogger<ManagementService> logger )
 	{
+		_logger = logger;
 	}
 
 	public bool DriverEnabled => _driverEnabled;
@@ -52,22 +55,11 @@ public sealed class ManagementService
 
 	internal async Task LockAsync ( Func<ServerManager, Task> action )
 	{
-		await _lock.WaitAsync();
-
-		var serverManager = new ServerManager();
-
-		try
+		_ = await LockAsync( async serverManager =>
 		{
 			await action( serverManager );
-
-			serverManager.CommitChanges();
-		}
-		finally
-		{
-			serverManager.Dispose();
-
-			_lock.Release();
-		}
+			return true;
+		} );
 	}
 	internal async Task<T> LockAsync<T> ( Func<ServerManager, Task<T>> action )
 	{
@@ -82,6 +74,12 @@ public sealed class ManagementService
 			serverManager.CommitChanges();
 
 			return result;
+		}
+		catch ( UnauthorizedAccessException ex )
+		{
+			_logger.LogError( ex, ex.Message );
+
+			throw;
 		}
 		finally
 		{
