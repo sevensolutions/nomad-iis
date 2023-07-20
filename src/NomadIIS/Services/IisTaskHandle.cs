@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.AccessControl;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
@@ -188,6 +189,8 @@ public sealed class IisTaskHandle : IDisposable
 				throw;
 			}
 		} );
+
+		SetupDirectoryPermissions();
 
 		await SendTaskEventAsync( $"Application started, Name: {_appPoolName}" );
 
@@ -387,7 +390,7 @@ public sealed class IisTaskHandle : IDisposable
 	}
 
 	private static string GetAppPoolName ( TaskConfig taskConfig )
-		=> $"{taskConfig.AllocId}-{taskConfig.TaskGroupName}-{taskConfig.Name}";
+		=> $"{taskConfig.AllocId}-{taskConfig.Name}";
 
 	private ApplicationPool GetApplicationPool ( ServerManager serverManager )
 		=> FindApplicationPool( serverManager ) ?? throw new KeyNotFoundException( $"No AppPool with name {_appPoolName} found." );
@@ -413,6 +416,46 @@ public sealed class IisTaskHandle : IDisposable
 		catch ( Exception )
 		{
 		}
+	}
+
+	private void SetupDirectoryPermissions ()
+	{
+		// https://developer.hashicorp.com/nomad/docs/concepts/filesystem
+
+#pragma warning disable CA1416 // Plattformkompatibilität überprüfen
+
+		var identity = $"IIS AppPool\\{_appPoolName}";
+
+		var allocDir = new DirectoryInfo( _taskConfig!.AllocDir );
+		
+		SetupDirectory( @"alloc\data", FileSystemRights.FullControl );
+		SetupDirectory( @"alloc\logs", FileSystemRights.FullControl );
+		SetupDirectory( @"alloc\tmp", FileSystemRights.FullControl );
+		SetupDirectory( $@"{_taskConfig.Name}\local", FileSystemRights.FullControl );
+		SetupDirectory( $@"{_taskConfig.Name}\secrets", FileSystemRights.Read );
+		SetupDirectory( $@"{_taskConfig.Name}\tmp", FileSystemRights.FullControl );
+
+		void SetupDirectory( string subDirectory, FileSystemRights fileSystemRights )
+		{
+			var directory = allocDir;
+
+			if ( subDirectory != "\\" )
+				directory = new DirectoryInfo( Path.Combine( directory.FullName, subDirectory ) );
+
+			if ( !directory.Exists )
+				return;
+
+			var acl = directory.GetAccessControl();
+
+			acl.AddAccessRule( new FileSystemAccessRule(
+				identity, fileSystemRights, InheritanceFlags.ContainerInherit, PropagationFlags.None, AccessControlType.Allow ) );
+			acl.AddAccessRule( new FileSystemAccessRule(
+				identity, fileSystemRights, InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow ) );
+
+			directory.SetAccessControl( acl );
+		}
+
+#pragma warning restore CA1416 // Plattformkompatibilität überprüfen
 	}
 
 	private class CpuStats
