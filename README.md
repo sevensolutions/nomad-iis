@@ -21,12 +21,12 @@ Feel free to use it as-is or as a reference implementation for your own C#-based
 | Single Web App per Nomad Task | ✔ | The Task Driver creates an IIS Application Pool and Website for every Nomad Task in the job specification. |
 | HTTP Bindings | ✔ | |
 | HTTPS Bindings | ✔ | [GH-3](https://github.com/sevensolutions/nomad-iis/issues/3) |
-| Environment Variables | ✔ | [Details](#env-variables) |
+| Environment Variables | ✔ | [Details](#-environment-variables) |
 | Resource Statistics | ✔ | [GH-13](https://github.com/sevensolutions/nomad-iis/issues/13), CPU isn't working because of a bug. |
 | Logging | ❌ | [GH-6](https://github.com/sevensolutions/nomad-iis/issues/6) |
-| Signals with `nomad alloc signal` | ✔ | [Details](#signals) |
+| Signals with `nomad alloc signal` | ✔ | [Details](#-supported-signals) |
 | Exec (Shell Access) | ❌ | I'am playing around a little bit but don't want to give you hope :/. See [GH-15](https://github.com/sevensolutions/nomad-iis/issues/15) for status. |
-| Filesystem Isolation | 🔶 | [Details](#fsisolation) |
+| Filesystem Isolation | 🔶 | [Details](#-filesystem-isolation) |
 | Nomad Networking | ❌ | |
 
 ## ⚙ Driver Configuration
@@ -107,12 +107,12 @@ job "iis-test" {
 }
 ```
 
-## 🌎 Environment Variables{#env-variables}
+## 🌎 Environment Variables
 
 All System Environment Variables available to the Nomad Client will be applied to the Application Pool.
 You can supply additional ones by using the [`env` Block](https://developer.hashicorp.com/nomad/docs/job-specification/env) in the `task` stanza.
 
-## ✨ Supported Signals{#signals}
+## ✨ Supported Signals
 
 The Nomad IIS driver supports the following signals:
 
@@ -128,7 +128,7 @@ nomad alloc signal -s RECYCLE <allocation> <task>
 
 Details about the command can be found [here](https://developer.hashicorp.com/nomad/docs/commands/alloc/signal).
 
-## 🛡 Filesystem Isolation{#fsisolation}
+## 🛡 Filesystem Isolation
 
 Because there is no `chroot` on Windows, filesystem isolation is only handled via permissions.
 For every AppPool, IIS creates a dedicated AppPool Service Account which is only allowed to access it's own directories. See commits of [GH-5](https://github.com/sevensolutions/nomad-iis/issues/5) for details.
