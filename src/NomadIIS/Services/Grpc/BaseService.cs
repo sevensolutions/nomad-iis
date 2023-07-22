@@ -2,6 +2,7 @@
 using Hashicorp.Nomad.Plugins.Base.Proto;
 using MessagePack;
 using Microsoft.Extensions.Logging;
+using Microsoft.Web.Administration;
 using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
@@ -14,7 +15,6 @@ public sealed class BaseService : BasePluginBase
 {
 	private readonly ILogger<BaseService> _logger;
 	private readonly ManagementService _managementService;
-	private static readonly Regex _intervalRegex = new Regex( @"^(?<value>\d+)(?<unit>s)$" );
 
 	public BaseService ( ILogger<BaseService> logger, ManagementService managementService )
 	{
@@ -29,8 +29,8 @@ public sealed class BaseService : BasePluginBase
 		return Task.FromResult( new PluginInfoResponse()
 		{
 			Type = PluginType.Driver,
-			Name = "iis",
-			PluginVersion = "0.1.0",
+			Name = NomadIIS.PluginInfo.Name,
+			PluginVersion = NomadIIS.PluginInfo.Version,
 			PluginApiVersions =
 			{
 				{ "0.1.0" }
@@ -52,33 +52,47 @@ public sealed class BaseService : BasePluginBase
 	{
 		_logger.LogInformation( nameof( SetConfig ) );
 
-		var statsInterval = TimeSpan.FromSeconds( 3 );
+		var enabled = true;
+		TimeSpan? statsInterval = null;
+		TimeSpan? fingerprintInterval = null;
 
 		if ( request.MsgpackConfig is not null )
 		{
 			var config = MessagePackSerializer.Deserialize<Dictionary<object, object>>( request.MsgpackConfig.Memory );
+			
+			if ( config.TryGetValue( "enabled", out var rawEnabled ) && rawEnabled is bool vEnabled )
+				enabled = vEnabled;
 
 			if ( config.TryGetValue( "stats_interval", out var objStatsInterval )
 				&& objStatsInterval is string strStatsInterval &&
 				!string.IsNullOrEmpty( strStatsInterval ) )
 			{
-				var match = _intervalRegex.Match( strStatsInterval );
+				var interval = TimeSpanHelper.TryParse( strStatsInterval );
 
-				if ( match.Success )
-				{
-					var value = int.Parse( match.Groups["value"].Value );
-
-					if ( value < 1 )
-						throw new ArgumentException( $"stats_interval must be at least 1s." );
-
-					statsInterval = TimeSpan.FromSeconds( value );
-				}
-				else
+				if ( interval is null )
 					throw new ArgumentException( $"Invalid value for stats_interval configuration value" );
+				if ( interval.Value < TimeSpan.FromSeconds( 1 ) )
+					throw new ArgumentException( $"stats_interval must be at least 1s." );
+
+				statsInterval = interval.Value;
+			}
+
+			if ( config.TryGetValue( "fingerprint_interval", out var objFingerprintInterval )
+				&& objFingerprintInterval is string strFingerprintInterval &&
+				!string.IsNullOrEmpty( strFingerprintInterval ) )
+			{
+				var interval = TimeSpanHelper.TryParse( strFingerprintInterval );
+
+				if ( interval is null )
+					throw new ArgumentException( $"Invalid value for fingerprint_interval configuration value" );
+				if ( interval.Value < TimeSpan.FromSeconds( 10 ) )
+					throw new ArgumentException( $"fingerprint_interval must be at least 10s." );
+
+				fingerprintInterval = interval.Value;
 			}
 		}
 
-		_managementService.Configure( statsInterval );
+		_managementService.Configure( enabled, statsInterval, fingerprintInterval );
 
 		return Task.FromResult( new SetConfigResponse() );
 	}

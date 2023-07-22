@@ -9,3 +9,7 @@ updates:
     directory: "/src" # Location of package manifests
     schedule:
       interval: "weekly"
+    groups:
+      dependencies: # Just a name
+        patterns:
+          - "*"

@@ -41,7 +41,7 @@ message PluginInfoResponse {
   repeated string plugin_api_versions = 2;
 
   // plugin_version is the semver version of this individual plugin.
-  // This is divorce from Nomad’s development and versioning.
+  // This is divorce from Nomadâ€™s development and versioning.
   string plugin_version = 3;
 
   // name is the name of the plugin
