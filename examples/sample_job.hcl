@@ -4,8 +4,8 @@ job "iis-test" {
 
   group "iis-test" {
     count = 1
-	
-	network {
+    
+    network {
       port "httplabel" {}
     }
 
@@ -13,15 +13,15 @@ job "iis-test" {
       driver = "iis"
 
       config {
-	    path = "C:\\inetpub\\wwwroot"
-		
-		binding {
-		  type = "http"
-		  port = "httplabel"
-		}
+        path = "C:\\inetpub\\wwwroot"
+        
+        binding {
+          type = "http"
+          port = "httplabel"
+        }
       }
-	  
-	  env {
+      
+      env {
         my_key = "my-value"
       }
 

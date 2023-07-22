@@ -44,6 +44,17 @@ public static class ConfigSchemas
 							Required = false
 						}
 					}
+				},
+				{
+					"fingerprint_interval", new Spec()
+					{
+						Attr = new Attr()
+						{
+							Name = "fingerprint_interval",
+							Type = "string",
+							Required = false
+						}
+					}
 				}
 			}
 		}
