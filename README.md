@@ -1,8 +1,8 @@
 # HashiCorp Nomad IIS Task Driver
 
 [![Build](https://github.com/sevensolutions/nomad-iis/actions/workflows/build.yml/badge.svg)](https://github.com/sevensolutions/nomad-iis/actions/workflows/build.yml)
-[![Release](https://img.shields.io/badge/Version-0.1.0-blue)](https://github.com/Roblox/nomad-driver-iis/releases/tag/v0.1.0)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/Roblox/nomad-driver-iis/blob/master/LICENSE)
+[![Release](https://img.shields.io/badge/Version-0.1.0-blue)](https://github.com/sevensolutions/nomad-iis/releases/latest)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/sevensolutions/nomad-iis/blob/main/LICENSE)
 
 <p align="center" style="text-align:center;">
   <a href="https://github.com/sevensolutions/nomad-iis">
@@ -10,7 +10,7 @@
   </a>
 </p>
 
-This repository contains a task driver for HashiCorp Nomad to run web-applications in IIS on Windows machines. Unlike most other Nomad task drivers, this one is written in the C# language using ASP.NET 7.
+This repository contains a task driver for [HashiCorp Nomad](https://www.nomadproject.io/) to run web-applications in IIS on Windows machines. Unlike most other Nomad task drivers, this one is written in the C# language using ASP.NET 7.
 It uses the *Microsoft.Web.Administration*-API to communicate with IIS.
 Feel free to use it as-is or as a reference implementation for your own C#-based Nomad-plugins.
 
