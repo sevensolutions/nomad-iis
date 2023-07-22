@@ -14,9 +14,19 @@ This repository contains a task driver for HashiCorp Nomad to run web-applicatio
 It uses the *Microsoft.Web.Administration*-API to communicate with IIS.
 Feel free to use it as-is or as a reference implementation for your own C#-based Nomad-plugins.
 
-## ❓ How it Works
+## 🎉 Features
 
-This Task Driver creates an IIS Application Pool and Website for every Nomad Task in a job specification.
+| Feature | Status | Details |
+|---|---|---|
+| Single Web App per Nomad Task | ✔ | The Task Driver creates an IIS Application Pool and Website for every Nomad Task in the job specification. |
+| HTTP Bindings | ✔ | |
+| HTTPS Bindings | ✔ | [GH-3](https://github.com/sevensolutions/nomad-iis/issues/3) |
+| Environment Variables | ✔ | |
+| Resource Statistics | 🔶 | [GH-13](https://github.com/sevensolutions/nomad-iis/issues/13) |
+| Signals with `nomad alloc signal` | ✔ | |
+| Exec (Shell Access) | ❌ | I'am playing around a little bit but don't want to give you hope :/. See [GH-15](https://github.com/sevensolutions/nomad-iis/issues/15) for status. |
+| Filesystem Isolation | 🔶 | Because there is no `chroot` on Windows, filesystem isolation is only handled via permissions. For every AppPool IIS creates a dedicated AppPool Service Account which is only allowed to access it's own directories. See [GH-5](https://github.com/sevensolutions/nomad-iis/issues/5) for details. |
+| Nomad Networking | ❌ | |
 
 ## ⚙ Configuration
 
