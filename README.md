@@ -1,7 +1,7 @@
 # HashiCorp Nomad IIS Task Driver
 
-[![Build](https://github.com/sevensolutions/nomad-iis/actions/workflows/build.yml/badge.svg)](https://github.com/sevensolutions/nomad-iis/actions/workflows/build.yml)
-[![Release](https://img.shields.io/badge/Version-0.1.0-blue)](https://github.com/sevensolutions/nomad-iis/releases/latest)
+[![Build](https://img.shields.io/github/actions/workflow/status/sevensolutions/nomad-iis/.github%2Fworkflows%2Fbuild.yml?logo=github&label=Build&color=green)](https://github.com/sevensolutions/nomad-iis/actions/workflows/build.yml)
+[![Release](https://img.shields.io/github/v/release/sevensolutions/nomad-iis?label=Release)](https://github.com/sevensolutions/nomad-iis/releases/latest)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/sevensolutions/nomad-iis/blob/main/LICENSE)
 
 <p align="center" style="text-align:center;">
