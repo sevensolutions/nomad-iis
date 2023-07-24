@@ -125,7 +125,7 @@ public sealed class IisTaskHandle : IDisposable
 				if ( website is null )
 				{
 					website = serverManager.Sites.CreateElement();
-					website.Id = serverManager.Sites.Count > 0 ? serverManager.Sites.Max( x => x.Id ) + 1 : 0;
+					website.Id = serverManager.Sites.Count > 0 ? serverManager.Sites.Max( x => x.Id ) + 1 : 1;
 					website.Name = _websiteName;
 					website.ApplicationDefaults.ApplicationPoolName = appPool.Name;
 
