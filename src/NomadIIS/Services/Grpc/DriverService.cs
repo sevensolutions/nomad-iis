@@ -3,10 +3,14 @@ using Grpc.Core;
 using Hashicorp.Nomad.Plugins.Drivers.Proto;
 using MessagePack;
 using Microsoft.Extensions.Logging;
+using Microsoft.Web.Administration;
 using System;
+using System.Collections.Immutable;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.ServiceProcess;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace NomadIIS.Services.Grpc;
@@ -31,7 +35,7 @@ public sealed class DriverService : Driver.DriverBase
 			Capabilities = new DriverCapabilities()
 			{
 				SendSignals = true,
-				Exec = false,
+				Exec = true,
 				FsIsolation = DriverCapabilities.Types.FSIsolation.None
 			}
 		} );
@@ -93,7 +97,7 @@ public sealed class DriverService : Driver.DriverBase
 				{
 					status = FingerprintResponse.Types.HealthState.Undetected;
 					healthDescription = "Driver disabled";
-				}				
+				}
 
 				await responseStream.WriteAsync( new FingerprintResponse()
 				{
@@ -242,12 +246,141 @@ public sealed class DriverService : Driver.DriverBase
 	{
 		_logger.LogDebug( nameof( ExecTask ) );
 
+		var commands = request.Command.ToArray();
+
+		var cmd = string.Join( ", ", commands );
+
+		_logger.LogError( cmd );
+
+		_logger.LogError( request.Timeout?.ToString() );
+
+
+
 		return base.ExecTask( request, context );
 	}
 
-	public override Task ExecTaskStreaming ( IAsyncStreamReader<ExecTaskStreamingRequest> requestStream, IServerStreamWriter<ExecTaskStreamingResponse> responseStream, ServerCallContext context )
+	public override async Task ExecTaskStreaming ( IAsyncStreamReader<ExecTaskStreamingRequest> requestStream, IServerStreamWriter<ExecTaskStreamingResponse> responseStream, ServerCallContext context )
 	{
-		return base.ExecTaskStreaming( requestStream, responseStream, context );
+		IisTaskHandle? handle = null;
+		Process? process = null;
+		Task? stdOutTask = null;
+		Task? stdErrTask = null;
+
+		await foreach ( var request in requestStream.ReadAllAsync( context.CancellationToken ) )
+		{
+			// TODOPEI: request.Setup.Tty?
+			// https://stackoverflow.com/questions/362419/using-process-start-to-start-a-process-as-a-different-user-from-within-a-windo
+
+			_logger.LogDebug( $"TtySize: {request.TtySize}" );
+
+			if ( request.Setup?.TaskId is not null )
+			{
+				handle = _managementService.GetHandle( request.Setup.TaskId );
+
+				var commands = request.Setup.Command.ToImmutableArray();
+				var command = commands[0];
+
+				var psi = new ProcessStartInfo()
+				{
+					FileName = command,
+					RedirectStandardInput = true,
+					RedirectStandardOutput = true,
+					RedirectStandardError = true,
+					UserName = $"IIS AppPool\\{handle.AppPoolName}"
+				};
+
+				if ( commands.Length > 1 )
+				{
+					foreach ( var arg in commands[1..] )
+						psi.ArgumentList.Add( arg );
+				}
+
+				process = Process.Start( psi );
+				process!.Start();
+
+				process.StandardInput.AutoFlush = false;
+
+				stdOutTask = Task.Run( async () =>
+				{
+					var buffer = new byte[1024];
+
+					while ( !context.CancellationToken.IsCancellationRequested && !process.HasExited )
+					{
+						var numRead = await process.StandardOutput.BaseStream.ReadAsync( buffer, 0, buffer.Length, context.CancellationToken );
+						if ( numRead > 0 )
+						{
+							await responseStream.WriteAsync( new ExecTaskStreamingResponse()
+							{
+								Exited = false,
+								Stdout = new ExecTaskStreamingIOOperation()
+								{
+									Close = false,
+									Data = ByteString.CopyFrom( buffer.ToArray().Take(numRead).Select(x => (byte)x).ToArray() )
+								}
+							} );
+						}
+					}
+				} );
+
+				stdErrTask = Task.Run( async () =>
+				{
+					var buffer = new Memory<char>( new char[1024] );
+
+					while ( !context.CancellationToken.IsCancellationRequested && !process.HasExited )
+					{
+						var numRead = await process.StandardError.ReadAsync( buffer, context.CancellationToken );
+						if ( numRead > 0 )
+						{
+							await responseStream.WriteAsync( new ExecTaskStreamingResponse()
+							{
+								Exited = false,
+								Stderr = new ExecTaskStreamingIOOperation()
+								{
+									Close = false,
+									Data = ByteString.CopyFrom( buffer.ToArray().Take( numRead ).Select( x => (byte)x ).ToArray() )
+								}
+							} );
+						}
+					}
+				} );
+			}
+			else if ( handle is not null && process is not null )
+			{
+				if ( request.Stdin is not null )
+				{
+					if ( !request.Stdin.Close )
+					{
+						if ( request.Stdin.Data is not null )
+						{
+							var stdinData = request.Stdin.Data.ToArray();
+
+							if ( stdinData.Length == 1 && stdinData[0] == '\r' )
+								stdinData = new byte[] { (byte)'\r', (byte)'\n' };
+
+							await process.StandardInput.BaseStream.WriteAsync( stdinData, context.CancellationToken );
+							
+							await responseStream.WriteAsync( new ExecTaskStreamingResponse()
+							{
+								Exited = false,
+								Stdout = new ExecTaskStreamingIOOperation()
+								{
+									Close = false,
+									Data = request.Stdin.Data
+								}
+							} );
+
+							await process.StandardInput.FlushAsync();
+						}
+					}
+					else
+					{
+						// TODOPEI: Close
+					}
+				}
+			}
+
+			
+		}
 	}
 
 	public override Task<RecoverTaskResponse> RecoverTask ( RecoverTaskRequest request, ServerCallContext context )

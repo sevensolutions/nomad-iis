@@ -33,6 +33,7 @@ public sealed class IisTaskHandle : IDisposable
 	}
 
 	public string TaskId { get; }
+	public string? AppPoolName => _appPoolName;
 
 	public async Task RunAsync ( ILogger<DriverService> logger, TaskConfig task )
 	{
