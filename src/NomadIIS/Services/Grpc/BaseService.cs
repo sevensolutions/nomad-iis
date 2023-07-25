@@ -53,6 +53,7 @@ public sealed class BaseService : BasePluginBase
 		_logger.LogInformation( nameof( SetConfig ) );
 
 		var enabled = true;
+		var directorySecurity = true;
 		TimeSpan? statsInterval = null;
 		TimeSpan? fingerprintInterval = null;
 
@@ -90,9 +91,12 @@ public sealed class BaseService : BasePluginBase
 
 				fingerprintInterval = interval.Value;
 			}
+
+			if ( config.TryGetValue( "directory_security", out var rawDirectorySecurity ) && rawEnabled is bool vDirectorySecurity )
+				directorySecurity = vDirectorySecurity;
 		}
 
-		_managementService.Configure( enabled, statsInterval, fingerprintInterval );
+		_managementService.Configure( enabled, statsInterval, fingerprintInterval, directorySecurity );
 
 		return Task.FromResult( new SetConfigResponse() );
 	}

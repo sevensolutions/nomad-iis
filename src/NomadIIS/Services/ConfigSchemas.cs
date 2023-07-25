@@ -55,7 +55,31 @@ public static class ConfigSchemas
 							Required = false
 						}
 					}
-				}
+				},
+				{
+					"directory_security", new Spec()
+					{
+						Default = new Default()
+						{
+							Primary = new Spec()
+							{
+								Attr = new Attr()
+								{
+									Name = "directory_security",
+									Type = "bool",
+									Required = false
+								}
+							},
+							Default_ = new Spec()
+							{
+								Literal = new Literal()
+								{
+									Value = "true"
+								}
+							}
+						}
+					}
+				},
 			}
 		}
 	};

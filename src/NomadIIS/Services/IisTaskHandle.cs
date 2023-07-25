@@ -8,6 +8,8 @@ using System.IO;
 using System.Linq;
 using System.Security.AccessControl;
 using System.Security.Cryptography.X509Certificates;
+using System.Security.Principal;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -190,7 +192,8 @@ public sealed class IisTaskHandle : IDisposable
 			}
 		} );
 
-		SetupDirectoryPermissions();
+		if ( _owner.DirectorySecurity )
+			SetupDirectoryPermissions();
 
 		await SendTaskEventAsync( $"Application started, Name: {_appPoolName}" );
 
@@ -390,7 +393,25 @@ public sealed class IisTaskHandle : IDisposable
 	}
 
 	private static string GetAppPoolName ( TaskConfig taskConfig )
-		=> $"{taskConfig.AllocId}-{taskConfig.Name}";
+	{
+		var rawName = $"{taskConfig.AllocId}-{taskConfig.Name}";
+
+		var invalidChars = ApplicationPoolCollection.InvalidApplicationPoolNameCharacters()
+			.Union( SiteCollection.InvalidSiteNameCharacters() )
+			.ToArray();
+
+		var sb = new StringBuilder();
+
+		foreach ( var c in rawName )
+		{
+			if ( invalidChars.Contains( c ) )
+				sb.Append( '_' );
+			else
+				sb.Append( c );
+		}
+
+		return sb.ToString();
+	}
 
 	private ApplicationPool GetApplicationPool ( ServerManager serverManager )
 		=> FindApplicationPool( serverManager ) ?? throw new KeyNotFoundException( $"No AppPool with name {_appPoolName} found." );
@@ -421,6 +442,8 @@ public sealed class IisTaskHandle : IDisposable
 	private void SetupDirectoryPermissions ()
 	{
 		// https://developer.hashicorp.com/nomad/docs/concepts/filesystem
+		// https://learn.microsoft.com/en-us/troubleshoot/developer/webapps/iis/www-authentication-authorization/default-permissions-user-rights
+		// https://stackoverflow.com/questions/51277338/remove-users-group-permission-for-folder-inside-programdata
 
 #pragma warning disable CA1416 // Plattformkompatibilität überprüfen
 
@@ -428,14 +451,14 @@ public sealed class IisTaskHandle : IDisposable
 
 		var allocDir = new DirectoryInfo( _taskConfig!.AllocDir );
 		
-		SetupDirectory( @"alloc\data", FileSystemRights.FullControl );
-		SetupDirectory( @"alloc\logs", FileSystemRights.FullControl );
-		SetupDirectory( @"alloc\tmp", FileSystemRights.FullControl );
-		SetupDirectory( $@"{_taskConfig.Name}\local", FileSystemRights.FullControl );
-		SetupDirectory( $@"{_taskConfig.Name}\secrets", FileSystemRights.Read );
-		SetupDirectory( $@"{_taskConfig.Name}\tmp", FileSystemRights.FullControl );
+		SetupDirectory( @"alloc\data", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit );
+		SetupDirectory( @"alloc\logs", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit );
+		SetupDirectory( @"alloc\tmp", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit );
+		SetupDirectory( $@"{_taskConfig.Name}\local", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit );
+		SetupDirectory( $@"{_taskConfig.Name}\secrets", FileSystemRights.Read, InheritanceFlags.ObjectInherit );
+		SetupDirectory( $@"{_taskConfig.Name}\tmp", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit );
 
-		void SetupDirectory( string subDirectory, FileSystemRights fileSystemRights )
+		void SetupDirectory( string subDirectory, FileSystemRights fileSystemRights, InheritanceFlags inheritanceFlags )
 		{
 			var directory = allocDir;
 
@@ -447,11 +470,30 @@ public sealed class IisTaskHandle : IDisposable
 
 			var acl = directory.GetAccessControl();
 
-			acl.AddAccessRule( new FileSystemAccessRule(
-				identity, fileSystemRights, InheritanceFlags.ContainerInherit, PropagationFlags.None, AccessControlType.Allow ) );
-			acl.AddAccessRule( new FileSystemAccessRule(
-				identity, fileSystemRights, InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow ) );
+			// Disable Inheritance and copy existing rules
+			acl.SetAccessRuleProtection( true, true );
+			directory.SetAccessControl( acl );
 
+			// Re-read the ACL
+			acl = directory.GetAccessControl();
+
+			// Remove unwanted BuiltIn-users/groups which allow access to everyone
+			var builtinUsersSid = new SecurityIdentifier( WellKnownSidType.BuiltinUsersSid, null );
+			var authenticatedUserSid = new SecurityIdentifier( WellKnownSidType.AuthenticatedUserSid, null );
+			
+			foreach ( FileSystemAccessRule rule in acl.GetAccessRules( true, false, typeof( SecurityIdentifier ) ) )
+			{
+				if ( rule.IdentityReference == builtinUsersSid || rule.IdentityReference == authenticatedUserSid )
+					acl.RemoveAccessRule( rule );
+			}
+
+			// Add new Rules
+			acl.AddAccessRule( new FileSystemAccessRule(
+				identity, fileSystemRights, inheritanceFlags, PropagationFlags.InheritOnly, AccessControlType.Allow ) );
+			//acl.AddAccessRule( new FileSystemAccessRule(
+			//	identity, fileSystemRights, InheritanceFlags.ObjectInherit, PropagationFlags.InheritOnly, AccessControlType.Allow ) );
+
+			// Apply the new ACL
 			directory.SetAccessControl( acl );
 		}
 
