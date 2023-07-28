@@ -168,7 +168,7 @@ public sealed class IisTaskHandle : IDisposable
 						var binding = website.Bindings.Add(
 							$"{ipAddress}:{b.PortMapping.Value}:{b.Binding.Hostname}",
 							certificateHash, certificateStoreName, sslFlags );
-						
+
 						binding.Protocol = b.Binding.Type;
 					}
 
@@ -193,11 +193,11 @@ public sealed class IisTaskHandle : IDisposable
 		} );
 
 		if ( _owner.DirectorySecurity )
-			SetupDirectoryPermissions();
+			SetupDirectoryPermissions( logger );
 
 		await SendTaskEventAsync( $"Application started, Name: {_appPoolName}" );
 
-		void AddEnvironmentVariable( ConfigurationElementCollection envVarsCollection, string key, string value )
+		void AddEnvironmentVariable ( ConfigurationElementCollection envVarsCollection, string key, string value )
 		{
 			if ( !string.IsNullOrEmpty( key ) && !string.IsNullOrEmpty( value ) )
 			{
@@ -439,7 +439,7 @@ public sealed class IisTaskHandle : IDisposable
 		}
 	}
 
-	private void SetupDirectoryPermissions ()
+	private void SetupDirectoryPermissions ( ILogger logger )
 	{
 		// https://developer.hashicorp.com/nomad/docs/concepts/filesystem
 		// https://learn.microsoft.com/en-us/troubleshoot/developer/webapps/iis/www-authentication-authorization/default-permissions-user-rights
@@ -450,15 +450,20 @@ public sealed class IisTaskHandle : IDisposable
 		var identity = $"IIS AppPool\\{_appPoolName}";
 
 		var allocDir = new DirectoryInfo( _taskConfig!.AllocDir );
-		
-		SetupDirectory( @"alloc\data", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit );
-		SetupDirectory( @"alloc\logs", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit );
-		SetupDirectory( @"alloc\tmp", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit );
-		SetupDirectory( $@"{_taskConfig.Name}\local", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit );
-		SetupDirectory( $@"{_taskConfig.Name}\secrets", FileSystemRights.Read, InheritanceFlags.ObjectInherit );
-		SetupDirectory( $@"{_taskConfig.Name}\tmp", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit );
 
-		void SetupDirectory( string subDirectory, FileSystemRights fileSystemRights, InheritanceFlags inheritanceFlags )
+		var builtinUsersSid = TryGetSid( WellKnownSidType.BuiltinUsersSid, logger );
+		var authenticatedUserSid = TryGetSid( WellKnownSidType.AuthenticatedUserSid, logger );
+
+		SetupDirectory( @"alloc", null, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, logger );
+		SetupDirectory( @"alloc\data", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, logger );
+		SetupDirectory( @"alloc\logs", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, logger );
+		SetupDirectory( @"alloc\tmp", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, logger );
+		SetupDirectory( $@"{_taskConfig.Name}\private", null, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, logger );
+		SetupDirectory( $@"{_taskConfig.Name}\local", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, logger );
+		SetupDirectory( $@"{_taskConfig.Name}\secrets", FileSystemRights.Read, InheritanceFlags.ObjectInherit, logger );
+		SetupDirectory( $@"{_taskConfig.Name}\tmp", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, logger );
+
+		void SetupDirectory ( string subDirectory, FileSystemRights? fileSystemRights, InheritanceFlags inheritanceFlags, ILogger logger )
 		{
 			var directory = allocDir;
 
@@ -478,25 +483,40 @@ public sealed class IisTaskHandle : IDisposable
 			acl = directory.GetAccessControl();
 
 			// Remove unwanted BuiltIn-users/groups which allow access to everyone
-			var builtinUsersSid = new SecurityIdentifier( WellKnownSidType.BuiltinUsersSid, null );
-			var authenticatedUserSid = new SecurityIdentifier( WellKnownSidType.AuthenticatedUserSid, null );
-			
 			foreach ( FileSystemAccessRule rule in acl.GetAccessRules( true, false, typeof( SecurityIdentifier ) ) )
 			{
-				if ( rule.IdentityReference == builtinUsersSid || rule.IdentityReference == authenticatedUserSid )
+				if ( ( builtinUsersSid is not null && rule.IdentityReference == builtinUsersSid ) ||
+					( ( authenticatedUserSid is not null ) && rule.IdentityReference == authenticatedUserSid ) )
 					acl.RemoveAccessRule( rule );
 			}
 
 			// Add new Rules
-			acl.AddAccessRule( new FileSystemAccessRule(
-				identity, fileSystemRights, inheritanceFlags, PropagationFlags.InheritOnly, AccessControlType.Allow ) );
-			//acl.AddAccessRule( new FileSystemAccessRule(
-			//	identity, fileSystemRights, InheritanceFlags.ObjectInherit, PropagationFlags.InheritOnly, AccessControlType.Allow ) );
+			if ( fileSystemRights is not null )
+			{
+				acl.AddAccessRule( new FileSystemAccessRule(
+					identity, fileSystemRights.Value, inheritanceFlags, PropagationFlags.InheritOnly, AccessControlType.Allow ) );
+			}
 
 			// Apply the new ACL
 			directory.SetAccessControl( acl );
 		}
 
+#pragma warning restore CA1416 // Plattformkompatibilität überprüfen
+	}
+
+	private SecurityIdentifier? TryGetSid ( WellKnownSidType sidType, ILogger logger )
+	{
+#pragma warning disable CA1416 // Plattformkompatibilität überprüfen
+		try
+		{
+			return new SecurityIdentifier( sidType, null );
+		}
+		catch ( Exception ex )
+		{
+			logger.LogWarning( ex, $"Failed to get SID {sidType}." );
+
+			return null;
+		}
 #pragma warning restore CA1416 // Plattformkompatibilität überprüfen
 	}
 
