@@ -12,8 +12,6 @@ internal static class WmiHelper
 		if ( processIds is null || processIds.Length <= 0 )
 			throw new ArgumentNullException( nameof( processIds ) );
 
-		// https://github.com/Roblox/nomad-driver-iis/blob/master/iis/iis.go#L956
-
 		var condition = string.Format( "ProcessID={0}", string.Join( " OR ProcessID=", processIds ) );
 
 		// https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-process
@@ -48,8 +46,8 @@ internal static class WmiHelper
 		}
 
 		// Need to multiply cpu stats by one hundred to align with nomad method CpuStats.Percent's expected decimal placement
-		kernelModeTime *= 100;
-		userModeTime *= 100;
+		//kernelModeTime *= 100;
+		//userModeTime *= 100;
 
 		return (kernelModeTime, userModeTime, workingSetPrivate);
 

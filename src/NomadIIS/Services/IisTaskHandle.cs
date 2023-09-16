@@ -152,7 +152,7 @@ public sealed class IisTaskHandle : IDisposable
 							if ( certificate is null )
 								throw new KeyNotFoundException( $"Couldn't find certificate with hash {b.Binding.CertificateHash}." );
 
-							await SendTaskEventAsync( $"Using certificate: {certificate.FriendlyName}" );
+							await SendTaskEventAsync( logger, $"Using certificate: {certificate.FriendlyName}" );
 
 							certificateStoreName = store.Name;
 							certificateHash = certificate.GetCertHash();
@@ -186,7 +186,7 @@ public sealed class IisTaskHandle : IDisposable
 				if ( appPool2 is not null )
 					serverManager.ApplicationPools.Remove( appPool2 );
 
-				await SendTaskEventAsync( $"Error: {ex.Message}" );
+				await SendTaskEventAsync( logger, $"Error: {ex.Message}" );
 
 				throw;
 			}
@@ -195,7 +195,7 @@ public sealed class IisTaskHandle : IDisposable
 		if ( _owner.DirectorySecurity )
 			SetupDirectoryPermissions( logger );
 
-		await SendTaskEventAsync( $"Application started, Name: {_appPoolName}" );
+		await SendTaskEventAsync( logger, $"Application started, Name: {_appPoolName}" );
 
 		void AddEnvironmentVariable ( ConfigurationElementCollection envVarsCollection, string key, string value )
 		{
@@ -281,7 +281,7 @@ public sealed class IisTaskHandle : IDisposable
 
 						appPool.Recycle();
 
-						await SendTaskEventAsync( $"ApplicationPool recycled, Name = {_appPoolName}" );
+						await SendTaskEventAsync( logger, $"ApplicationPool recycled, Name = {_appPoolName}" );
 					}
 				} );
 
@@ -334,6 +334,8 @@ public sealed class IisTaskHandle : IDisposable
 			{
 				var stats = WmiHelper.QueryWmiStatistics( w3wpPids );
 
+				var cpuShares = _taskConfig?.Resources.AllocatedResources.Cpu.CpuShares ?? 0L;
+
 				var totalCpu = _totalCpuStats.Percent( stats.KernelModeTime + stats.UserModeTime );
 
 				return Task.FromResult( new TaskResourceUsage()
@@ -343,8 +345,8 @@ public sealed class IisTaskHandle : IDisposable
 						Percent = totalCpu,
 						SystemMode = _kernelModeCpuStats.Percent( stats.KernelModeTime ),
 						UserMode = _userModeCpuStats.Percent( stats.UserModeTime ),
-						TotalTicks = _totalCpuStats.TicksConsumed( totalCpu ),
-						MeasuredFields = { CPUUsage.Types.Fields.Percent, CPUUsage.Types.Fields.SystemMode, CPUUsage.Types.Fields.UserMode }
+						TotalTicks = ( cpuShares / 100d ) * totalCpu, // _totalCpuStats.TicksConsumed( totalCpu ),
+						MeasuredFields = { CPUUsage.Types.Fields.Percent, CPUUsage.Types.Fields.SystemMode, CPUUsage.Types.Fields.UserMode, CPUUsage.Types.Fields.TotalTicks }
 					},
 					Memory = new MemoryUsage()
 					{
@@ -418,7 +420,7 @@ public sealed class IisTaskHandle : IDisposable
 	private ApplicationPool? FindApplicationPool ( ServerManager serverManager )
 		=> serverManager.ApplicationPools.FirstOrDefault( x => x.Name == _appPoolName );
 
-	private async Task SendTaskEventAsync ( string message )
+	private async Task SendTaskEventAsync ( ILogger logger, string message )
 	{
 		if ( _taskConfig is null )
 			return;
@@ -434,8 +436,9 @@ public sealed class IisTaskHandle : IDisposable
 				Message = message
 			} );
 		}
-		catch ( Exception )
+		catch ( Exception ex )
 		{
+			logger.LogError( ex, "Failed to send task event." );
 		}
 	}
 
@@ -527,6 +530,8 @@ public sealed class IisTaskHandle : IDisposable
 
 		public double Percent ( double cpuTime )
 		{
+			// https://github.com/hashicorp/nomad/blob/main/client/lib/cpustats/stats.go
+
 			var now = DateTime.UtcNow;
 
 			if ( _previousCpuTime is null || _previousTimestamp is null )
@@ -537,10 +542,13 @@ public sealed class IisTaskHandle : IDisposable
 				return 0d;
 			}
 
-			var timeDelta = now.Subtract( _previousTimestamp.Value ).TotalNanoseconds;
+			var timeDelta = now.Subtract( _previousTimestamp.Value ).TotalMilliseconds;
 			var cpuDelta = cpuTime - _previousCpuTime.Value;
 
-			var result = timeDelta <= 0d || cpuDelta <= 0d ? 0d : cpuDelta / timeDelta * 100d;
+			//var result = timeDelta <= 0d || cpuDelta <= 0d ? 0d : (cpuDelta / timeDelta) * 100d;
+
+			// https://stackoverflow.com/questions/22195277/get-the-cpu-usage-of-each-process-from-wmi
+			var result = cpuDelta / ( timeDelta * 100d * Environment.ProcessorCount );
 
 			_previousCpuTime = cpuTime;
 			_previousTimestamp = now;
