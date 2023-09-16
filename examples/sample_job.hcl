@@ -13,7 +13,7 @@ job "iis-test" {
       driver = "iis"
 
       config {
-        path = "P:\\work\\WebApplication1\\WebApplication1"
+        path = "C:\\inetpub\\wwwroot"
         
         binding {
           type = "http"
@@ -26,7 +26,7 @@ job "iis-test" {
       }
 
       resources {
-        cpu    = 800
+        cpu    = 100
         memory = 20
       }
     }
