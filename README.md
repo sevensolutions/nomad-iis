@@ -22,7 +22,7 @@ Feel free to use it as-is or as a reference implementation for your own C#-based
 | HTTP Bindings | ✔ | |
 | HTTPS Bindings | ✔ | [GH-3](https://github.com/sevensolutions/nomad-iis/issues/3) |
 | Environment Variables | ✔ | [Details](#-environment-variables) |
-| Resource Statistics | ✔ | [GH-13](https://github.com/sevensolutions/nomad-iis/issues/13), CPU isn't working because of a bug. |
+| Resource Statistics | ✔ | |
 | Logging | ❌ | [GH-6](https://github.com/sevensolutions/nomad-iis/issues/6) |
 | Signals with `nomad alloc signal` | ✔ | [Details](#-supported-signals) |
 | Exec (Shell Access) | ❌ | I'am playing around a little bit but don't want to give you hope :/. See [GH-15](https://github.com/sevensolutions/nomad-iis/issues/15) for status. |
