@@ -34,7 +34,6 @@ Feel free to use it as-is or as a reference implementation for your own C#-based
 | Option | Type | Required | Default Value | Description |
 |---|---|---|---|---|
 | enabled | bool | no | true | Enables/Disables the Nomad IIS Plugin |
-| stats_interval | string | no | 3s | Defines the interval how often the plugin should report driver statistics to Nomad. The smallest possible value is 1s. |
 | fingerprint_interval | string | no | 30s | Defines the interval how often the plugin should report the driver's fingerprint to Nomad. The smallest possible value is 10s. |
 | directory_security | bool | no | true | Enables Directory Permission Management for [Filesystem Isolation](#-filesystem-isolation). |
 
@@ -44,7 +43,8 @@ Feel free to use it as-is or as a reference implementation for your own C#-based
 plugin "nomad_iis" {
   config {
     enabled = true,
-    stats_interval = "1s"
+    fingerprint_interval = "30s",
+    directory_security = true
   }
 }
 ```

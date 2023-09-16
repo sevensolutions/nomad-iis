@@ -6,7 +6,6 @@ log_level = "TRACE"
 plugin "nomad_iis" {
   config {
     enabled = true,
-	stats_interval = "1s"
 	fingerprint_interval = "10s"
   }
 }

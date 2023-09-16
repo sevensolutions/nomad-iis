@@ -64,20 +64,6 @@ public sealed class BaseService : BasePluginBase
 			if ( config.TryGetValue( "enabled", out var rawEnabled ) && rawEnabled is bool vEnabled )
 				enabled = vEnabled;
 
-			if ( config.TryGetValue( "stats_interval", out var objStatsInterval )
-				&& objStatsInterval is string strStatsInterval &&
-				!string.IsNullOrEmpty( strStatsInterval ) )
-			{
-				var interval = TimeSpanHelper.TryParse( strStatsInterval );
-
-				if ( interval is null )
-					throw new ArgumentException( $"Invalid value for stats_interval configuration value" );
-				if ( interval.Value < TimeSpan.FromSeconds( 1 ) )
-					throw new ArgumentException( $"stats_interval must be at least 1s." );
-
-				statsInterval = interval.Value;
-			}
-
 			if ( config.TryGetValue( "fingerprint_interval", out var objFingerprintInterval )
 				&& objFingerprintInterval is string strFingerprintInterval &&
 				!string.IsNullOrEmpty( strFingerprintInterval ) )
@@ -96,7 +82,7 @@ public sealed class BaseService : BasePluginBase
 				directorySecurity = vDirectorySecurity;
 		}
 
-		_managementService.Configure( enabled, statsInterval, fingerprintInterval, directorySecurity );
+		_managementService.Configure( enabled, fingerprintInterval, directorySecurity );
 
 		return Task.FromResult( new SetConfigResponse() );
 	}

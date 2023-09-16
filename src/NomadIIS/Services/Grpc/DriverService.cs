@@ -121,7 +121,7 @@ public sealed class DriverService : Driver.DriverBase
 		var task = request.Task;
 
 		var handle = _managementService.CreateHandle( task.Id );
-
+		
 		try
 		{
 			await handle.RunAsync( _logger, task );
@@ -268,6 +268,8 @@ public sealed class DriverService : Driver.DriverBase
 
 		try
 		{
+			var interval = request.CollectionInterval.ToTimeSpan();
+
 			while ( !context.CancellationToken.IsCancellationRequested )
 			{
 				var handle = _managementService.TryGetHandle( request.TaskId );
@@ -287,7 +289,7 @@ public sealed class DriverService : Driver.DriverBase
 					}
 				} );
 
-				await Task.Delay( _managementService.StatsInterval, context.CancellationToken );
+				await Task.Delay( interval, context.CancellationToken );
 			}
 		}
 		catch ( Exception )

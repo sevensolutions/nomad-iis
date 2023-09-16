@@ -35,17 +35,6 @@ public static class ConfigSchemas
 					}
 				},
 				{
-					"stats_interval", new Spec()
-					{
-						Attr = new Attr()
-						{
-							Name = "stats_interval",
-							Type = "string",
-							Required = false
-						}
-					}
-				},
-				{
 					"fingerprint_interval", new Spec()
 					{
 						Attr = new Attr()
