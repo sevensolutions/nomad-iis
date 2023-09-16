@@ -69,6 +69,14 @@ plugin "nomad_iis" {
 | path | string | yes | *none* | Defines the path of the web application, containing the application files |
 | alias | string | no | / | Defines an optional alias at which the application should be hosted below the website. If not set, the application will be hosted at the website level. |
 | enable_preload | bool | no | *IIS default* | Specifies whether the application should be pre-loaded. |
+| *virtual_directory* | block list | no | *none* | Defines optional virtual directories below this application. See *virtual_directory* schema below for details. |
+
+### `virtual_directory` Block Configuration
+
+| Option | Type | Required | Default Value | Description |
+|---|---|---|---|---|
+| alias | string | yes | *none* | Defines the alias of the virtual directory |
+| path | string | yes | *none* | Defines the path of the virtual directory |
 
 ### `binding` Block Configuration
 

@@ -124,6 +124,46 @@ public static class ConfigSchemas
 													Required = false
 												}
 											}
+										},
+										{
+											"virtual_directories", new Spec()
+											{
+												BlockList = new BlockList()
+												{
+													Name = "virtual_directory",
+													Nested = new Spec()
+													{
+														Object = new Object()
+														{
+															Attributes =
+															{
+																{
+																	"alias", new Spec()
+																	{
+																		Attr = new Attr()
+																		{
+																			Name = "alias",
+																			Type = "string",
+																			Required = true
+																		}
+																	}
+																},
+																{
+																	"path", new Spec()
+																	{
+																		Attr = new Attr()
+																		{
+																			Name = "path",
+																			Type = "string",
+																			Required = true
+																		}
+																	}
+																}
+															}
+														}
+													}
+												}
+											}
 										}
 									}
 								}

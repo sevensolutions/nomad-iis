@@ -29,26 +29,57 @@ internal static class MessagePackHelper
 					alias = vAlias;
 
 				if ( !application.TryGetValue( "path", out var rawPath ) || rawPath is not string path || string.IsNullOrWhiteSpace( path ) )
-					throw new KeyNotFoundException( "Missing required value path in application block." );
+					throw new ArgumentException( "Missing required value path in application block." );
 
 				bool? enablePreload = null;
 				if ( application.TryGetValue( "enable_preload", out var rawEnablePreload ) && rawEnablePreload is bool vEnablePreload )
 					enablePreload = vEnablePreload;
 
+				DriverTaskConfigVirtualDirectory[]? virtualDirectories = null;
+
+				if ( application.TryGetValue( "virtual_directories", out var rawVirtualDirectories ) && rawVirtualDirectories is object[] objVirtualDirectories )
+				{
+					virtualDirectories = objVirtualDirectories.Select( x =>
+					{
+						if ( x is not Dictionary<object, object> virtualDirectory )
+							throw new NotSupportedException( "Invalid virtual_directory object." );
+
+						string? alias = null;
+						if ( virtualDirectory.TryGetValue( "alias", out var rawAlias ) && rawAlias is string vAlias )
+							alias = vAlias;
+
+						if ( string.IsNullOrEmpty( alias ) )
+							throw new ArgumentException( "Missing required alias in virtual_directory block." );
+
+						if ( !virtualDirectory.TryGetValue( "path", out var rawPath ) || rawPath is not string path || string.IsNullOrWhiteSpace( path ) )
+							throw new ArgumentException( "Missing required value path in virtual_directory block." );
+
+						return new DriverTaskConfigVirtualDirectory
+						{
+							Alias = alias,
+							Path = path
+						};
+					} ).ToArray();
+				}
+
+				if ( virtualDirectories is not null && virtualDirectories.Select( x => x.Alias ).Distinct().Count() != virtualDirectories.Length )
+					throw new ArgumentException( "Every virtual_directory alias must be unique." );
+
 				return new DriverTaskConfigApplication
 				{
 					Alias = alias,
 					Path = path,
-					EnablePreload = enablePreload
+					EnablePreload = enablePreload,
+					VirtualDirectories = virtualDirectories
 				};
 			} ).ToArray();
 		}
 
 		if ( applications is null || applications.Length < 1 )
-			throw new NotSupportedException( "There must be one or more applications specified." );
+			throw new ArgumentException( "There must be one or more applications specified." );
 
 		if ( applications.Select( x => x.Alias ).Distinct().Count() != applications.Length )
-			throw new NotSupportedException( "Every application alias must be unique." );
+			throw new ArgumentException( "Every application alias must be unique." );
 
 		if ( !config.TryGetValue( "managed_pipeline_mode", out var rawManagedPipelineMode ) || rawManagedPipelineMode is not string managedPipelineMode )
 			managedPipelineMode = "Integrated";
@@ -90,13 +121,13 @@ internal static class MessagePackHelper
 					throw new NotSupportedException( "Invalid binding object." );
 
 				if ( !binding.TryGetValue( "type", out var rawType ) || rawType is not string type || string.IsNullOrWhiteSpace( type ) )
-					throw new KeyNotFoundException( "Missing required value type in binding block." );
+					throw new ArgumentException( "Missing required value type in binding block." );
 
 				if ( !binding.TryGetValue( "port", out var rawPort ) || rawPort is not string port || string.IsNullOrWhiteSpace( port ) )
-					throw new KeyNotFoundException( "Missing required port type in binding block." );
+					throw new ArgumentException( "Missing required port type in binding block." );
 
 				if ( type != "http" && type != "https" )
-					throw new NotSupportedException( "Binding type must be either http or https." );
+					throw new ArgumentException( "Binding type must be either http or https." );
 
 				string? hostname = null;
 				if ( binding.TryGetValue( "hostname", out var rawHostname ) && rawHostname is string vHostname )
@@ -127,7 +158,7 @@ internal static class MessagePackHelper
 		}
 
 		if ( bindings is null || bindings.Length < 1 || bindings.Length > 2 )
-			throw new NotSupportedException( "There must be exactly one or two bindings specified." );
+			throw new ArgumentException( "There must be exactly one or two bindings specified." );
 
 		return new DriverTaskConfig()
 		{
@@ -160,6 +191,13 @@ public sealed class DriverTaskConfigApplication
 	public string? Alias { get; set; }
 	public required string Path { get; init; }
 	public bool? EnablePreload { get; init; }
+	public required DriverTaskConfigVirtualDirectory[]? VirtualDirectories { get; init; }
+}
+
+public sealed class DriverTaskConfigVirtualDirectory
+{
+	public required string Alias { get; set; }
+	public required string Path { get; init; }
 }
 
 public sealed class DriverTaskConfigBinding

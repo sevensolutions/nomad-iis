@@ -145,6 +145,19 @@ public sealed class IisTaskHandle : IDisposable
 
 							if ( app.EnablePreload is not null )
 								application.SetAttributeValue( "preloadEnabled", app.EnablePreload.Value );
+
+							if ( app.VirtualDirectories is not null )
+							{
+								foreach ( var vdir in app.VirtualDirectories )
+								{
+									var physicalVdirPath = vdir.Path;
+
+									if ( !Path.IsPathRooted( physicalVdirPath ) )
+										physicalVdirPath = Path.Combine( task.AllocDir, task.Name, physicalVdirPath );
+
+									application.VirtualDirectories.Add( $"/{vdir.Alias}", physicalVdirPath );
+								}
+							}
 						}
 
 						foreach ( var b in bindings )
