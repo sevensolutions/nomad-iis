@@ -80,13 +80,54 @@ public static class ConfigSchemas
 			Attributes =
 			{
 				{
-					"path", new Spec()
+					"applications", new Spec()
 					{
-						Attr = new Attr()
+						BlockList = new BlockList()
 						{
-							Name = "path",
-							Type = "string",
-							Required = true
+							Name = "application",
+							MinItems = 1,
+							Nested = new Spec()
+							{
+								Object = new Object()
+								{
+									Attributes =
+									{
+										{
+											"alias", new Spec()
+											{
+												Attr = new Attr()
+												{
+													Name = "alias",
+													Type = "string",
+													Required = false
+												}
+											}
+										},
+										{
+											"path", new Spec()
+											{
+												Attr = new Attr()
+												{
+													Name = "path",
+													Type = "string",
+													Required = true
+												}
+											}
+										},
+										{
+											"enable_preload", new Spec()
+											{
+												Attr = new Attr()
+												{
+													Name = "enable_preload",
+													Type = "bool",
+													Required = false
+												}
+											}
+										}
+									}
+								}
+							}
 						}
 					}
 				},

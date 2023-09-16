@@ -13,7 +13,13 @@ job "iis-test" {
       driver = "iis"
 
       config {
-        path = "C:\\inetpub\\wwwroot"
+        application {
+          path = "C:\\inetpub\\wwwroot"
+        }
+        application {
+          alias = "subapp"
+          path = "C:\\inetpub\\wwwroot"
+        }
         
         binding {
           type = "http"

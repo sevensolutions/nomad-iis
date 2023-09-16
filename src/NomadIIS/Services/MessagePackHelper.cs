@@ -2,9 +2,7 @@
 using MessagePack;
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
-using System.Threading.Tasks;
 
 namespace NomadIIS.Services;
 
@@ -17,8 +15,40 @@ internal static class MessagePackHelper
 
 		var config = MessagePackSerializer.Deserialize<Dictionary<object, object>>( byteString.Memory );
 
-		if ( !config.TryGetValue( "path", out var rawPath ) || rawPath is not string path || string.IsNullOrWhiteSpace( path ) )
-			throw new KeyNotFoundException( "Missing required value path in task config." );
+		DriverTaskConfigApplication[]? applications = null;
+
+		if ( config.TryGetValue( "applications", out var rawApplications ) && rawApplications is object[] objApplications )
+		{
+			applications = objApplications.Select( x =>
+			{
+				if ( x is not Dictionary<object, object> application )
+					throw new NotSupportedException( "Invalid application object." );
+
+				string? alias = null;
+				if ( application.TryGetValue( "alias", out var rawAlias ) && rawAlias is string vAlias )
+					alias = vAlias;
+
+				if ( !application.TryGetValue( "path", out var rawPath ) || rawPath is not string path || string.IsNullOrWhiteSpace( path ) )
+					throw new KeyNotFoundException( "Missing required value path in application block." );
+
+				bool? enablePreload = null;
+				if ( application.TryGetValue( "enable_preload", out var rawEnablePreload ) && rawEnablePreload is bool vEnablePreload )
+					enablePreload = vEnablePreload;
+
+				return new DriverTaskConfigApplication
+				{
+					Alias = alias,
+					Path = path,
+					EnablePreload = enablePreload
+				};
+			} ).ToArray();
+		}
+
+		if ( applications is null || applications.Length < 1 )
+			throw new NotSupportedException( "There must be one or more applications specified." );
+
+		if ( applications.Select( x => x.Alias ).Distinct().Count() != applications.Length )
+			throw new NotSupportedException( "Every application alias must be unique." );
 
 		if ( !config.TryGetValue( "managed_pipeline_mode", out var rawManagedPipelineMode ) || rawManagedPipelineMode is not string managedPipelineMode )
 			managedPipelineMode = "Integrated";
@@ -101,7 +131,7 @@ internal static class MessagePackHelper
 
 		return new DriverTaskConfig()
 		{
-			Path = path,
+			Applications = applications,
 			ManagedPipelineMode = managedPipelineMode,
 			ManagedRuntimeVersion = managedRuntimeVersion,
 			StartMode = startMode,
@@ -115,7 +145,7 @@ internal static class MessagePackHelper
 
 public sealed class DriverTaskConfig
 {
-	public required string Path { get; init; }
+	public required DriverTaskConfigApplication[] Applications { get; init; }
 	public required string ManagedPipelineMode { get; init; }
 	public required string? ManagedRuntimeVersion { get; init; }
 	public required string StartMode { get; init; }
@@ -123,6 +153,13 @@ public sealed class DriverTaskConfig
 	public required bool DisabledOverlappedRecycle { get; init; }
 	public required TimeSpan? PeriodicRestart { get; init; }
 	public required DriverTaskConfigBinding[] Bindings { get; init; }
+}
+
+public sealed class DriverTaskConfigApplication
+{
+	public string? Alias { get; set; }
+	public required string Path { get; init; }
+	public bool? EnablePreload { get; init; }
 }
 
 public sealed class DriverTaskConfigBinding

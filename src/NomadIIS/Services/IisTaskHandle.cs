@@ -38,164 +38,179 @@ public sealed class IisTaskHandle : IDisposable
 
 	public async Task RunAsync ( ILogger<DriverService> logger, TaskConfig task )
 	{
-		_taskConfig = task;
-		_startDate = DateTime.UtcNow;
-
-		var ports = task.Resources.Ports;
-
-		_appPoolName = GetAppPoolName( task );
-		_websiteName = _appPoolName;
-
-		var config = task.MsgpackDriverConfig.DecodeAsTaskConfig();
-
-		var appPath = config.Path;
-
-		if ( !Path.IsPathRooted( appPath ) )
-			appPath = Path.Combine( task.AllocDir, task.Name, appPath );
-
-		var bindings = config.Bindings.Select( binding =>
+		try
 		{
-			var port = ports.FirstOrDefault( x => x.Label == binding.PortLabel );
-			if ( port is null )
-				throw new KeyNotFoundException( $"Couldn't resolve binding-port with label \"{binding.PortLabel}\" in the network config." );
+			_taskConfig = task;
+			_startDate = DateTime.UtcNow;
 
-			return new { Binding = binding, PortMapping = port };
-		} ).ToArray();
+			var ports = task.Resources.Ports;
 
-		await _owner.LockAsync( async serverManager =>
-		{
-			// Create AppPool
-			logger.LogInformation( $"Task {task.Id}: Creating AppPool and Website with name {_appPoolName}..." );
+			_appPoolName = GetAppPoolName( task );
+			_websiteName = _appPoolName;
 
-			var appPool = FindApplicationPool( serverManager );
+			var config = task.MsgpackDriverConfig.DecodeAsTaskConfig();
 
-			if ( appPool is null )
+			var bindings = config.Bindings.Select( binding =>
 			{
-				appPool = serverManager.ApplicationPools.Add( _appPoolName );
-				appPool.AutoStart = true;
+				var port = ports.FirstOrDefault( x => x.Label == binding.PortLabel );
+				if ( port is null )
+					throw new KeyNotFoundException( $"Couldn't resolve binding-port with label \"{binding.PortLabel}\" in the network config." );
 
-				switch ( config.ManagedPipelineMode )
-				{
-					case "Integrated":
-						appPool.ManagedPipelineMode = ManagedPipelineMode.Integrated;
-						break;
-					case "Classic":
-						appPool.ManagedPipelineMode = ManagedPipelineMode.Classic;
-						break;
-				}
+				return new { Binding = binding, PortMapping = port };
+			} ).ToArray();
 
-				if ( !string.IsNullOrWhiteSpace( config.ManagedRuntimeVersion ) )
-				{
-					if ( config.ManagedRuntimeVersion == "None" )
-						appPool.ManagedRuntimeVersion = "";
-					else
-						appPool.ManagedRuntimeVersion = config.ManagedRuntimeVersion;
-				}
-
-				switch ( config.StartMode )
-				{
-					case "OnDemand":
-						appPool.StartMode = StartMode.OnDemand;
-						break;
-					case "AlwaysRunning":
-						appPool.StartMode = StartMode.AlwaysRunning;
-						break;
-				}
-
-				if ( config.IdleTimeout is not null )
-					appPool.ProcessModel.IdleTimeout = config.IdleTimeout.Value;
-
-				appPool.Recycling.DisallowOverlappingRotation = config.DisabledOverlappedRecycle;
-
-				if ( config.PeriodicRestart is not null )
-					appPool.Recycling.PeriodicRestart.Time = config.PeriodicRestart.Value;
-
-				var envVarsCollection = appPool.GetCollection( "environmentVariables" );
-
-				foreach ( var env in task.Env )
-					AddEnvironmentVariable( envVarsCollection, env.Key, env.Value );
-
-				// TODOPEI: Doesn't work because of wrong permission
-				//AddEnvironmentVariable( envVarsCollection, "NOMAD_STDOUT_PATH", task.StdoutPath );
-				//AddEnvironmentVariable( envVarsCollection, "NOMAD_STDERR_PATH", task.StderrPath );
-			}
-
-			// Create Website
-			try
+			await _owner.LockAsync( async serverManager =>
 			{
-				var website = serverManager.Sites.FirstOrDefault( x => x.Name == _websiteName );
-				if ( website is null )
+				// Create AppPool
+				logger.LogInformation( $"Task {task.Id}: Creating AppPool and Website with name {_appPoolName}..." );
+
+				var appPool = FindApplicationPool( serverManager );
+
+				if ( appPool is null )
 				{
-					website = serverManager.Sites.CreateElement();
-					website.Id = serverManager.Sites.Count > 0 ? serverManager.Sites.Max( x => x.Id ) + 1 : 1;
-					website.Name = _websiteName;
-					website.ApplicationDefaults.ApplicationPoolName = appPool.Name;
+					appPool = serverManager.ApplicationPools.Add( _appPoolName );
+					appPool.AutoStart = true;
 
-					var application = website.Applications.FirstOrDefault();
-					if ( application is null )
-						application = website.Applications.Add( "/", appPath );
-
-					foreach ( var b in bindings )
+					switch ( config.ManagedPipelineMode )
 					{
-						string? certificateStoreName = null;
-						byte[]? certificateHash = null;
-
-						if ( b.Binding.CertificateHash is not null )
-						{
-							using var store = new X509Store( StoreName.My, StoreLocation.LocalMachine );
-
-							store.Open( OpenFlags.ReadOnly );
-
-							var certificate = store.Certificates
-								.FirstOrDefault( x => x.GetCertHashString().Equals( b.Binding.CertificateHash, StringComparison.InvariantCultureIgnoreCase ) );
-
-							if ( certificate is null )
-								throw new KeyNotFoundException( $"Couldn't find certificate with hash {b.Binding.CertificateHash}." );
-
-							await SendTaskEventAsync( logger, $"Using certificate: {certificate.FriendlyName}" );
-
-							certificateStoreName = store.Name;
-							certificateHash = certificate.GetCertHash();
-						}
-
-						var sslFlags = SslFlags.None;
-						if ( b.Binding.RequireSni is not null && b.Binding.RequireSni.Value )
-							sslFlags |= SslFlags.Sni;
-
-						var ipAddress = b.Binding.IPAddress ?? "*";
-
-						// Note: Certificate needs to be specified in this Add() method. Otherwise it doesn't work.
-						var binding = website.Bindings.Add(
-							$"{ipAddress}:{b.PortMapping.Value}:{b.Binding.Hostname}",
-							certificateHash, certificateStoreName, sslFlags );
-
-						binding.Protocol = b.Binding.Type;
+						case "Integrated":
+							appPool.ManagedPipelineMode = ManagedPipelineMode.Integrated;
+							break;
+						case "Classic":
+							appPool.ManagedPipelineMode = ManagedPipelineMode.Classic;
+							break;
 					}
 
-					serverManager.Sites.Add( website );
+					if ( !string.IsNullOrWhiteSpace( config.ManagedRuntimeVersion ) )
+					{
+						if ( config.ManagedRuntimeVersion == "None" )
+							appPool.ManagedRuntimeVersion = "";
+						else
+							appPool.ManagedRuntimeVersion = config.ManagedRuntimeVersion;
+					}
+
+					switch ( config.StartMode )
+					{
+						case "OnDemand":
+							appPool.StartMode = StartMode.OnDemand;
+							break;
+						case "AlwaysRunning":
+							appPool.StartMode = StartMode.AlwaysRunning;
+							break;
+					}
+
+					if ( config.IdleTimeout is not null )
+						appPool.ProcessModel.IdleTimeout = config.IdleTimeout.Value;
+
+					appPool.Recycling.DisallowOverlappingRotation = config.DisabledOverlappedRecycle;
+
+					if ( config.PeriodicRestart is not null )
+						appPool.Recycling.PeriodicRestart.Time = config.PeriodicRestart.Value;
+
+					var envVarsCollection = appPool.GetCollection( "environmentVariables" );
+
+					foreach ( var env in task.Env )
+						AddEnvironmentVariable( envVarsCollection, env.Key, env.Value );
+
+					// TODOPEI: Doesn't work because of wrong permission
+					//AddEnvironmentVariable( envVarsCollection, "NOMAD_STDOUT_PATH", task.StdoutPath );
+					//AddEnvironmentVariable( envVarsCollection, "NOMAD_STDERR_PATH", task.StderrPath );
 				}
-			}
-			catch ( Exception ex )
-			{
-				// Try to clean up
-				var website = serverManager.Sites.FirstOrDefault( x => x.Name == _websiteName );
-				if ( website is not null )
-					serverManager.Sites.Remove( website );
 
-				var appPool2 = FindApplicationPool( serverManager );
-				if ( appPool2 is not null )
-					serverManager.ApplicationPools.Remove( appPool2 );
+				// Create Website
+				try
+				{
+					var website = serverManager.Sites.FirstOrDefault( x => x.Name == _websiteName );
+					if ( website is null )
+					{
+						website = serverManager.Sites.CreateElement();
+						website.Id = serverManager.Sites.Count > 0 ? serverManager.Sites.Max( x => x.Id ) + 1 : 1;
+						website.Name = _websiteName;
+						website.ApplicationDefaults.ApplicationPoolName = appPool.Name;
 
-				await SendTaskEventAsync( logger, $"Error: {ex.Message}" );
+						website.Applications.Clear();
 
-				throw;
-			}
-		} );
+						if ( !config.Applications.Any( x => string.IsNullOrEmpty( x.Alias ) ) )
+							website.Applications.Add( "/", @"C:\inetpub\wwwroot" );
 
-		if ( _owner.DirectorySecurity )
-			SetupDirectoryPermissions( logger );
+						foreach ( var app in config.Applications.OrderBy( x => string.IsNullOrEmpty( x.Alias ) ? 0 : 1 ) )
+						{
+							var alias = $"/{app.Alias}";
+							var physicalPath = app.Path;
 
-		await SendTaskEventAsync( logger, $"Application started, Name: {_appPoolName}" );
+							if ( !Path.IsPathRooted( physicalPath ) )
+								physicalPath = Path.Combine( task.AllocDir, task.Name, physicalPath );
+
+							var application = website.Applications.Add( alias, physicalPath );
+
+							if ( app.EnablePreload is not null )
+								application.SetAttributeValue( "preloadEnabled", app.EnablePreload.Value );
+						}
+
+						foreach ( var b in bindings )
+						{
+							string? certificateStoreName = null;
+							byte[]? certificateHash = null;
+
+							if ( b.Binding.CertificateHash is not null )
+							{
+								using var store = new X509Store( StoreName.My, StoreLocation.LocalMachine );
+
+								store.Open( OpenFlags.ReadOnly );
+
+								var certificate = store.Certificates
+									.FirstOrDefault( x => x.GetCertHashString().Equals( b.Binding.CertificateHash, StringComparison.InvariantCultureIgnoreCase ) );
+
+								if ( certificate is null )
+									throw new KeyNotFoundException( $"Couldn't find certificate with hash {b.Binding.CertificateHash}." );
+
+								await SendTaskEventAsync( logger, $"Using certificate: {certificate.FriendlyName}" );
+
+								certificateStoreName = store.Name;
+								certificateHash = certificate.GetCertHash();
+							}
+
+							var sslFlags = SslFlags.None;
+							if ( b.Binding.RequireSni is not null && b.Binding.RequireSni.Value )
+								sslFlags |= SslFlags.Sni;
+
+							var ipAddress = b.Binding.IPAddress ?? "*";
+
+							// Note: Certificate needs to be specified in this Add() method. Otherwise it doesn't work.
+							var binding = website.Bindings.Add(
+								$"{ipAddress}:{b.PortMapping.Value}:{b.Binding.Hostname}",
+								certificateHash, certificateStoreName, sslFlags );
+
+							binding.Protocol = b.Binding.Type;
+						}
+
+						serverManager.Sites.Add( website );
+					}
+				}
+				catch ( Exception )
+				{
+					// Try to clean up
+					var website = serverManager.Sites.FirstOrDefault( x => x.Name == _websiteName );
+					if ( website is not null )
+						serverManager.Sites.Remove( website );
+
+					var appPool2 = FindApplicationPool( serverManager );
+					if ( appPool2 is not null )
+						serverManager.ApplicationPools.Remove( appPool2 );
+
+					throw;
+				}
+			} );
+
+			if ( _owner.DirectorySecurity )
+				SetupDirectoryPermissions( logger );
+
+			await SendTaskEventAsync( logger, $"Application started, Name: {_appPoolName}" );
+		}
+		catch ( Exception ex )
+		{
+			await SendTaskEventAsync( logger, $"Error: {ex.Message}" );
+		}
 
 		void AddEnvironmentVariable ( ConfigurationElementCollection envVarsCollection, string key, string value )
 		{

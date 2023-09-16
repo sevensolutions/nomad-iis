@@ -12,6 +12,12 @@ indent_style = tab
 indent_size = 2
 tab_width = 2
 
+# HCL
+[*.{HCL}]
+indent_size = 2
+tab_width = 2
+indent_style = spaces
+
 # CSPROJ
 [*.CSPROJ]
 indent_size = 2

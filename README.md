@@ -53,14 +53,22 @@ plugin "nomad_iis" {
 
 | Option | Type | Required | Default Value | Description |
 |---|---|---|---|---|
-| path | string | yes | *none* | Defines the path of the web application. |
+| *application* | block list | yes | *none* | Defines one more applications. See *application* schema below for details. |
 | managed_pipeline_mode | string | no | *IIS default* | Valid options are *Integrated* or *Classic* |
 | managed_runtime_version | string | no | *IIS default* | Valid options are *v4.0*, *v2.0*, *None* |
 | start_mode | string | no | *IIS default* | Valid options are *OnDemand* or *AlwaysRunning* |
 | idle_timeout | string | no | *IIS default* | The AppPool idle timeout in the form *HH:mm:ss* or *[00w][00d][00h][00m][00s]* |
 | disable_overlapped_recycle | bool | no | *IIS default* | Defines whether two AppPools are allowed to run while recycling |
 | periodic_restart | string | no | *IIS default* | The AppPool periodic restart interval in the form *HH:mm:ss* or *[00w][00d][00h][00m][00s]* |
-| *bindings* | block list | no | *none* | Defines one or two port bindings. See *binding* schema below for details. |
+| *binding* | block list | yes | *none* | Defines one or two port bindings. See *binding* schema below for details. |
+
+### `application` Block Configuration
+
+| Option | Type | Required | Default Value | Description |
+|---|---|---|---|---|
+| path | string | yes | *none* | Defines the path of the web application, containing the application files |
+| alias | string | no | / | Defines an optional alias at which the application should be hosted below the website. If not set, the application will be hosted at the website level. |
+| enable_preload | bool | no | *IIS default* | Specifies whether the application should be pre-loaded. |
 
 ### `binding` Block Configuration
 
@@ -91,7 +99,9 @@ job "iis-test" {
       driver = "iis"
 
       config {
-        path = "C:\\inetpub\\wwwroot"
+        application {
+          path = "C:\\inetpub\\wwwroot"
+        }
 		
         binding {
           type = "http"
