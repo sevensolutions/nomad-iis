@@ -3,6 +3,7 @@ using Grpc.Core;
 using Hashicorp.Nomad.Plugins.Drivers.Proto;
 using MessagePack;
 using Microsoft.Extensions.Logging;
+using NomadIIS.Services.Configuration;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -43,7 +44,7 @@ public sealed class DriverService : Driver.DriverBase
 
 		return Task.FromResult( new TaskConfigSchemaResponse()
 		{
-			Spec = ConfigSchemas.TaskConfig
+			Spec = HclSpecGenerator.Generate<DriverTaskConfig>()
 		} );
 	}
 

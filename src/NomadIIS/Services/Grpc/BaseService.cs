@@ -3,6 +3,7 @@ using Hashicorp.Nomad.Plugins.Base.Proto;
 using MessagePack;
 using Microsoft.Extensions.Logging;
 using Microsoft.Web.Administration;
+using NomadIIS.Services.Configuration;
 using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
@@ -44,7 +45,7 @@ public sealed class BaseService : BasePluginBase
 
 		return Task.FromResult( new ConfigSchemaResponse()
 		{
-			Spec = ConfigSchemas.DriverConfig
+			Spec = HclSpecGenerator.Generate<DriverConfig>()
 		} );
 	}
 
@@ -52,37 +53,12 @@ public sealed class BaseService : BasePluginBase
 	{
 		_logger.LogInformation( nameof( SetConfig ) );
 
-		var enabled = true;
-		var directorySecurity = true;
-		TimeSpan? statsInterval = null;
-		TimeSpan? fingerprintInterval = null;
-
 		if ( request.MsgpackConfig is not null )
 		{
-			var config = MessagePackSerializer.Deserialize<Dictionary<object, object>>( request.MsgpackConfig.Memory );
-			
-			if ( config.TryGetValue( "enabled", out var rawEnabled ) && rawEnabled is bool vEnabled )
-				enabled = vEnabled;
+			var config = Configuration.MessagePackReader.Deserialize<DriverConfig>( request.MsgpackConfig );
 
-			if ( config.TryGetValue( "fingerprint_interval", out var objFingerprintInterval )
-				&& objFingerprintInterval is string strFingerprintInterval &&
-				!string.IsNullOrEmpty( strFingerprintInterval ) )
-			{
-				var interval = TimeSpanHelper.TryParse( strFingerprintInterval );
-
-				if ( interval is null )
-					throw new ArgumentException( $"Invalid value for fingerprint_interval configuration value" );
-				if ( interval.Value < TimeSpan.FromSeconds( 10 ) )
-					throw new ArgumentException( $"fingerprint_interval must be at least 10s." );
-
-				fingerprintInterval = interval.Value;
-			}
-
-			if ( config.TryGetValue( "directory_security", out var rawDirectorySecurity ) && rawEnabled is bool vDirectorySecurity )
-				directorySecurity = vDirectorySecurity;
+			_managementService.Configure( config );
 		}
-
-		_managementService.Configure( enabled, fingerprintInterval, directorySecurity );
 
 		return Task.FromResult( new SetConfigResponse() );
 	}

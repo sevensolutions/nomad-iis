@@ -1,6 +1,7 @@
 ﻿using Hashicorp.Nomad.Plugins.Drivers.Proto;
 using Microsoft.Extensions.Logging;
 using Microsoft.Web.Administration;
+using NomadIIS.Services.Configuration;
 using NomadIIS.Services.Grpc;
 using System;
 using System.Collections.Generic;
@@ -48,7 +49,10 @@ public sealed class IisTaskHandle : IDisposable
 			_appPoolName = GetAppPoolName( task );
 			_websiteName = _appPoolName;
 
-			var config = task.MsgpackDriverConfig.DecodeAsTaskConfig();
+			var config = MessagePackReader.Deserialize<DriverTaskConfig>( task.MsgpackDriverConfig );
+
+			if ( config.Applications.Select( x => x.Alias ).Distinct().Count() != config.Applications.Length )
+				throw new ArgumentException( "Every application alias must be unique." );
 
 			var bindings = config.Bindings.Select( binding =>
 			{
@@ -71,33 +75,23 @@ public sealed class IisTaskHandle : IDisposable
 					appPool = serverManager.ApplicationPools.Add( _appPoolName );
 					appPool.AutoStart = true;
 
-					switch ( config.ManagedPipelineMode )
-					{
-						case "Integrated":
-							appPool.ManagedPipelineMode = ManagedPipelineMode.Integrated;
-							break;
-						case "Classic":
-							appPool.ManagedPipelineMode = ManagedPipelineMode.Classic;
-							break;
-					}
+					if ( config.ManagedPipelineMode is not null )
+						appPool.ManagedPipelineMode = config.ManagedPipelineMode.Value;
 
 					if ( !string.IsNullOrWhiteSpace( config.ManagedRuntimeVersion ) )
 					{
 						if ( config.ManagedRuntimeVersion == "None" )
 							appPool.ManagedRuntimeVersion = "";
+						else if ( config.ManagedRuntimeVersion == "v4.0" )
+							appPool.ManagedRuntimeVersion = "v4.0";
+						else if ( config.ManagedRuntimeVersion == "v2.0" )
+							appPool.ManagedRuntimeVersion = "v2.0";
 						else
-							appPool.ManagedRuntimeVersion = config.ManagedRuntimeVersion;
+							throw new ArgumentException( $"Invalid managed_runtime_version. Must be either v4.0, v2.0 or None." );
 					}
 
-					switch ( config.StartMode )
-					{
-						case "OnDemand":
-							appPool.StartMode = StartMode.OnDemand;
-							break;
-						case "AlwaysRunning":
-							appPool.StartMode = StartMode.AlwaysRunning;
-							break;
-					}
+					if ( config.StartMode is not null )
+						appPool.StartMode = config.StartMode.Value;
 
 					if ( config.IdleTimeout is not null )
 						appPool.ProcessModel.IdleTimeout = config.IdleTimeout.Value;
@@ -148,6 +142,9 @@ public sealed class IisTaskHandle : IDisposable
 
 							if ( app.VirtualDirectories is not null )
 							{
+								if ( app.VirtualDirectories.Select( x => x.Alias ).Distinct().Count() != app.VirtualDirectories.Length )
+									throw new ArgumentException( "Every virtual_directory alias must be unique." );
+
 								foreach ( var vdir in app.VirtualDirectories )
 								{
 									var physicalVdirPath = vdir.Path;
@@ -194,7 +191,7 @@ public sealed class IisTaskHandle : IDisposable
 								$"{ipAddress}:{b.PortMapping.Value}:{b.Binding.Hostname}",
 								certificateHash, certificateStoreName, sslFlags );
 
-							binding.Protocol = b.Binding.Type;
+							binding.Protocol = b.Binding.Type.ToString().ToLower();
 						}
 
 						serverManager.Sites.Add( website );

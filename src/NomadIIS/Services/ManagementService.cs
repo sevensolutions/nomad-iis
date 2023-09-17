@@ -1,6 +1,7 @@
 ﻿using Hashicorp.Nomad.Plugins.Drivers.Proto;
 using Microsoft.Extensions.Logging;
 using Microsoft.Web.Administration;
+using NomadIIS.Services.Configuration;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -13,9 +14,9 @@ namespace NomadIIS.Services;
 public sealed class ManagementService
 {
 	private readonly ILogger<ManagementService> _logger;
-	private bool _driverEnabled;
+	private bool _driverEnabled = true;
 	private TimeSpan _fingerprintInterval = TimeSpan.FromSeconds( 30 );
-	private bool _directorySecurity;
+	private bool _directorySecurity = true;
 	private readonly ConcurrentDictionary<string, IisTaskHandle> _handles = new();
 	private readonly SemaphoreSlim _lock = new( 1, 1 );
 	private readonly Channel<DriverTaskEvent> _eventsChannel = Channel.CreateUnbounded<DriverTaskEvent>( new UnboundedChannelOptions()
@@ -34,11 +35,16 @@ public sealed class ManagementService
 	public TimeSpan FingerprintInterval => _fingerprintInterval;
 	public bool DirectorySecurity => _directorySecurity;
 
-	public void Configure ( bool enabled, TimeSpan? fingerprintInterval, bool directorySecurity )
+	public void Configure ( DriverConfig config )
 	{
-		_driverEnabled = enabled;
-		_fingerprintInterval = fingerprintInterval ?? _fingerprintInterval;
-		_directorySecurity = directorySecurity;
+		_driverEnabled = config.Enabled;
+
+		if ( config.FingerprintInterval < TimeSpan.FromSeconds( 10 ) )
+			throw new ArgumentException( $"fingerprint_interval must be at least 10s." );
+
+		_fingerprintInterval = config.FingerprintInterval;
+
+		_directorySecurity = config.DirectorySecurity;
 	}
 
 	public IisTaskHandle CreateHandle ( string taskId )
