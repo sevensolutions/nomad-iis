@@ -6,6 +6,9 @@ namespace NomadIIS.Services.Configuration;
 
 public sealed class DriverTaskConfig
 {
+	[ConfigurationField( "target_website" )]
+	public string? TargetWebsite { get; set; }
+
 	[ConfigurationCollectionField( "applications", "application", 1 )]
 	public DriverTaskConfigApplication[] Applications { get; set; } = default!;
 
@@ -20,10 +23,10 @@ public sealed class DriverTaskConfig
 
 	[ConfigurationField( "idle_timeout" )]
 	public TimeSpan? IdleTimeout { get; set; }
-	
+
 	[ConfigurationField( "disable_overlapped_recycle" )]
 	public bool DisabledOverlappedRecycle { get; set; }
-	
+
 	[ConfigurationField( "periodic_restart" )]
 	public TimeSpan? PeriodicRestart { get; set; }
 
