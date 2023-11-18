@@ -125,7 +125,7 @@ public sealed class DriverService : Driver.DriverBase
 		
 		try
 		{
-			await handle.RunAsync( _logger, task );
+			var driverState = await handle.RunAsync( _logger, task );
 
 			return new StartTaskResponse()
 			{
@@ -133,7 +133,8 @@ public sealed class DriverService : Driver.DriverBase
 				{
 					State = TaskState.Running,
 					Config = task,
-					Version = 1 // Driver State Version
+					Version = driverState.Version,
+					DriverState = ByteString.CopyFrom( MessagePackSerializer.Serialize( driverState ) )
 				},
 				Result = StartTaskResponse.Types.Result.Success
 			};
@@ -257,8 +258,7 @@ public sealed class DriverService : Driver.DriverBase
 
 		var handle = _managementService.CreateHandle( request.TaskId );
 
-		if ( handle is not null )
-			handle.RecoverState( request );
+		handle.RecoverState( _logger, request );
 
 		return Task.FromResult( new RecoverTaskResponse() );
 	}

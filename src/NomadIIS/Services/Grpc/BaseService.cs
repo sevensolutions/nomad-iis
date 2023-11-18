@@ -55,7 +55,7 @@ public sealed class BaseService : BasePluginBase
 
 		if ( request.MsgpackConfig is not null )
 		{
-			var config = Configuration.MessagePackReader.Deserialize<DriverConfig>( request.MsgpackConfig );
+			var config = Configuration.MessagePackHelper.Deserialize<DriverConfig>( request.MsgpackConfig );
 
 			_managementService.Configure( config );
 		}

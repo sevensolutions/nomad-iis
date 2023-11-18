@@ -11,7 +11,7 @@ using System.Reflection;
 
 namespace NomadIIS.Services.Configuration;
 
-public sealed class MessagePackReader
+public sealed class MessagePackHelper
 {
 	public static T Deserialize<T> ( ByteString data )
 		where T : class, new()

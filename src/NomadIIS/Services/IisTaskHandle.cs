@@ -1,10 +1,12 @@
 ﻿using Hashicorp.Nomad.Plugins.Drivers.Proto;
+using MessagePack;
 using Microsoft.Extensions.Logging;
 using Microsoft.Web.Administration;
 using NomadIIS.Services.Configuration;
 using NomadIIS.Services.Grpc;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Security.AccessControl;
@@ -23,10 +25,8 @@ public sealed class IisTaskHandle : IDisposable
 
 	// Note: These fields need to be recovered by RecoverState()!
 	private TaskConfig? _taskConfig;
-	private DriverTaskConfig? _config;
-	private DateTime? _startDate;
-	private string? _appPoolName;
-	private string? _websiteName;
+	private DriverStateV1? _state;
+	private bool _isRecovered;
 
 	private readonly CpuStats _totalCpuStats = new();
 	private readonly CpuStats _kernelModeCpuStats = new();
@@ -41,68 +41,81 @@ public sealed class IisTaskHandle : IDisposable
 
 	public string TaskId { get; }
 
-	public async Task RunAsync ( ILogger<DriverService> logger, TaskConfig task )
+	public async Task<DriverStateV1> RunAsync ( ILogger<DriverService> logger, TaskConfig task )
 	{
+		if ( _isRecovered )
+			return _state!;
+
+		logger.LogInformation( $"Starting task {task.Id} (Alloc: {task.AllocId})..." );
+
+		_state = new DriverStateV1();
+
 		try
 		{
 			_taskConfig = task;
-			_startDate = DateTime.UtcNow;
+			_state.StartDate = DateTime.UtcNow;
 
-			_appPoolName = BuildAppPoolOrWebsiteName( task );
+			_state.AppPoolName = BuildAppPoolOrWebsiteName( task );
 
-			_config = MessagePackReader.Deserialize<DriverTaskConfig>( task.MsgpackDriverConfig );
+			var config = MessagePackHelper.Deserialize<DriverTaskConfig>( task.MsgpackDriverConfig );
 
-			if ( _config.Applications.Select( x => x.Alias ).Distinct().Count() != _config.Applications.Length )
+			if ( config.Applications.Select( x => x.Alias ).Distinct().Count() != config.Applications.Length )
 				throw new ArgumentException( "Every application alias must be unique." );
 
-			if ( !string.IsNullOrEmpty( _config.TargetWebsite ) && _config.Applications.Any( x => string.IsNullOrEmpty( x.Alias ) ) )
+			if ( !string.IsNullOrEmpty( config.TargetWebsite ) && config.Applications.Any( x => string.IsNullOrEmpty( x.Alias ) ) )
 				throw new ArgumentException( "Defining a root application with an empty alias is not allowed when using a target_website." );
 
 			await _owner.LockAsync( serverManager =>
 			{
 				// Create AppPool
-				logger.LogInformation( $"Task {task.Id}: Creating AppPool with name {_appPoolName}..." );
-
-				var appPool = FindApplicationPool( serverManager, _appPoolName );
+				var appPool = FindApplicationPool( serverManager, _state.AppPoolName );
 				if ( appPool is null )
-					appPool = CreateApplicationPool( serverManager, _appPoolName, _taskConfig, _config );
+				{
+					logger.LogInformation( $"Task {task.Id}: Creating AppPool with name {_state.AppPoolName}..." );
+
+					appPool = CreateApplicationPool( serverManager, _state.AppPoolName, _taskConfig, config );
+				}
 
 				// Create Website
 				Site? website = null;
 
-				if ( !string.IsNullOrEmpty( _config.TargetWebsite ) )
+				if ( !string.IsNullOrEmpty( config.TargetWebsite ) )
 				{
-					website = FindWebsiteByName( serverManager, _config.TargetWebsite );
+					website = FindWebsiteByName( serverManager, config.TargetWebsite );
 
 					if ( website is null )
-						throw new KeyNotFoundException( $"The specified target_website \"{_config.TargetWebsite}\" does not exist. Make sure you constrain the job to nodes containing the specified target_website." );
+						throw new KeyNotFoundException( $"The specified target_website \"{config.TargetWebsite}\" does not exist. Make sure you constrain the job to nodes containing the specified target_website." );
 
-					_websiteName = website.Name;
+					_state.WebsiteName = website.Name;
+					_state.HasCreatedWebsite = false;
 
-					logger.LogInformation( $"Task {task.Id}: Using target website with name {_websiteName}..." );
+					logger.LogInformation( $"Task {task.Id}: Using target website with name {_state.WebsiteName}..." );
 				}
 				else
 				{
-					_websiteName = _appPoolName;
+					_state.WebsiteName = _state.AppPoolName;
+					_state.HasCreatedWebsite = true;
 
-					logger.LogInformation( $"Task {task.Id}: Creating Website with name {_websiteName}..." );
-
-					website = FindWebsiteByName( serverManager, _websiteName );
+					website = FindWebsiteByName( serverManager, _state.WebsiteName );
 
 					if ( website is null )
-						website = CreateWebsite( serverManager, _websiteName, _taskConfig, _config, appPool );
+					{
+						logger.LogInformation( $"Task {task.Id}: Creating Website with name {_state.WebsiteName}..." );
+
+						website = CreateWebsite( serverManager, _state.WebsiteName, _taskConfig, config, appPool );
+					}
 				}
 
 				// Create applications
-				foreach ( var app in _config.Applications.OrderBy( x => string.IsNullOrEmpty( x.Alias ) ? 0 : 1 ) )
+				foreach ( var app in config.Applications.OrderBy( x => string.IsNullOrEmpty( x.Alias ) ? 0 : 1 ) )
 				{
 					var application = FindApplicationByPath( website, $"/{app.Alias}" );
 
-					if ( application is not null )
-						throw new InvalidOperationException( $"An application with alias {app.Alias} already exists in website {website.Name}." );
-
-					CreateApplication( website, appPool, _taskConfig, app );
+					if ( application is null )
+						CreateApplication( website, appPool, _taskConfig, app );
 				}
+
+				_state.ApplicationAliases = config.Applications.Select( x => x.Alias ).ToList();
 
 				return Task.CompletedTask;
 			} );
@@ -119,7 +132,7 @@ public sealed class IisTaskHandle : IDisposable
 			if ( _owner.DirectorySecurity )
 				SetupDirectoryPermissions( logger );
 
-			await SendTaskEventAsync( logger, $"Application started, Name: {_appPoolName}" );
+			await SendTaskEventAsync( logger, $"Application started, Name: {_state.AppPoolName}" );
 		}
 		catch ( Exception ex )
 		{
@@ -127,16 +140,20 @@ public sealed class IisTaskHandle : IDisposable
 
 			// Note: We do not rethrow here because the website has already been set-up.
 		}
+
+		return _state;
 	}
 	public async Task StopAsync ( ILogger<DriverService> logger )
 	{
-		if ( string.IsNullOrEmpty( _appPoolName ) || string.IsNullOrEmpty( _websiteName ) || _config is null )
+		if ( _state is null || _taskConfig is null || string.IsNullOrEmpty( _state.AppPoolName ) || string.IsNullOrEmpty( _state.WebsiteName ) )
 			throw new InvalidOperationException( "Invalid state." );
+
+		logger.LogInformation( $"Stopping task {_taskConfig.Id} (Alloc: {_taskConfig.AllocId})..." );
 
 		await _owner.LockAsync( serverManager =>
 		{
-			var website = FindWebsiteByName( serverManager, _websiteName );
-			var appPool = FindApplicationPool( serverManager, _appPoolName );
+			var website = FindWebsiteByName( serverManager, _state.WebsiteName );
+			var appPool = FindApplicationPool( serverManager, _state.AppPoolName );
 
 			if ( appPool is not null )
 			{
@@ -147,21 +164,26 @@ public sealed class IisTaskHandle : IDisposable
 				}
 				catch ( Exception ex )
 				{
-					logger.LogWarning( ex, $"Failed to stop AppPool {_appPoolName}." );
+					logger.LogWarning( ex, $"Failed to stop AppPool {_state.AppPoolName}." );
 				}
 			}
 
 			if ( website is not null )
 			{
-				if ( !string.IsNullOrEmpty( _config.TargetWebsite ) )
+				if ( !_state.HasCreatedWebsite )
 				{
 					// Just remove the applications
-					foreach(var app in _config.Applications)
+					if ( _state.ApplicationAliases is not null )
 					{
-						var application = FindApplicationByPath( website, $"/{app.Alias}" );
-						if ( application is not null )
-							website.Applications.Remove( application );
+						foreach ( var appAlias in _state.ApplicationAliases )
+						{
+							var application = FindApplicationByPath( website, $"/{appAlias}" );
+							if ( application is not null )
+								website.Applications.Remove( application );
+						}
 					}
+					else
+						logger.LogWarning( "Invalid state. Missing _applicationAliases." );
 				}
 				else
 				{
@@ -181,20 +203,25 @@ public sealed class IisTaskHandle : IDisposable
 		await StopAsync( logger );
 	}
 
-	public void RecoverState ( RecoverTaskRequest request )
+	public void RecoverState ( ILogger logger, RecoverTaskRequest request )
 	{
 		_taskConfig = request.Handle.Config;
-		_appPoolName = BuildAppPoolOrWebsiteName( _taskConfig );
 
-		_config = MessagePackReader.Deserialize<DriverTaskConfig>( _taskConfig.MsgpackDriverConfig );
+		logger.LogInformation( $"Recovering task {request.TaskId} (Alloc: {_taskConfig.AllocId})..." );
 
-		if ( !string.IsNullOrEmpty( _config.TargetWebsite ) )
-			_websiteName = _config.TargetWebsite;
+		_isRecovered = true;
+
+		// Note: _taskConfig.MsgpackDriverConfig is allways empty when recovering a task.
+
+		if ( request.Handle.DriverState is not null && !request.Handle.DriverState.IsEmpty )
+		{
+			if ( request.Handle.Version >= 1 )
+				_state = MessagePackSerializer.Deserialize<DriverStateV1>( request.Handle.DriverState.Memory );
+			else
+				throw new InvalidOperationException( "Invalid state." );
+		}
 		else
-			_websiteName = _appPoolName;
-
-		// TODOPEI: Recover _startDate
-		_startDate = DateTime.UtcNow;
+			throw new InvalidOperationException( "Invalid state." );
 	}
 
 	public async Task SignalAsync ( ILogger<DriverService> logger, string signal )
@@ -202,7 +229,7 @@ public sealed class IisTaskHandle : IDisposable
 		if ( string.IsNullOrEmpty( signal ) )
 			return;
 
-		if ( string.IsNullOrEmpty( _appPoolName ) )
+		if ( _state is null || string.IsNullOrEmpty( _state.AppPoolName ) )
 			throw new InvalidOperationException( "Invalid state." );
 
 		switch ( signal.ToUpperInvariant() )
@@ -211,15 +238,15 @@ public sealed class IisTaskHandle : IDisposable
 			case "RECYCLE":
 				await _owner.LockAsync( async serverManager =>
 				{
-					var appPool = GetApplicationPool( serverManager, _appPoolName );
+					var appPool = GetApplicationPool( serverManager, _state.AppPoolName );
 
 					if ( appPool is not null )
 					{
-						logger.LogInformation( $"Recycle AppPool {_appPoolName}" );
+						logger.LogInformation( $"Recycle AppPool {_state.AppPoolName}" );
 
 						appPool.Recycle();
 
-						await SendTaskEventAsync( logger, $"ApplicationPool recycled, Name = {_appPoolName}" );
+						await SendTaskEventAsync( logger, $"ApplicationPool recycled, Name = {_state.AppPoolName}" );
 					}
 				} );
 
@@ -262,12 +289,12 @@ public sealed class IisTaskHandle : IDisposable
 
 	public async Task<TaskResourceUsage> GetStatisticsAsync ( ILogger<DriverService> logger )
 	{
-		if ( string.IsNullOrEmpty( _appPoolName ) )
+		if ( _state is null || string.IsNullOrEmpty( _state.AppPoolName ) )
 			throw new InvalidOperationException( "Invalid state." );
 
 		return await _owner.LockAsync( serverManager =>
 		{
-			var appPool = GetApplicationPool( serverManager, _appPoolName );
+			var appPool = GetApplicationPool( serverManager, _state.AppPoolName );
 
 			var w3wpPids = appPool.WorkerProcesses.Select( x => x.ProcessId ).ToArray();
 
@@ -305,7 +332,7 @@ public sealed class IisTaskHandle : IDisposable
 
 	public Task<InspectTaskResponse> InspectAsync ()
 	{
-		if ( _taskConfig is null || _startDate is null )
+		if ( _state is null || _taskConfig is null )
 			throw new InvalidOperationException( "Invalid state." );
 
 		return Task.FromResult( new InspectTaskResponse()
@@ -314,15 +341,15 @@ public sealed class IisTaskHandle : IDisposable
 			{
 				Attributes =
 				{
-					{ "AppPoolName", _appPoolName },
-					{ "WebsiteName", _websiteName }
+					{ "AppPoolName", _state.AppPoolName },
+					{ "WebsiteName", _state.WebsiteName }
 				}
 			},
 			Task = new Hashicorp.Nomad.Plugins.Drivers.Proto.TaskStatus()
 			{
 				Id = _taskConfig.Id,
 				Name = _taskConfig.Name,
-				StartedAt = Google.Protobuf.WellKnownTypes.Timestamp.FromDateTime( _startDate.Value ),
+				StartedAt = Google.Protobuf.WellKnownTypes.Timestamp.FromDateTime( _state.StartDate ),
 				State = TaskState.Running
 			}
 		} );
@@ -339,7 +366,7 @@ public sealed class IisTaskHandle : IDisposable
 
 	private static string BuildAppPoolOrWebsiteName ( TaskConfig taskConfig )
 	{
-		var rawName = $"{taskConfig.AllocId}-{taskConfig.Name}";
+		var rawName = $"nomad-{taskConfig.AllocId}-{taskConfig.Name}";
 
 		var invalidChars = ApplicationPoolCollection.InvalidApplicationPoolNameCharacters()
 			.Union( SiteCollection.InvalidSiteNameCharacters() )
@@ -550,7 +577,7 @@ public sealed class IisTaskHandle : IDisposable
 
 #pragma warning disable CA1416 // Plattformkompatibilität überprüfen
 
-		var identity = $"IIS AppPool\\{_appPoolName}";
+		var identity = $"IIS AppPool\\{_state!.AppPoolName}";
 
 		var allocDir = new DirectoryInfo( _taskConfig!.AllocDir );
 
