@@ -17,6 +17,7 @@ public sealed class ManagementService
 	private bool _driverEnabled = true;
 	private TimeSpan _fingerprintInterval = TimeSpan.FromSeconds( 30 );
 	private bool _directorySecurity = true;
+	private string[] _allowedTargetWebsites;
 	private readonly ConcurrentDictionary<string, IisTaskHandle> _handles = new();
 	private readonly SemaphoreSlim _lock = new( 1, 1 );
 	private readonly Channel<DriverTaskEvent> _eventsChannel = Channel.CreateUnbounded<DriverTaskEvent>( new UnboundedChannelOptions()
@@ -34,6 +35,7 @@ public sealed class ManagementService
 	public bool DriverEnabled => _driverEnabled;
 	public TimeSpan FingerprintInterval => _fingerprintInterval;
 	public bool DirectorySecurity => _directorySecurity;
+	public string[] AllowedTargetWebsites => _allowedTargetWebsites;
 
 	public void Configure ( DriverConfig config )
 	{
@@ -43,8 +45,8 @@ public sealed class ManagementService
 			throw new ArgumentException( $"fingerprint_interval must be at least 10s." );
 
 		_fingerprintInterval = config.FingerprintInterval;
-
 		_directorySecurity = config.DirectorySecurity;
+		_allowedTargetWebsites = config.AllowedTargetWebsites ?? Array.Empty<string>();
 	}
 
 	public IisTaskHandle CreateHandle ( string taskId )

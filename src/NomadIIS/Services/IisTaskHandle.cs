@@ -68,8 +68,17 @@ public sealed class IisTaskHandle : IDisposable
 			if ( config.Applications.Select( x => x.Alias ).Distinct().Count() != config.Applications.Length )
 				throw new ArgumentException( "Every application alias must be unique." );
 
-			if ( !string.IsNullOrEmpty( config.TargetWebsite ) && config.Applications.Any( x => string.IsNullOrEmpty( x.Alias ) ) )
-				throw new ArgumentException( "Defining a root application with an empty alias is not allowed when using a target_website." );
+			if ( !string.IsNullOrEmpty( config.TargetWebsite ) )
+			{
+				if ( !IsAllowedTargetWebsite( config.TargetWebsite ) )
+					throw new InvalidOperationException( $"Using target_website \"{config.TargetWebsite}\" is not allowed on this node." );
+
+				if ( config.TargetWebsite.StartsWith( "nomad-" ) )
+					throw new InvalidOperationException( $"Re-using the existing nomad website \"{config.TargetWebsite}\" as target_website is not allowed." );
+
+				if ( config.Applications.Any( x => string.IsNullOrEmpty( x.Alias ) ) )
+					throw new ArgumentException( "Defining a root application with an empty alias is not allowed when using a target_website." );
+			}
 
 			await _owner.LockAsync( serverManager =>
 			{
@@ -93,14 +102,14 @@ public sealed class IisTaskHandle : IDisposable
 						throw new KeyNotFoundException( $"The specified target_website \"{config.TargetWebsite}\" does not exist. Make sure you constrain the job to nodes containing the specified target_website." );
 
 					_state.WebsiteName = website.Name;
-					_state.HasCreatedWebsite = false;
+					_state.TaskOwnsWebsite = false;
 
 					logger.LogInformation( $"Task {task.Id}: Using target website with name {_state.WebsiteName}..." );
 				}
 				else
 				{
 					_state.WebsiteName = _state.AppPoolName;
-					_state.HasCreatedWebsite = true;
+					_state.TaskOwnsWebsite = true;
 
 					website = FindWebsiteByName( serverManager, _state.WebsiteName );
 
@@ -116,6 +125,9 @@ public sealed class IisTaskHandle : IDisposable
 				foreach ( var app in config.Applications.OrderBy( x => string.IsNullOrEmpty( x.Alias ) ? 0 : 1 ) )
 				{
 					var application = FindApplicationByPath( website, $"/{app.Alias}" );
+
+					if ( application is not null && !_state.TaskOwnsWebsite )
+						throw new InvalidOperationException( $"An application with alias {app.Alias} already exists in website {website.Name}." );
 
 					if ( application is null )
 						CreateApplication( website, appPool, _taskConfig, app );
@@ -176,7 +188,7 @@ public sealed class IisTaskHandle : IDisposable
 
 			if ( website is not null )
 			{
-				if ( !_state.HasCreatedWebsite )
+				if ( !_state.TaskOwnsWebsite )
 				{
 					// Just remove the applications
 					if ( _state.ApplicationAliases is not null )
@@ -567,6 +579,19 @@ public sealed class IisTaskHandle : IDisposable
 	}
 
 	#endregion
+
+	private bool IsAllowedTargetWebsite ( string websiteName )
+	{
+		foreach ( var allowed in _owner.AllowedTargetWebsites )
+		{
+			if ( allowed == "*" || allowed == websiteName )
+				return true;
+
+			// TODO: Should we support regex?
+		}
+
+		return false;
+	}
 
 	private async Task SendTaskEventAsync ( ILogger logger, string message )
 	{

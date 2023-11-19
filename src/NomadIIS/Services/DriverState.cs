@@ -23,7 +23,7 @@ namespace NomadIIS.Services
 		public string WebsiteName { get; set; } = default!;
 
 		[Key( 3 )]
-		public bool HasCreatedWebsite { get; set; } = default!;
+		public bool TaskOwnsWebsite { get; set; } = default!;
 
 		[Key( 4 )]
 		public List<string?> ApplicationAliases { get; set; } = default!;

@@ -17,4 +17,7 @@ public sealed class DriverConfig
 	[DefaultValue( true )]
 	[ConfigurationField( "directory_security" )]
 	public bool DirectorySecurity { get; set; }
+
+	[ConfigurationField( "allowed_target_websites" )]
+	public string[]? AllowedTargetWebsites { get; set; }
 }

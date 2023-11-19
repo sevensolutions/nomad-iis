@@ -38,6 +38,7 @@ Feel free to use it as-is or as a reference implementation for your own C#-based
 | enabled | bool | no | true | Enables/Disables the Nomad IIS Plugin |
 | fingerprint_interval | string | no | 30s | Defines the interval how often the plugin should report the driver's fingerprint to Nomad. The smallest possible value is 10s. |
 | directory_security | bool | no | true | Enables Directory Permission Management for [Filesystem Isolation](#-filesystem-isolation). |
+| allowed_target_websites | string[] | no | *none* | A list of IIS websites which are allowed to be used as [target_website](#-using-an-existing-website). An asterisk (*\**) may be used as a wildcard to allow any website. |
 
 **Example**
 
@@ -47,6 +48,7 @@ plugin "nomad_iis" {
     enabled = true,
     fingerprint_interval = "30s",
     directory_security = true
+    allowed_target_websites = [ "Default Web Site" ]
   }
 }
 ```
@@ -56,7 +58,7 @@ plugin "nomad_iis" {
 | Option | Type | Required | Default Value | Description |
 |---|---|---|---|---|
 | *application* | block list | yes | *none* | Defines one more applications. See *application* schema below for details. |
-| target_website | string | no | *none* | Specifies an existing target website. In this case the driver will not create a new website but instead use the existing one where it provisions the virtual applications only. You need to make sure you constrain your jobs to nodes having this target_website available, otherwise the job will fail. |
+| target_website | string | no | *none* | Specifies an existing target website. In this case the driver will not create a new website but instead use the existing one where it provisions the virtual applications only. Please read the details [here]([Details](#-using-an-existing-website)). |
 | managed_pipeline_mode | string | no | *IIS default* | Valid options are *Integrated* or *Classic* |
 | managed_runtime_version | string | no | *IIS default* | Valid options are *v4.0*, *v2.0*, *None* |
 | start_mode | string | no | *IIS default* | Valid options are *OnDemand* or *AlwaysRunning* |
@@ -171,6 +173,19 @@ Given a job spec with two tasks, the following table depicts the permissions for
 | `/task2/private` | No Access |
 | `/task2/secrets` | Read Only for *task2*, No Access for *task1*, no file listing |
 | `/task2/tmp` | Full Access for *task2* |
+
+## 🌐 Using an existing Website
+
+By specifying a *target_website* in the task configuration you can re-use an existing website managed outside of nomad.
+In this case the driver will not create a new website but instead use the existing one where it provisions the virtual applications only.
+
+Note that there're a few restrictions when using a target_website:
+
+- The feature [needs to be enabled](#-driver-configuration).
+- Re-using an existing website managed by nomad (owned by a different job or task), is not allowed.
+- Bindings and other website-related configuration will have no effect.
+- You need to make sure you constrain your jobs to nodes having this target_website available, otherwise the job will fail.
+- You cannot create a root-application when using a target_website.
 
 ## 🛠 How to Compile
 

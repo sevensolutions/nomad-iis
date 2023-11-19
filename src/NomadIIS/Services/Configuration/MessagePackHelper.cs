@@ -92,7 +92,7 @@ public sealed class MessagePackHelper
 				return TimeSpanHelper.Parse( strValue );
 			if ( targetType.IsEnum || Nullable.GetUnderlyingType( targetType ) is not null && Nullable.GetUnderlyingType( targetType )!.IsEnum )
 			{
-				if (Enum.TryParse( Nullable.GetUnderlyingType( targetType ) ?? targetType, strValue, true, out var enumValue ))
+				if ( Enum.TryParse( Nullable.GetUnderlyingType( targetType ) ?? targetType, strValue, true, out var enumValue ) )
 					return enumValue;
 				throw new ArgumentException( $"Invalid value \"{strValue}\" for {fieldName}." );
 			}
@@ -100,6 +100,24 @@ public sealed class MessagePackHelper
 
 		if ( rawValue is bool bValue && targetType == typeof( bool ) )
 			return bValue;
+
+		if ( rawValue is IEnumerable rawEnumerableValue )
+		{
+			if ( targetType == typeof( string[] ) )
+			{
+				var list = new List<string>();
+
+				foreach ( var raw in rawEnumerableValue )
+				{
+					if ( raw is string str )
+						list.Add( str );
+					else
+						throw new ArgumentException($"Invalid item value \"{raw}\" for string array.");
+				}
+
+				return list.ToArray();
+			}
+		}
 
 		throw new NotSupportedException();
 	}
