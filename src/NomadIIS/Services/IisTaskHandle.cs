@@ -58,6 +58,13 @@ public sealed class IisTaskHandle : IDisposable
 
 			var config = MessagePackHelper.Deserialize<DriverTaskConfig>( task.MsgpackDriverConfig );
 
+			foreach ( var app in config.Applications )
+			{
+				// In case someone is specifying the alias with a leading slash.
+				if ( app.Alias is not null )
+					app.Alias.TrimStart( '/' );
+			}
+
 			if ( config.Applications.Select( x => x.Alias ).Distinct().Count() != config.Applications.Length )
 				throw new ArgumentException( "Every application alias must be unique." );
 
