@@ -48,12 +48,25 @@ public sealed class ManagementService
 	}
 
 	public IisTaskHandle CreateHandle ( string taskId )
-		=> _handles.GetOrAdd( taskId, id => new IisTaskHandle( this, id ) );
+	{
+		if ( string.IsNullOrWhiteSpace( taskId ) )
+			throw new ArgumentNullException( nameof( taskId ) );
+
+		return _handles.GetOrAdd( taskId, id => new IisTaskHandle( this, id ) );
+	}
 
 	public IisTaskHandle GetHandle ( string taskId )
-		=> TryGetHandle( taskId ) ?? throw new TaskNotFoundException( taskId );
+	{
+		if ( string.IsNullOrWhiteSpace( taskId ) )
+			throw new ArgumentNullException( nameof( taskId ) );
+
+		return TryGetHandle( taskId ) ?? throw new TaskNotFoundException( taskId );
+	}
 	public IisTaskHandle? TryGetHandle ( string taskId )
 	{
+		if ( string.IsNullOrWhiteSpace( taskId ) )
+			throw new ArgumentNullException( nameof( taskId ) );
+
 		if ( _handles.TryGetValue( taskId, out var handle ) )
 			return handle;
 		return null;

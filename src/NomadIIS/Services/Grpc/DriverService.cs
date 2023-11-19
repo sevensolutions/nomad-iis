@@ -256,7 +256,8 @@ public sealed class DriverService : Driver.DriverBase
 	{
 		_logger.LogDebug( nameof( RecoverTask ) );
 
-		var handle = _managementService.CreateHandle( request.TaskId );
+		// Note: Looks like request.TaskId is always empty here.
+		var handle = _managementService.CreateHandle( request.Handle.Config.Id );
 
 		handle.RecoverState( _logger, request );
 

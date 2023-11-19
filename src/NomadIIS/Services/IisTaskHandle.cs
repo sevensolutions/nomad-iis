@@ -26,7 +26,6 @@ public sealed class IisTaskHandle : IDisposable
 	// Note: These fields need to be recovered by RecoverState()!
 	private TaskConfig? _taskConfig;
 	private DriverStateV1? _state;
-	private bool _isRecovered;
 
 	private readonly CpuStats _totalCpuStats = new();
 	private readonly CpuStats _kernelModeCpuStats = new();
@@ -34,7 +33,10 @@ public sealed class IisTaskHandle : IDisposable
 
 	internal IisTaskHandle ( ManagementService owner, string taskId )
 	{
-		_owner = owner;
+		if ( string.IsNullOrWhiteSpace( taskId ) )
+			throw new ArgumentNullException( nameof( taskId ) );
+
+		_owner = owner ?? throw new ArgumentNullException( nameof( owner ) );
 
 		TaskId = taskId;
 	}
@@ -43,9 +45,6 @@ public sealed class IisTaskHandle : IDisposable
 
 	public async Task<DriverStateV1> RunAsync ( ILogger<DriverService> logger, TaskConfig task )
 	{
-		if ( _isRecovered )
-			return _state!;
-
 		logger.LogInformation( $"Starting task {task.Id} (Alloc: {task.AllocId})..." );
 
 		_state = new DriverStateV1();
@@ -205,13 +204,12 @@ public sealed class IisTaskHandle : IDisposable
 
 	public void RecoverState ( ILogger logger, RecoverTaskRequest request )
 	{
+		// Note: request.TaskId is null/empty here.
+		// Also request.Handle.Config.MsgpackDriverConfig is allways empty.
+
 		_taskConfig = request.Handle.Config;
 
-		logger.LogInformation( $"Recovering task {request.TaskId} (Alloc: {_taskConfig.AllocId})..." );
-
-		_isRecovered = true;
-
-		// Note: _taskConfig.MsgpackDriverConfig is allways empty when recovering a task.
+		logger.LogInformation( $"Recovering task {_taskConfig.Id} (Alloc: {_taskConfig.AllocId})..." );
 
 		if ( request.Handle.DriverState is not null && !request.Handle.DriverState.IsEmpty )
 		{
@@ -222,6 +220,8 @@ public sealed class IisTaskHandle : IDisposable
 		}
 		else
 			throw new InvalidOperationException( "Invalid state." );
+
+		logger.LogInformation( $"Recovered task {_taskConfig.Id} from state: {_state}" );
 	}
 
 	public async Task SignalAsync ( ILogger<DriverService> logger, string signal )
@@ -259,32 +259,46 @@ public sealed class IisTaskHandle : IDisposable
 	}
 	public async Task<int> WaitAsync ( ILogger<DriverService> logger )
 	{
+		var exitCode = 0;
+
 		try
 		{
 			while ( !_ctsDisposed.IsCancellationRequested )
 			{
 				await Task.Delay( 3000, _ctsDisposed.Token );
 
-				//await _owner.LockAsync( serverManager =>
-				//{
-				//	var appPool = FindApplicationPool( serverManager );
+				if ( _state is null )
+				{
+					exitCode = -1;
+					break;
+				}
 
-				//	if ( appPool is not null )
-				//	{
-				//		logger.LogDebug( $"AppPool {_appPoolName} is in state {appPool.State}" );
-				//		//if ( appPool.State != ObjectState.Started )
-				//		//	return -1;
-				//	}
+				exitCode = await _owner.LockAsync( serverManager =>
+				{
+					var appPool = FindApplicationPool( serverManager, _state.AppPoolName );
 
-				//	return Task.CompletedTask;
-				//} );
+					if ( appPool is not null )
+					{
+						logger.LogDebug( $"AppPool {_state.AppPoolName} is in state {appPool.State}" );
+
+						if ( appPool.State == ObjectState.Stopped )
+							return Task.FromResult( -1 );
+					}
+					else
+						return Task.FromResult( -1 );
+
+					return Task.FromResult( 0 );
+				} );
+
+				if ( exitCode != 0 )
+					break;
 			}
 		}
 		catch ( OperationCanceledException )
 		{
 		}
 
-		return 0;
+		return exitCode;
 	}
 
 	public async Task<TaskResourceUsage> GetStatisticsAsync ( ILogger<DriverService> logger )

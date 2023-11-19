@@ -27,5 +27,8 @@ namespace NomadIIS.Services
 
 		[Key( 4 )]
 		public List<string?> ApplicationAliases { get; set; } = default!;
+
+		public override string ToString ()
+			=> $"Website: {WebsiteName}, AppPool: {AppPoolName}, StartDate: {StartDate.ToLocalTime()}";
 	}
 }
