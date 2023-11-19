@@ -4,8 +4,12 @@ using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Reflection;
+using System.Xml.Linq;
 
 namespace NomadIIS.Services.Configuration;
+
+// https://pkg.go.dev/github.com/hashicorp/nomad/plugins/shared/hclspec
+// https://github.com/hashicorp/nomad/blob/v1.6.3/plugins/shared/hclspec/hcl_spec.pb.go
 
 internal sealed class HclSpecGenerator
 {
@@ -65,7 +69,7 @@ internal sealed class HclSpecGenerator
 					{
 						Name = collectionFieldAttribute.BlockName,
 						MinItems = (ulong)collectionFieldAttribute.MinCount,
-						MaxItems = (ulong)(collectionFieldAttribute.MaxCount ?? 0),
+						MaxItems = (ulong)( collectionFieldAttribute.MaxCount ?? 0 ),
 						Nested = Generate( property.PropertyType.GetElementType()! )
 					}
 				};
@@ -89,6 +93,8 @@ internal sealed class HclSpecGenerator
 			return "string";
 		if ( type.IsEnum || Nullable.GetUnderlyingType( type ) is not null && Nullable.GetUnderlyingType( type )!.IsEnum )
 			return "string";
+		if ( type.IsArray )
+			return $"list({GetSchemaType( type.GetElementType()! )})";
 
 		throw new NotSupportedException();
 	}
