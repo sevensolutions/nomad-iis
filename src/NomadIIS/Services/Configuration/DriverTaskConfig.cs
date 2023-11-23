@@ -30,6 +30,9 @@ public sealed class DriverTaskConfig
 	[ConfigurationField( "periodic_restart" )]
 	public TimeSpan? PeriodicRestart { get; set; }
 
+	[ConfigurationField( "enable_udp_logging" )]
+	public bool EnableUdpLogging { get; set; }
+
 	[ConfigurationCollectionField( "bindings", "binding", 0, 2 )]
 	public DriverTaskConfigBinding[] Bindings { get; set; } = default!;
 }

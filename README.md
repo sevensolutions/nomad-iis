@@ -65,6 +65,7 @@ plugin "nomad_iis" {
 | idle_timeout | string | no | *IIS default* | The AppPool idle timeout in the form *HH:mm:ss* or *[00w][00d][00h][00m][00s]* |
 | disable_overlapped_recycle | bool | no | *IIS default* | Defines whether two AppPools are allowed to run while recycling |
 | periodic_restart | string | no | *IIS default* | The AppPool periodic restart interval in the form *HH:mm:ss* or *[00w][00d][00h][00m][00s]* |
+| enable_udp_logging | bool | no | false | Enables a UDP log-sink your application can log to. Please read the details [here]([Details](#-udp-logging)). |
 | *binding* | block list | yes | *none* | Defines one or two port bindings. See *binding* schema below for details. |
 
 ### `application` Block Configuration
@@ -186,6 +187,33 @@ Note that there're a few restrictions when using a target_website:
 - Bindings and other website-related configuration will have no effect.
 - You need to make sure you constrain your jobs to nodes having this target_website available, otherwise the job will fail.
 - You cannot create a root-application when using a target_website.
+
+## 📤 UDP Logging
+
+Unfortunately, IIS doesn't attach a Console to the *w3wp* processes and therefore *STDOUT* and *STDERR* streams are not available.
+As a solution, *nomad-iis* can provide a UDP-endpoint and ship those log messages to the Nomad-Client.
+
+Please note, that you need to configure your app's logging provider to log to this UDP endpoint.
+Here is an example log4net-appender on how to log to the UDP log-sink:
+
+```xml
+<appender name="UdpAppender" type="log4net.Appender.UdpAppender">
+    <localPort value="${NOMAD_STDOUT_UDP_LOCAL_PORT}" />
+    <remoteAddress value="127.0.0.1" />
+    <remotePort value="${NOMAD_STDOUT_UDP_REMOTE_PORT}" />
+    <layout type="log4net.Layout.PatternLayout, log4net">
+        <conversionPattern value="%d{dd.MM.yy HH:mm:ss.fff} %-5p [%-8t] %-35logger - %m%newline" />
+    </layout>
+</appender>
+```
+
+The UDP log-sink exposes two more environment variables:
+
+| Name | Description |
+|---|---|
+| NOMAD_STDOUT_UDP_LOCAL_PORT | The local port the appender has to use. Only messages from this port get received and forwarded to nomad. |
+| NOMAD_STDOUT_UDP_REMOTE_PORT | The remote port of the log-sink where log events must be sent to. |
+
 
 ## 🛠 How to Compile
 

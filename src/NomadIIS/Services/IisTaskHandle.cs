@@ -8,7 +8,11 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Pipes;
 using System.Linq;
+using System.Net;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using System.Security.AccessControl;
 using System.Security.Cryptography.X509Certificates;
 using System.Security.Principal;
@@ -80,15 +84,21 @@ public sealed class IisTaskHandle : IDisposable
 					throw new ArgumentException( "Defining a root application with an empty alias is not allowed when using a target_website." );
 			}
 
-			await _owner.LockAsync( serverManager =>
+			await _owner.LockAsync( async serverManager =>
 			{
+				UdpLoggerInfo? udpLogger = null;
+
+				// Register the UDP Logger
+				if ( config.EnableUdpLogging )
+					udpLogger = await SetupUdpStdoutForwarder( logger, task.StdoutPath, _ctsDisposed.Token );
+
 				// Create AppPool
 				var appPool = FindApplicationPool( serverManager, _state.AppPoolName );
 				if ( appPool is null )
 				{
 					logger.LogInformation( $"Task {task.Id}: Creating AppPool with name {_state.AppPoolName}..." );
 
-					appPool = CreateApplicationPool( serverManager, _state.AppPoolName, _taskConfig, config );
+					appPool = CreateApplicationPool( serverManager, _state.AppPoolName, _taskConfig, config, udpLogger );
 				}
 
 				// Create Website
@@ -134,8 +144,6 @@ public sealed class IisTaskHandle : IDisposable
 				}
 
 				_state.ApplicationAliases = config.Applications.Select( x => x.Alias ).ToList();
-
-				return Task.CompletedTask;
 			} );
 		}
 		catch ( Exception ex )
@@ -239,6 +247,8 @@ public sealed class IisTaskHandle : IDisposable
 		}
 		else
 			throw new InvalidOperationException( "Invalid state." );
+
+		// TODO: Recover UdpLogger with the old port.
 
 		logger.LogInformation( $"Recovered task {_taskConfig.Id} from state: {_state}" );
 	}
@@ -422,7 +432,7 @@ public sealed class IisTaskHandle : IDisposable
 		=> FindApplicationPool( serverManager, name ) ?? throw new KeyNotFoundException( $"No AppPool with name {name} found." );
 	private static ApplicationPool? FindApplicationPool ( ServerManager serverManager, string name )
 		=> serverManager.ApplicationPools.FirstOrDefault( x => x.Name == name );
-	private static ApplicationPool CreateApplicationPool ( ServerManager serverManager, string name, TaskConfig taskConfig, DriverTaskConfig config )
+	private static ApplicationPool CreateApplicationPool ( ServerManager serverManager, string name, TaskConfig taskConfig, DriverTaskConfig config, UdpLoggerInfo? udpLogger )
 	{
 		var appPool = serverManager.ApplicationPools.Add( name );
 		appPool.AutoStart = true;
@@ -458,9 +468,11 @@ public sealed class IisTaskHandle : IDisposable
 		foreach ( var env in taskConfig.Env )
 			AddEnvironmentVariable( envVarsCollection, env.Key, env.Value );
 
-		// TODOPEI: Doesn't work because of wrong permission
-		//AddEnvironmentVariable( envVarsCollection, "NOMAD_STDOUT_PATH", task.StdoutPath );
-		//AddEnvironmentVariable( envVarsCollection, "NOMAD_STDERR_PATH", task.StderrPath );
+		if ( udpLogger is not null )
+		{
+			AddEnvironmentVariable( envVarsCollection, "NOMAD_STDOUT_UDP_REMOTE_PORT", udpLogger.Value.TargetPort.ToString() );
+			AddEnvironmentVariable( envVarsCollection, "NOMAD_STDOUT_UDP_LOCAL_PORT", udpLogger.Value.SourcePort.ToString() );
+		}
 
 		return appPool;
 
@@ -694,6 +706,86 @@ public sealed class IisTaskHandle : IDisposable
 			return null;
 		}
 #pragma warning restore CA1416 // Plattformkompatibilität überprüfen
+	}
+
+	private record struct UdpLoggerInfo(int SourcePort, int TargetPort);
+
+	private async Task<UdpLoggerInfo> SetupUdpStdoutForwarder ( ILogger<DriverService> logger, string privatePipeName, CancellationToken cancellationToken )
+	{
+		// TODO: Theoretically, we only need a single Endpoint on the driver side?
+
+		var localPort = GetAvailablePort( 10000 );
+		var remotePort = GetAvailablePort( localPort + 1 );
+
+		_ = await Task.Factory.StartNew( async () =>
+		{
+			try
+			{
+				var nomadPipe = new NamedPipeClientStream( privatePipeName.Replace( "//./pipe/", "" ) );
+				await nomadPipe.ConnectAsync();
+				while ( !_ctsDisposed.IsCancellationRequested )
+				{
+					UdpClient? udpClient = null;
+					try
+					{
+						var ipEndpoint = new IPEndPoint( IPAddress.Loopback, remotePort );
+						udpClient = new UdpClient( ipEndpoint );
+						while ( !_ctsDisposed.IsCancellationRequested )
+						{
+							var result = await udpClient.ReceiveAsync( _ctsDisposed.Token );
+							// Ensure that nobody else is logging to our endpoint
+							if ( result.RemoteEndPoint.Port == localPort )
+								await nomadPipe.WriteAsync( result.Buffer, _ctsDisposed.Token );
+						}
+					}
+					catch ( Exception ex )
+					{
+						logger.LogWarning( ex, ex.Message );
+						if ( udpClient is not null )
+							udpClient.Dispose();
+					}
+				}
+			}
+			catch ( Exception ex )
+			{
+				logger.LogError( ex, ex.Message );
+			}
+		}, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default );
+
+		return new UdpLoggerInfo(localPort, remotePort);
+	}
+
+	private static int GetAvailablePort ( int startingPort )
+	{
+		var portArray = new List<int>();
+
+		var properties = IPGlobalProperties.GetIPGlobalProperties();
+
+		// Ignore active connections
+		var connections = properties.GetActiveTcpConnections();
+		portArray.AddRange( from n in connections
+							where n.LocalEndPoint.Port >= startingPort
+							select n.LocalEndPoint.Port );
+
+		// Ignore active TCP listners
+		var endPoints = properties.GetActiveTcpListeners();
+		portArray.AddRange( from n in endPoints
+							where n.Port >= startingPort
+							select n.Port );
+
+		// Ignore active UDP listeners
+		endPoints = properties.GetActiveUdpListeners();
+		portArray.AddRange( from n in endPoints
+							where n.Port >= startingPort
+							select n.Port );
+
+		portArray.Sort();
+
+		for ( var i = startingPort; i < ushort.MaxValue; i++ )
+			if ( !portArray.Contains( i ) )
+				return i;
+
+		return 0;
 	}
 
 	private class CpuStats
