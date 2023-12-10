@@ -31,6 +31,11 @@ Feel free to use it as-is or as a reference implementation for your own C#-based
 | Filesystem Isolation | 🔶 | [Details](#-filesystem-isolation) |
 | Nomad Networking | ❌ | |
 
+## 🖥 Client Requirements
+
+- Windows Server 2016+
+- Microsoft IIS 10.0+
+
 ## ⚙ Driver Configuration
 
 | Option | Type | Required | Default Value | Description |
