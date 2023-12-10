@@ -547,7 +547,7 @@ public sealed class IisTaskHandle : IDisposable
 	private static Application CreateApplication ( Site website, ApplicationPool appPool, TaskConfig taskConfig, DriverTaskConfigApplication appConfig )
 	{
 		var alias = $"/{appConfig.Alias}";
-		var physicalPath = appConfig.Path;
+		var physicalPath = appConfig.Path.Replace( '/', '\\' );
 
 		if ( !Path.IsPathRooted( physicalPath ) )
 			physicalPath = Path.Combine( taskConfig.AllocDir, taskConfig.Name, physicalPath );
@@ -566,7 +566,7 @@ public sealed class IisTaskHandle : IDisposable
 
 			foreach ( var vdir in appConfig.VirtualDirectories )
 			{
-				var physicalVdirPath = vdir.Path;
+				var physicalVdirPath = vdir.Path.Replace( '/', '\\' );
 
 				if ( !Path.IsPathRooted( physicalVdirPath ) )
 					physicalVdirPath = Path.Combine( taskConfig.AllocDir, taskConfig.Name, physicalVdirPath );
