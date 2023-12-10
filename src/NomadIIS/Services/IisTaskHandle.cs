@@ -271,6 +271,11 @@ public sealed class IisTaskHandle : IDisposable
 
 				break;
 
+			case "SIGINT":
+			case "SIGKILL":
+				await StopAsync( logger );
+				break;
+
 			default:
 				logger.LogInformation( $"Unsupported signal {signal} received." );
 				break;
