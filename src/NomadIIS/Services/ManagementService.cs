@@ -5,6 +5,10 @@ using NomadIIS.Services.Configuration;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Security.Cryptography.Xml;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -13,13 +17,17 @@ namespace NomadIIS.Services;
 
 public sealed class ManagementService
 {
+	private const string StateFilename = "nomad_iis.state.json";
+
 	private readonly ILogger<ManagementService> _logger;
 	private bool _driverEnabled = true;
+	private string _dataDirectory;
 	private TimeSpan _fingerprintInterval = TimeSpan.FromSeconds( 30 );
 	private bool _directorySecurity = true;
-	private string[] _allowedTargetWebsites;
+	private string[] _allowedTargetWebsites = Array.Empty<string>();
 	private readonly ConcurrentDictionary<string, IisTaskHandle> _handles = new();
 	private readonly SemaphoreSlim _lock = new( 1, 1 );
+	private readonly object _stateLock = new object();
 	private readonly Channel<DriverTaskEvent> _eventsChannel = Channel.CreateUnbounded<DriverTaskEvent>( new UnboundedChannelOptions()
 	{
 		SingleWriter = false,
@@ -30,6 +38,7 @@ public sealed class ManagementService
 	public ManagementService ( ILogger<ManagementService> logger )
 	{
 		_logger = logger;
+		_dataDirectory = Path.GetDirectoryName( typeof( Program ).Assembly.Location )!;
 	}
 
 	public bool DriverEnabled => _driverEnabled;
@@ -41,12 +50,25 @@ public sealed class ManagementService
 	{
 		_driverEnabled = config.Enabled;
 
+		if ( !string.IsNullOrEmpty( config.DataDirectory ) )
+		{
+			if ( Path.IsPathRooted( config.DataDirectory ) )
+				_dataDirectory = config.DataDirectory;
+			else
+				_dataDirectory = Path.Combine( _dataDirectory, config.DataDirectory );
+		}
+
+		if ( !Directory.Exists( _dataDirectory ) )
+			Directory.CreateDirectory( _dataDirectory );
+
 		if ( config.FingerprintInterval < TimeSpan.FromSeconds( 10 ) )
 			throw new ArgumentException( $"fingerprint_interval must be at least 10s." );
 
 		_fingerprintInterval = config.FingerprintInterval;
 		_directorySecurity = config.DirectorySecurity;
 		_allowedTargetWebsites = config.AllowedTargetWebsites ?? Array.Empty<string>();
+
+		LoadState();
 	}
 
 	public IisTaskHandle CreateHandle ( string taskId )
@@ -112,6 +134,40 @@ public sealed class ManagementService
 
 	internal void Delete ( IisTaskHandle handle )
 		=> _handles.TryRemove( handle.TaskId, out _ );
+
+	internal void SaveState ()
+	{
+		lock ( _stateLock )
+		{
+			var stateFile = Path.Combine( _dataDirectory, StateFilename );
+
+			var driverState = new DriverState();
+
+			driverState.Allocations = _handles.Values.Select( x => new DriverStateAlloc()
+			{
+				TaskId = x.TaskId,
+				//AllocId = x.Con
+			} ).ToArray();
+
+			var stateJson = JsonSerializer.Serialize( driverState );
+
+			File.WriteAllText( stateFile, stateJson );
+		}
+	}
+	private void LoadState ()
+	{
+		lock ( _stateLock )
+		{
+			var stateFile = Path.Combine( _dataDirectory, StateFilename );
+
+			if ( File.Exists( stateFile ) )
+			{
+				var json = File.ReadAllText( stateFile );
+
+				var stateJson = JsonSerializer.Deserialize<DriverState>( json );
+			}
+		}
+	}
 
 	public ValueTask SendEventAsync ( DriverTaskEvent @event )
 		=> _eventsChannel.Writer.WriteAsync( @event );

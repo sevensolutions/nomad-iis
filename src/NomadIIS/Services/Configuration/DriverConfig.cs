@@ -10,6 +10,10 @@ public sealed class DriverConfig
 	[ConfigurationField( "enabled" )]
 	public bool Enabled { get; set; }
 
+	[DefaultValue( null )]
+	[ConfigurationField( "data_directory" )]
+	public string? DataDirectory { get; set; }
+
 	[DefaultValue( "30s" )]
 	[ConfigurationField( "fingerprint_interval" )]
 	public TimeSpan FingerprintInterval { get; set; }

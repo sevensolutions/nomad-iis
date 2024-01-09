@@ -127,6 +127,8 @@ public sealed class DriverService : Driver.DriverBase
 		{
 			var driverState = await handle.RunAsync( _logger, task );
 
+			_managementService.SaveState();
+
 			return new StartTaskResponse()
 			{
 				Handle = new TaskHandle()
