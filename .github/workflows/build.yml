@@ -31,7 +31,7 @@ jobs:
     - name: Copy to output folder
       run: |
         mkdir dist
-        copy .\src\NomadIIS\bin\Release\net8.0\publish\nomad_iis.exe .\dist\nomad_iis.exe
+        copy .\src\NomadIIS\bin\Release\net8.0\win-x64\publish\nomad_iis.exe .\dist\nomad_iis.exe
 
     # Upload the artifact
     - name: Upload build artifacts
