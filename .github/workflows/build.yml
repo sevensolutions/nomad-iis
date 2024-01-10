@@ -21,7 +21,7 @@ jobs:
     - name: Install .NET Core
       uses: actions/setup-dotnet@v3
       with:
-        dotnet-version: 7.0.x
+        dotnet-version: 8.0.x
 
     # Publish the application
     - name: Publish the application
@@ -31,7 +31,7 @@ jobs:
     - name: Copy to output folder
       run: |
         mkdir dist
-        copy .\src\NomadIIS\bin\Debug\net7.0\win-x64\publish\nomad_iis.exe .\dist\nomad_iis.exe
+        copy .\src\NomadIIS\bin\Debug\net8.0\win-x64\publish\nomad_iis.exe .\dist\nomad_iis.exe
 
     # Upload the artifact
     - name: Upload build artifacts
