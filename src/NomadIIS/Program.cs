@@ -9,7 +9,21 @@ using NomadIIS.Services;
 using NomadIIS.Services.Grpc;
 using Serilog;
 using Serilog.Filters;
+using System;
 using System.Net;
+using System.Security.Principal;
+
+#pragma warning disable CA1416 // Plattformkompatibilität überprüfen
+using ( var identity = WindowsIdentity.GetCurrent() )
+{
+	var principal = new WindowsPrincipal( identity );
+	if ( !principal.IsInRole( WindowsBuiltInRole.Administrator ) )
+	{
+		Console.WriteLine( "Error: This plugin needs to be executed with administrator privileges." );
+		return -1;
+	}
+}
+#pragma warning restore CA1416 // Plattformkompatibilität überprüfen
 
 var excludeRouting = Matching.FromSource( "Microsoft.AspNetCore.Routing" );
 var excludeHosting = Matching.FromSource( "Microsoft.AspNetCore.Hosting" );
@@ -64,3 +78,5 @@ app.MapGrpcService<DriverService>();
 app.MapGet( "/", () => "This binary is a plugin. These are not meant to be executed directly. Please execute the program that consumes these plugins, which will load any plugins automatically." );
 
 app.Run();
+
+return 0;

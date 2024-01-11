@@ -281,6 +281,11 @@ public sealed class IisTaskHandle : IDisposable
 
 				break;
 
+			case "SIGINT":
+			case "SIGKILL":
+				await StopAsync( logger );
+				break;
+
 			default:
 				logger.LogInformation( $"Unsupported signal {signal} received." );
 				break;
@@ -505,7 +510,7 @@ public sealed class IisTaskHandle : IDisposable
 
 		var website = serverManager.Sites.CreateElement();
 
-		website.Id = serverManager.Sites.Count > 0 ? serverManager.Sites.Max( x => x.Id ) + 1 : 1;
+		website.Id = GetNextAvailableWebsiteId( serverManager );
 		website.Name = name;
 		website.ApplicationDefaults.ApplicationPoolName = appPool.Name;
 
@@ -559,7 +564,7 @@ public sealed class IisTaskHandle : IDisposable
 	private static Application CreateApplication ( Site website, ApplicationPool appPool, TaskConfig taskConfig, DriverTaskConfigApplication appConfig )
 	{
 		var alias = $"/{appConfig.Alias}";
-		var physicalPath = appConfig.Path;
+		var physicalPath = appConfig.Path.Replace( '/', '\\' );
 
 		if ( !Path.IsPathRooted( physicalPath ) )
 			physicalPath = Path.Combine( taskConfig.AllocDir, taskConfig.Name, physicalPath );
@@ -578,7 +583,7 @@ public sealed class IisTaskHandle : IDisposable
 
 			foreach ( var vdir in appConfig.VirtualDirectories )
 			{
-				var physicalVdirPath = vdir.Path;
+				var physicalVdirPath = vdir.Path.Replace( '/', '\\' );
 
 				if ( !Path.IsPathRooted( physicalVdirPath ) )
 					physicalVdirPath = Path.Combine( taskConfig.AllocDir, taskConfig.Name, physicalVdirPath );
@@ -706,6 +711,23 @@ public sealed class IisTaskHandle : IDisposable
 			return null;
 		}
 #pragma warning restore CA1416 // Plattformkompatibilität überprüfen
+	}
+
+	private static long GetNextAvailableWebsiteId ( ServerManager serverManager )
+	{
+		var usedIds = serverManager.Sites
+			.Select( x => x.Id )
+			.ToHashSet();
+
+		for ( var id = 0L; id < long.MaxValue - 1; id++ )
+		{
+			var next = id + 1;
+
+			if ( !usedIds.Contains( next ) )
+				return next;
+		}
+
+		throw new Exception( "No more website IDs available." );
 	}
 
 	private record struct UdpLoggerInfo(int SourcePort, int TargetPort);

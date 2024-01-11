@@ -4,6 +4,9 @@ job "iis-test" {
 
   group "iis-test" {
     count = 1
+
+    # You may want to set this to true
+    # prevent_reschedule_on_lost = true
     
     network {
       port "httplabel" {}

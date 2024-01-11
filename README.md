@@ -10,7 +10,7 @@
   </a>
 </p>
 
-This repository contains a task driver for [HashiCorp Nomad](https://www.nomadproject.io/) to run web-applications in IIS on Windows machines. Unlike most other Nomad task drivers, this one is written in the C# language using ASP.NET 7.
+This repository contains a task driver for [HashiCorp Nomad](https://www.nomadproject.io/) to run web-applications in IIS on Windows machines. Unlike most other Nomad task drivers, this one is written in the C# language using ASP.NET 8.
 It uses the *Microsoft.Web.Administration*-API to communicate with IIS.
 Feel free to use it as-is or as a reference implementation for your own C#-based Nomad-plugins.
 
@@ -30,6 +30,11 @@ Feel free to use it as-is or as a reference implementation for your own C#-based
 | Exec (Shell Access) | ❌ | I'am playing around a little bit but don't want to give you hope :/. See [GH-15](https://github.com/sevensolutions/nomad-iis/issues/15) for status. |
 | Filesystem Isolation | 🔶 | [Details](#-filesystem-isolation) |
 | Nomad Networking | ❌ | |
+
+## 🖥 Client Requirements
+
+- Windows Server 2016+
+- Microsoft IIS 10.0+
 
 ## ⚙ Driver Configuration
 
@@ -104,6 +109,9 @@ job "iis-test" {
 
   group "iis-test" {
     count = 1
+
+    # You may want to set this to true
+    # prevent_reschedule_on_lost = true
 	
     network {
       port "httplabel" {}
@@ -144,6 +152,7 @@ The Nomad IIS driver supports the following signals:
 | Signal | Description |
 |---|---|
 | `SIGHUP` or `RECYCLE` | Recycles the Application Pool |
+| `SIGINT` or `SIGKILL` | Stops and removes the Application. Note: When sending this signal manually, the job gets re-scheduled. |
 
 To send a *RECYCLE* signal, run:
 
