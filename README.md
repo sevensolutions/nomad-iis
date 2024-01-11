@@ -44,7 +44,7 @@ Feel free to use it as-is or as a reference implementation for your own C#-based
 | fingerprint_interval | string | no | 30s | Defines the interval how often the plugin should report the driver's fingerprint to Nomad. The smallest possible value is 10s. |
 | directory_security | bool | no | true | Enables Directory Permission Management for [Filesystem Isolation](#-filesystem-isolation). |
 | allowed_target_websites | string[] | no | *none* | A list of IIS websites which are allowed to be used as [target_website](#-using-an-existing-website). An asterisk (*\**) may be used as a wildcard to allow any website. |
-| udp_logger_port | number | no | 64001 | The local UDP port where the driver is listening for log-events which will be shipped to the Nomad client. The value 0 will disable this feature. Please read the details [here]([Details](#-udp-logging)). |
+| udp_logger_port | number | no | 64001 | The local UDP port where the driver is listening for log-events which will be shipped to the Nomad client. The value 0 will disable this feature. Please read the details [here](#-udp-logging). |
 
 **Example**
 
@@ -71,7 +71,7 @@ plugin "nomad_iis" {
 | idle_timeout | string | no | *IIS default* | The AppPool idle timeout in the form *HH:mm:ss* or *[00w][00d][00h][00m][00s]* |
 | disable_overlapped_recycle | bool | no | *IIS default* | Defines whether two AppPools are allowed to run while recycling |
 | periodic_restart | string | no | *IIS default* | The AppPool periodic restart interval in the form *HH:mm:ss* or *[00w][00d][00h][00m][00s]* |
-| enable_udp_logging | bool | no | false | Enables a UDP log-sink your application can log to. Please read the details [here]([Details](#-udp-logging)). |
+| enable_udp_logging | bool | no | false | Enables a UDP log-sink your application can log to. Please read the details [here](#-udp-logging). |
 | *binding* | block list | yes | *none* | Defines one or two port bindings. See *binding* schema below for details. |
 
 ### `application` Block Configuration
