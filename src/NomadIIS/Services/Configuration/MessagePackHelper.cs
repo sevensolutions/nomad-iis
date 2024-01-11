@@ -90,6 +90,8 @@ public sealed class MessagePackHelper
 				return strValue == "true" ? true : strValue == "false" ? false : throw new ArgumentException( $"Invalid boolean value {strValue}." );
 			if ( targetType == typeof( TimeSpan ) || targetType == typeof( TimeSpan? ) )
 				return TimeSpanHelper.Parse( strValue );
+			if ( targetType == typeof( int ) || targetType == typeof( int? ) )
+				return int.Parse( strValue );
 			if ( targetType.IsEnum || Nullable.GetUnderlyingType( targetType ) is not null && Nullable.GetUnderlyingType( targetType )!.IsEnum )
 			{
 				if ( Enum.TryParse( Nullable.GetUnderlyingType( targetType ) ?? targetType, strValue, true, out var enumValue ) )
@@ -97,6 +99,13 @@ public sealed class MessagePackHelper
 				throw new ArgumentException( $"Invalid value \"{strValue}\" for {fieldName}." );
 			}
 		}
+
+		if ( rawValue is byte byteValue && ( targetType == typeof( int ) || targetType == typeof( int? ) ) )
+			return (int)byteValue;
+		if ( rawValue is ushort ushortValue && ( targetType == typeof( int ) || targetType == typeof( int? ) ) )
+			return (int)ushortValue;
+		if ( rawValue is int intValue && ( targetType == typeof( int ) || targetType == typeof( int? ) ) )
+			return intValue;
 
 		if ( rawValue is bool bValue && targetType == typeof( bool ) )
 			return bValue;
@@ -112,7 +121,7 @@ public sealed class MessagePackHelper
 					if ( raw is string str )
 						list.Add( str );
 					else
-						throw new ArgumentException($"Invalid item value \"{raw}\" for string array.");
+						throw new ArgumentException( $"Invalid item value \"{raw}\" for string array." );
 				}
 
 				return list.ToArray();

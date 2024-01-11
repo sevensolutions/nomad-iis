@@ -28,6 +28,9 @@ namespace NomadIIS.Services
 		[Key( 4 )]
 		public List<string?> ApplicationAliases { get; set; } = default!;
 
+		[Key( 5 )]
+		public int? UdpLoggerPort { get; set; }
+
 		public override string ToString ()
 			=> $"Website: {WebsiteName}, AppPool: {AppPoolName}, StartDate: {StartDate.ToLocalTime()}";
 	}

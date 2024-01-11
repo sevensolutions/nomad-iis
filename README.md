@@ -25,7 +25,7 @@ Feel free to use it as-is or as a reference implementation for your own C#-based
 | HTTPS Bindings | ✔ | [GH-3](https://github.com/sevensolutions/nomad-iis/issues/3) |
 | Environment Variables | ✔ | [Details](#-environment-variables) |
 | Resource Statistics | ✔ | |
-| Logging | ❌ | [GH-6](https://github.com/sevensolutions/nomad-iis/issues/6) |
+| Logging | ✔ | Experimental UDP logging. See [GH-6](https://github.com/sevensolutions/nomad-iis/issues/6) for details. |
 | Signals with `nomad alloc signal` | ✔ | [Details](#-supported-signals) |
 | Exec (Shell Access) | ❌ | I'am playing around a little bit but don't want to give you hope :/. See [GH-15](https://github.com/sevensolutions/nomad-iis/issues/15) for status. |
 | Filesystem Isolation | 🔶 | [Details](#-filesystem-isolation) |
@@ -44,6 +44,7 @@ Feel free to use it as-is or as a reference implementation for your own C#-based
 | fingerprint_interval | string | no | 30s | Defines the interval how often the plugin should report the driver's fingerprint to Nomad. The smallest possible value is 10s. |
 | directory_security | bool | no | true | Enables Directory Permission Management for [Filesystem Isolation](#-filesystem-isolation). |
 | allowed_target_websites | string[] | no | *none* | A list of IIS websites which are allowed to be used as [target_website](#-using-an-existing-website). An asterisk (*\**) may be used as a wildcard to allow any website. |
+| udp_logger_port | number | no | 64001 | The local UDP port where the driver is listening for log-events which will be shipped to the Nomad client. The value 0 will disable this feature. Please read the details [here]([Details](#-udp-logging)). |
 
 **Example**
 
@@ -197,10 +198,17 @@ Note that there're a few restrictions when using a target_website:
 - You need to make sure you constrain your jobs to nodes having this target_website available, otherwise the job will fail.
 - You cannot create a root-application when using a target_website.
 
-## 📤 UDP Logging
+## 💬 UDP Logging
 
 Unfortunately, IIS doesn't attach a Console to the *w3wp* processes and therefore *STDOUT* and *STDERR* streams are not available.
 As a solution, *nomad-iis* can provide a UDP-endpoint and ship those log messages to the Nomad-Client.
+
+The UDP log-sink exposes two more environment variables:
+
+| Name | Description |
+|---|---|
+| NOMAD_STDOUT_UDP_LOCAL_PORT | The local port the appender has to use. Only messages from this port get received and forwarded to nomad. |
+| NOMAD_STDOUT_UDP_REMOTE_PORT | The remote port of the log-sink where log events must be sent to. |
 
 Please note, that you need to configure your app's logging provider to log to this UDP endpoint.
 Here is an example log4net-appender on how to log to the UDP log-sink:
@@ -215,14 +223,6 @@ Here is an example log4net-appender on how to log to the UDP log-sink:
     </layout>
 </appender>
 ```
-
-The UDP log-sink exposes two more environment variables:
-
-| Name | Description |
-|---|---|
-| NOMAD_STDOUT_UDP_LOCAL_PORT | The local port the appender has to use. Only messages from this port get received and forwarded to nomad. |
-| NOMAD_STDOUT_UDP_REMOTE_PORT | The remote port of the log-sink where log events must be sent to. |
-
 
 ## 🛠 How to Compile
 

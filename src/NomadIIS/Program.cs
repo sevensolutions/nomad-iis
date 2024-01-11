@@ -39,7 +39,7 @@ var builder = WebApplication.CreateBuilder( args );
 builder.Logging.ClearProviders();
 builder.Host.UseSerilog();
 
-//Debugger.Launch();
+//System.Diagnostics.Debugger.Launch();
 
 builder.WebHost.ConfigureKestrel( config => {
 	config.Listen( IPAddress.Loopback, 5003, listenOptions => {
@@ -53,6 +53,7 @@ builder.WebHost.ConfigureKestrel( config => {
 
 builder.Services.AddSingleton<ManagementService>();
 
+builder.Services.AddHostedService( sp => sp.GetRequiredService<ManagementService>() );
 builder.Services.AddHostedService<HandshakeService>();
 
 builder.Services.AddGrpc();
