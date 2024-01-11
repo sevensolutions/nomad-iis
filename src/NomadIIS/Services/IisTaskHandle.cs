@@ -498,7 +498,7 @@ public sealed class IisTaskHandle : IDisposable
 
 		var website = serverManager.Sites.CreateElement();
 
-		website.Id = serverManager.Sites.Count > 0 ? serverManager.Sites.Max( x => x.Id ) + 1 : 1;
+		website.Id = GetNextAvailableWebsiteId( serverManager );
 		website.Name = name;
 		website.ApplicationDefaults.ApplicationPoolName = appPool.Name;
 
@@ -699,6 +699,23 @@ public sealed class IisTaskHandle : IDisposable
 			return null;
 		}
 #pragma warning restore CA1416 // Plattformkompatibilität überprüfen
+	}
+
+	private static long GetNextAvailableWebsiteId ( ServerManager serverManager )
+	{
+		var usedIds = serverManager.Sites
+			.Select( x => x.Id )
+			.ToHashSet();
+
+		for ( var id = 0L; id < long.MaxValue - 1; id++ )
+		{
+			var next = id + 1;
+
+			if ( !usedIds.Contains( next ) )
+				return next;
+		}
+
+		throw new Exception( "No more website IDs available." );
 	}
 
 	private class CpuStats
