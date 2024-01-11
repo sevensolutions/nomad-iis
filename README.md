@@ -207,8 +207,8 @@ The UDP log-sink exposes two more environment variables:
 
 | Name | Description |
 |---|---|
-| NOMAD_STDOUT_UDP_LOCAL_PORT | The local port the appender has to use. Only messages from this port get received and forwarded to nomad. |
-| NOMAD_STDOUT_UDP_REMOTE_PORT | The remote port of the log-sink where log events must be sent to. |
+| `NOMAD_STDOUT_UDP_LOCAL_PORT` | The local port the appender has to use. Only messages from this port get received and forwarded to nomad. |
+| `NOMAD_STDOUT_UDP_REMOTE_PORT` | The remote port of the log-sink where log events must be sent to. |
 
 Please note, that you need to configure your app's logging provider to log to this UDP endpoint.
 Here is an example log4net-appender on how to log to the UDP log-sink:
