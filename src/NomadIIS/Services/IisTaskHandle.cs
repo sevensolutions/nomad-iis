@@ -689,7 +689,7 @@ public sealed class IisTaskHandle : IDisposable
 			if ( fileSystemRights is not null )
 			{
 				acl.AddAccessRule( new FileSystemAccessRule(
-					identity, fileSystemRights.Value, inheritanceFlags, PropagationFlags.InheritOnly, AccessControlType.Allow ) );
+					identity, fileSystemRights.Value, inheritanceFlags, PropagationFlags.NoPropagateInherit, AccessControlType.Allow ) );
 			}
 
 			// Apply the new ACL
