@@ -255,3 +255,9 @@ Run the *Release.pubxml* publish profile from Visual Studio. This will create a 
 ## 🚧 TODOs and Known Issues
 
 Check the [Open Issues here](https://github.com/sevensolutions/nomad-iis/issues).
+
+## ☕ Support
+
+You want to support me?
+
+<a href="https://www.buymeacoffee.com/sevensolutions" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
