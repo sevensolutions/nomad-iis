@@ -21,7 +21,7 @@ public sealed class ManagementService : IHostedService
 	private bool _driverEnabled = true;
 	private TimeSpan _fingerprintInterval = TimeSpan.FromSeconds( 30 );
 	private bool _directorySecurity = true;
-	private string[] _allowedTargetWebsites;
+	private string[] _allowedTargetWebsites = Array.Empty<string>();
 	private int? _udpLoggerPort;
 	private UdpClient? _udpLoggerClient;
 	private Task? _udpLoggerTask;
