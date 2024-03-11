@@ -72,7 +72,7 @@ public sealed class DriverTaskConfigBinding
 
 	[Required]
 	[ConfigurationField( "port" )]
-	public string PortLabel { get; set; } = default!;
+	public string Port { get; set; } = default!;
 
 	[ConfigurationField( "hostname" )]
 	public string? Hostname { get; set; }

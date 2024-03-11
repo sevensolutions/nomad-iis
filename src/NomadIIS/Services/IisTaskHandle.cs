@@ -426,13 +426,19 @@ public sealed class IisTaskHandle : IDisposable
 
 		foreach ( var c in rawName )
 		{
-			if ( invalidChars.Contains( c ) )
+			if ( invalidChars.Contains( c ) || c == ' ' )
 				sb.Append( '_' );
 			else
 				sb.Append( c );
 		}
 
-		return sb.ToString();
+		var finalName = sb.ToString();
+
+		// AppPool name limit is 64 characters. Website's doesn't seem to have a limit.
+		if ( finalName.Length > 64 )
+			finalName = $"nomad-{taskConfig.AllocId}";
+
+		return finalName;
 	}
 
 	private static ApplicationPool GetApplicationPool ( ServerManager serverManager, string name )
@@ -503,11 +509,26 @@ public sealed class IisTaskHandle : IDisposable
 	{
 		var bindings = config.Bindings.Select( binding =>
 		{
-			var port = taskConfig.Resources.Ports.FirstOrDefault( x => x.Label == binding.PortLabel );
-			if ( port is null )
-				throw new KeyNotFoundException( $"Couldn't resolve binding-port with label \"{binding.PortLabel}\" in the network config." );
+			int? port;
+			PortMapping? portMapping = null;
 
-			return new { Binding = binding, PortMapping = port };
+			if ( int.TryParse( binding.Port, out var staticPort ) )
+			{
+				if ( string.IsNullOrEmpty( binding.Hostname ) )
+					throw new Exception( $"Static port {staticPort} can only be used in combination with the hostname-setting. You can also use a network stanza to specify the port." );
+
+				port = staticPort;
+			}
+			else
+			{
+				portMapping = taskConfig.Resources.Ports.FirstOrDefault( x => x.Label == binding.Port );
+				if ( portMapping is null )
+					throw new KeyNotFoundException( $"Couldn't resolve binding-port with label \"{binding.Port}\" in the network config." );
+
+				port = portMapping.Value;
+			}
+
+			return new { Binding = binding, Port = port, PortMapping = portMapping };
 		} ).ToArray();
 
 		var website = serverManager.Sites.CreateElement();
@@ -550,7 +571,7 @@ public sealed class IisTaskHandle : IDisposable
 
 			// Note: Certificate needs to be specified in this Add() method. Otherwise it doesn't work.
 			var binding = website.Bindings.Add(
-				$"{ipAddress}:{b.PortMapping.Value}:{b.Binding.Hostname}",
+				$"{ipAddress}:{b.Port}:{b.Binding.Hostname}",
 				certificateHash, certificateStoreName, sslFlags );
 
 			binding.Protocol = b.Binding.Type.ToString().ToLower();

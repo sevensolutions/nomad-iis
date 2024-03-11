@@ -95,7 +95,7 @@ plugin "nomad_iis" {
 | Option | Type | Required | Default Value | Description |
 |---|---|---|---|---|
 | type | string | yes | *none* | Defines the protocol of the port binding. Allowed values are *http* or *https*. |
-| port | string | yes | *none* | Defines the port label of a `network` block configuration |
+| port | string | yes | *none* | Defines the port label of a `network` block configuration or a static port like "80". Static ports can only be used when *hostname* is also set. Otherwise use a nomad *network*-stanza to specify the port. |
 | hostname | string | no | *IIS default* | Only listens to the specified hostname |
 | require_sni | bool | no | *IIS default* | Defines whether SNI (Server Name Indication) is required |
 | ip_address | string | no | *IIS default* | Specifies the IP-Address of the interface to listen on |
