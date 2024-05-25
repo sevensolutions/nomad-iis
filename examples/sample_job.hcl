@@ -15,14 +15,19 @@ job "iis-test" {
     task "iis-test" {
       driver = "iis"
 
+      artifact {
+        source = "https://github.com/sevensolutions/nomad-iis/raw/main/examples/static-sample-app.zip"
+        destination = "local"
+      }
+
       config {
         application {
-          path = "C:\\inetpub\\wwwroot"
+          path = "local"
         }
-        application {
-          alias = "subapp"
-          path = "C:\\inetpub\\wwwroot"
-        }
+        # application {
+        #   alias = "subapp"
+        #   path = "C:\\inetpub\\wwwroot"
+        # }
         
         binding {
           type = "http"

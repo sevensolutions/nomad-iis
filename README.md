@@ -103,35 +103,43 @@ plugin "nomad_iis" {
 
 **Example**
 
+**Note:** The following example downloads a very simple HTML app from this repository.
+Feel free to inspect the ZIP before running the job.
+
 ```hcl
-job "iis-test" {
+job "static-sample-app" {
   datacenters = ["dc1"]
   type = "service"
 
-  group "iis-test" {
+  group "app" {
     count = 1
 
     # You may want to set this to true
     # prevent_reschedule_on_lost = true
-	
+  
     network {
       port "httplabel" {}
     }
 
-    task "iis-test" {
+    task "app" {
       driver = "iis"
+
+      artifact {
+        source = "https://github.com/sevensolutions/nomad-iis/raw/main/examples/static-sample-app.zip"
+        destination = "local"
+      }
 
       config {
         application {
-          path = "C:\\inetpub\\wwwroot"
+          path = "local"
         }
-		
+    
         binding {
           type = "http"
           port = "httplabel"
         }
       }
-	  
+    
       resources {
         cpu    = 100
         memory = 20
