@@ -157,7 +157,7 @@ public sealed class IisTaskHandle : IDisposable
 		try
 		{
 			if ( _owner.DirectorySecurity )
-				SetupDirectoryPermissions( logger );
+				await SetupDirectoryPermissions( logger );
 
 			await SendTaskEventAsync( logger, $"Application started, Name: {_state.AppPoolName}" );
 		}
@@ -655,7 +655,25 @@ public sealed class IisTaskHandle : IDisposable
 		}
 	}
 
-	private void SetupDirectoryPermissions ( ILogger logger )
+	private async Task SetupDirectoryPermissions ( ILogger logger )
+	{
+		try
+		{
+			// GH-43: It may happen that this throws an IdentityNotMappedException sometimes.
+			// I think setting up the AppPoolIdentity takes some time.
+			// So if we're too early, we try again in 2 seconds.
+			SetupDirectoryPermissionsCore( logger );
+		}
+		catch(IdentityNotMappedException ex)
+		{
+			logger.LogDebug( ex, "Failed to setup directory permissions for allocation {allocation}. Retrying in 2 seconds...", _taskConfig?.AllocId );
+
+			await Task.Delay( 2000 );
+
+			SetupDirectoryPermissionsCore( logger );
+		}
+	}
+	private void SetupDirectoryPermissionsCore ( ILogger logger )
 	{
 		// https://developer.hashicorp.com/nomad/docs/concepts/filesystem
 		// https://learn.microsoft.com/en-us/troubleshoot/developer/webapps/iis/www-authentication-authorization/default-permissions-user-rights

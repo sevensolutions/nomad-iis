@@ -252,7 +252,7 @@ Of course you can also compile with Visual Studio :)
 ## 🐛 How to Debug locally
 
 There is a launch-profile to run nomad in dev-mode which automatically loads the driver plugin.
-Open Visual Studio, select the *Nomad* launch profile and press *F5*.
+Open Visual Studio, select the *Nomad (Dev)* launch profile and press *F5*.
 
 Note: To debug the driver itself, you need to attach the debugger to the nomad_iis.exe process manually.
 
