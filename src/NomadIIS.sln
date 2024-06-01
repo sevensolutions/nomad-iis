@@ -11,9 +11,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Projektmappenelemente", "Pr
 		..\.gitignore = ..\.gitignore
 		..\examples\agent.dev.hcl = ..\examples\agent.dev.hcl
 		..\examples\agent.hcl = ..\examples\agent.hcl
+		..\examples\aspnet_sample_app.hcl = ..\examples\aspnet_sample_app.hcl
 		..\.github\dependabot.yml = ..\.github\dependabot.yml
 		..\README.md = ..\README.md
-		..\examples\sample_job.hcl = ..\examples\sample_job.hcl
+		..\examples\static_sample_app.hcl = ..\examples\static_sample_app.hcl
 	EndProjectSection
 EndProject
 Global
