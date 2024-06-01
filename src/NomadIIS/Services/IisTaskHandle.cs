@@ -56,6 +56,8 @@ public sealed class IisTaskHandle : IDisposable
 
 		_state = new DriverStateV1();
 
+		DriverTaskConfig config;
+
 		try
 		{
 			_taskConfig = task;
@@ -63,7 +65,7 @@ public sealed class IisTaskHandle : IDisposable
 
 			_state.AppPoolName = BuildAppPoolOrWebsiteName( task );
 
-			var config = MessagePackHelper.Deserialize<DriverTaskConfig>( task.MsgpackDriverConfig );
+			config = MessagePackHelper.Deserialize<DriverTaskConfig>( task.MsgpackDriverConfig );
 
 			foreach ( var app in config.Applications )
 			{
@@ -157,7 +159,7 @@ public sealed class IisTaskHandle : IDisposable
 		try
 		{
 			if ( _owner.DirectorySecurity )
-				await SetupDirectoryPermissions( logger );
+				await SetupDirectoryPermissions( logger, config );
 
 			await SendTaskEventAsync( logger, $"Application started, Name: {_state.AppPoolName}" );
 		}
@@ -655,25 +657,25 @@ public sealed class IisTaskHandle : IDisposable
 		}
 	}
 
-	private async Task SetupDirectoryPermissions ( ILogger logger )
+	private async Task SetupDirectoryPermissions ( ILogger logger, DriverTaskConfig config )
 	{
 		try
 		{
 			// GH-43: It may happen that this throws an IdentityNotMappedException sometimes.
 			// I think setting up the AppPoolIdentity takes some time.
 			// So if we're too early, we try again in 2 seconds.
-			SetupDirectoryPermissionsCore( logger );
+			SetupDirectoryPermissionsCore( logger, config );
 		}
-		catch(IdentityNotMappedException ex)
+		catch ( IdentityNotMappedException ex )
 		{
 			logger.LogDebug( ex, "Failed to setup directory permissions for allocation {allocation}. Retrying in 2 seconds...", _taskConfig?.AllocId );
 
 			await Task.Delay( 2000 );
 
-			SetupDirectoryPermissionsCore( logger );
+			SetupDirectoryPermissionsCore( logger, config );
 		}
 	}
-	private void SetupDirectoryPermissionsCore ( ILogger logger )
+	private void SetupDirectoryPermissionsCore ( ILogger logger, DriverTaskConfig config )
 	{
 		// https://developer.hashicorp.com/nomad/docs/concepts/filesystem
 		// https://learn.microsoft.com/en-us/troubleshoot/developer/webapps/iis/www-authentication-authorization/default-permissions-user-rights
@@ -681,23 +683,25 @@ public sealed class IisTaskHandle : IDisposable
 
 #pragma warning disable CA1416 // Plattformkompatibilität überprüfen
 
-		var identity = $"IIS AppPool\\{_state!.AppPoolName}";
+		var appPoolIdentity = $"IIS AppPool\\{_state!.AppPoolName}";
+
+		string[] identities = config.PermitIusr ? [appPoolIdentity, "IUSR"] : [appPoolIdentity];
 
 		var allocDir = new DirectoryInfo( _taskConfig!.AllocDir );
 
 		var builtinUsersSid = TryGetSid( WellKnownSidType.BuiltinUsersSid, logger );
 		var authenticatedUserSid = TryGetSid( WellKnownSidType.AuthenticatedUserSid, logger );
 
-		SetupDirectory( @"alloc", null, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, logger );
-		SetupDirectory( @"alloc\data", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, logger );
-		SetupDirectory( @"alloc\logs", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, logger );
-		SetupDirectory( @"alloc\tmp", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, logger );
-		SetupDirectory( $@"{_taskConfig.Name}\private", null, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, logger );
-		SetupDirectory( $@"{_taskConfig.Name}\local", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, logger );
-		SetupDirectory( $@"{_taskConfig.Name}\secrets", FileSystemRights.Read, InheritanceFlags.ObjectInherit, logger );
-		SetupDirectory( $@"{_taskConfig.Name}\tmp", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, logger );
+		SetupDirectory( [appPoolIdentity], @"alloc", null, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, logger );
+		SetupDirectory( [appPoolIdentity], @"alloc\data", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, logger );
+		SetupDirectory( [appPoolIdentity], @"alloc\logs", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, logger );
+		SetupDirectory( [appPoolIdentity], @"alloc\tmp", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, logger );
+		SetupDirectory( null, $@"{_taskConfig.Name}\private", null, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, logger );
+		SetupDirectory( identities, $@"{_taskConfig.Name}\local", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, logger );
+		SetupDirectory( [appPoolIdentity], $@"{_taskConfig.Name}\secrets", FileSystemRights.Read, InheritanceFlags.ObjectInherit, PropagationFlags.InheritOnly, logger );
+		SetupDirectory( [appPoolIdentity], $@"{_taskConfig.Name}\tmp", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, logger );
 
-		void SetupDirectory ( string subDirectory, FileSystemRights? fileSystemRights, InheritanceFlags inheritanceFlags, ILogger logger )
+		void SetupDirectory ( string[]? identities, string subDirectory, FileSystemRights? fileSystemRights, InheritanceFlags inheritanceFlags, PropagationFlags propagationFlags, ILogger logger )
 		{
 			var directory = allocDir;
 
@@ -725,10 +729,13 @@ public sealed class IisTaskHandle : IDisposable
 			}
 
 			// Add new Rules
-			if ( fileSystemRights is not null )
+			if ( identities is not null && identities.Length > 0 && fileSystemRights is not null )
 			{
-				acl.AddAccessRule( new FileSystemAccessRule(
-					identity, fileSystemRights.Value, inheritanceFlags, PropagationFlags.None, AccessControlType.Allow ) );
+				foreach ( var identity in identities )
+				{
+					acl.AddAccessRule( new FileSystemAccessRule(
+						identity, fileSystemRights.Value, inheritanceFlags, propagationFlags, AccessControlType.Allow ) );
+				}
 			}
 
 			// Apply the new ACL

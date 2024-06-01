@@ -72,6 +72,7 @@ plugin "nomad_iis" {
 | disable_overlapped_recycle | bool | no | *IIS default* | Defines whether two AppPools are allowed to run while recycling |
 | periodic_restart | string | no | *IIS default* | The AppPool periodic restart interval in the form *HH:mm:ss* or *[00w][00d][00h][00m][00s]* |
 | enable_udp_logging | bool | no | false | Enables a UDP log-sink your application can log to. Please read the details [here](#-udp-logging). |
+| permit_iusr | bool | no | true | Specifies whether you want to permit the [IUSR-account](https://learn.microsoft.com/en-us/iis/get-started/planning-for-security/understanding-built-in-user-and-group-accounts-in-iis#understanding-the-new-iusr-account) on the *local* directory. When you disable this, you may need to tweak your *web.config* a bit. Read [this](#gdk-iusr) for details. |
 | *binding* | block list | yes | *none* | Defines one or two port bindings. See *binding* schema below for details. |
 
 ### `application` Block Configuration
@@ -230,6 +231,27 @@ Here is an example log4net-appender on how to log to the UDP log-sink:
         <conversionPattern value="%d{dd.MM.yy HH:mm:ss.fff} %-5p [%-8t] %-35logger - %m%newline" />
     </layout>
 </appender>
+```
+
+## 💡 Good to know
+
+### Anonymous Authentication and the IUSR account{#gdk-iusr}
+
+By default, this driver will permit the built-in [*IUSR-account*](https://learn.microsoft.com/en-us/iis/get-started/planning-for-security/understanding-built-in-user-and-group-accounts-in-iis#understanding-the-new-iusr-account) to the *local* task directory.
+This should allow anonymous authentication to work directly.  
+You can optionally disable this by setting `permit_iusr = false`.
+In this case you may need to add the following snippet to your *web.config* to make anonymous authentication use the *AppPoolIdentity* instead.
+
+```xml
+<configuration>
+  <system.webServer>
+    <security>
+      <authentication>
+        <anonymousAuthentication userName="" />
+      </authentication>
+    </security>
+  </system.webServer>
+</configuration>
 ```
 
 ## 🛠 How to Compile

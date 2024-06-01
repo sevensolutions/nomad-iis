@@ -33,6 +33,9 @@ public sealed class DriverTaskConfig
 	[ConfigurationField( "enable_udp_logging" )]
 	public bool EnableUdpLogging { get; set; }
 
+	[ConfigurationField( "permit_iusr" )]
+	public bool PermitIusr { get; set; } = true;
+
 	[ConfigurationCollectionField( "bindings", "binding", 0, 2 )]
 	public DriverTaskConfigBinding[] Bindings { get; set; } = default!;
 }
