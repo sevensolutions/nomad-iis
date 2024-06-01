@@ -42,7 +42,7 @@ builder.Host.UseSerilog();
 //System.Diagnostics.Debugger.Launch();
 
 builder.WebHost.ConfigureKestrel( config => {
-	config.Listen( IPAddress.Loopback, 5003, listenOptions => {
+	config.Listen( IPAddress.Loopback, 0, listenOptions => {
 		listenOptions.Protocols = HttpProtocols.Http2;
 	} );
 	//config.ListenUnixSocket("/my-socket2.sock", listenOptions =>
