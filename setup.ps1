@@ -1,4 +1,4 @@
-$NomadVersion = "1.7.5"
+$NomadVersion = "1.8.0"
 $NomadDownloadUrl = "https://releases.hashicorp.com/nomad/${NomadVersion}/nomad_${NomadVersion}_windows_amd64.zip"
 $NomadZipFileLocation = ".\nomad\nomad_${NomadVersion}_windows_amd64.zip"
 
