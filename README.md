@@ -50,6 +50,8 @@ Feel free to use it as-is or as a reference implementation for your own C#-based
 
 ```hcl
 plugin "nomad_iis" {
+  #args = ["--port 1234"] # Optional. To change the static port. The default is 5003.
+  #args = ["--port 0"] # Optional. To use a random port
   config {
     enabled = true,
     fingerprint_interval = "30s",
