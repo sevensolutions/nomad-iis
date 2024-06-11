@@ -16,7 +16,8 @@ Feel free to use it as-is or as a reference implementation for your own C#-based
 
 > [!NOTE]  
 > This document always represents the latest version, which may not have been released yet.  
-> Therefore, some features may not be available currently but will be available soon. Stay tuned.
+> Therefore, some features may not be available currently but will be available soon.
+> You can use the GIT-Tags to check individual versions.
 
 ## 🎉 Features
 
