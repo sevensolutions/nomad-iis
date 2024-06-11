@@ -14,6 +14,10 @@ This repository contains a task driver for [HashiCorp Nomad](https://www.nomadpr
 It uses the *Microsoft.Web.Administration*-API to communicate with IIS.
 Feel free to use it as-is or as a reference implementation for your own C#-based Nomad-plugins.
 
+> [!NOTE]  
+> This document always represents the latest version, which may not have been released yet.  
+> Therefore, some features may not be available currently but will be available soon. Stay tuned.
+
 ## 🎉 Features
 
 | Feature | Status | Details |
