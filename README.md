@@ -266,6 +266,11 @@ In this case you may need to add the following snippet to your *web.config* to m
 > The corresponding section is locked on IIS Instance level.
 > To unlock it, open the IIS Management Console, select the Server node on the left side and then navigate to *Feature Delegation*. Look for the entry *Authentication - Anonymous* and change it to *Read/Write*.
 
+### asp-net-sample-app returns 500 - Internal Server Error
+
+The asp-net-sample-app changes the anonymous authentication in a way, so that the App Pool Identity is being used.  
+Please see the *Important*-box above.
+
 ## 🛠 How to Compile
 
 Run the setup command to download the nomad binary.
