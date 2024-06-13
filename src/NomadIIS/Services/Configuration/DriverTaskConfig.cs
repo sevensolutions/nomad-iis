@@ -1,5 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using System;
+﻿using System;
+using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 
 namespace NomadIIS.Services.Configuration;
@@ -33,6 +33,7 @@ public sealed class DriverTaskConfig
 	[ConfigurationField( "enable_udp_logging" )]
 	public bool EnableUdpLogging { get; set; }
 
+	[DefaultValue( true )]
 	[ConfigurationField( "permit_iusr" )]
 	public bool PermitIusr { get; set; } = true;
 

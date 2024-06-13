@@ -240,7 +240,7 @@ Here is an example log4net-appender on how to log to the UDP log-sink:
 </appender>
 ```
 
-## 💡 Good to know
+## 💡 Good to know / FAQ
 
 ### Anonymous Authentication and the IUSR account
 
@@ -260,6 +260,11 @@ In this case you may need to add the following snippet to your *web.config* to m
   </system.webServer>
 </configuration>
 ```
+
+> [!IMPORTANT]  
+> By default, changing the anonymous authentication via custom web.config is not allowed in IIS and you will get a *500 - Internal Server Error*.
+> The corresponding section is locked on IIS Instance level.
+> To unlock it, open the IIS Management Console, select the Server node on the left side and then navigate to *Feature Delegation*. Look for the entry *Authentication - Anonymous* and change it to *Read/Write*.
 
 ## 🛠 How to Compile
 

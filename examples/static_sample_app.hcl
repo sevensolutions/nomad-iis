@@ -24,19 +24,11 @@ job "static-sample-app" {
         application {
           path = "local"
         }
-		# application {
-        #   alias = "subapp"
-        #   path = "C:\\inetpub\\wwwroot"
-        # }
     
         binding {
           type = "http"
           port = "httplabel"
         }
-      }
-
-	  env {
-        my_key = "my-value"
       }
     
       resources {
