@@ -265,6 +265,8 @@ In this case you may need to add the following snippet to your *web.config* to m
 > By default, changing the anonymous authentication via custom web.config is not allowed in IIS and you will get a *500 - Internal Server Error*.
 > The corresponding section is locked on IIS Instance level.
 > To unlock it, open the IIS Management Console, select the Server node on the left side and then navigate to *Feature Delegation*. Look for the entry *Authentication - Anonymous* and change it to *Read/Write*.
+> If you want to automate this process, run the following Powershell Command:
+> `Set-WebConfiguration //System.WebServer/Security/Authentication/anonymousAuthentication -metadata overrideMode -value Allow -PSPath IIS:/`
 
 ### asp-net-sample-app returns 500 - Internal Server Error
 
