@@ -216,6 +216,9 @@ Note that there're a few restrictions when using a target_website:
 
 ## 💬 UDP Logging
 
+> [!WARNING]
+> This feature is considered experimental and not very well tested yet.
+
 Unfortunately, IIS doesn't attach a Console to the *w3wp* processes and therefore *STDOUT* and *STDERR* streams are not available.
 As a solution, *nomad-iis* can provide a UDP-endpoint and ship those log messages to the Nomad-Client.
 
