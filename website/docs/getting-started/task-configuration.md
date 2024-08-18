@@ -7,7 +7,7 @@ sidebar_position: 5
 | Option | Type | Required | Default Value | Description |
 |---|---|---|---|---|
 | *application* | block list | yes | *none* | Defines one more applications. See *application* schema below for details. |
-| target_website | string | no | *none* | Specifies an existing target website. In this case the driver will not create a new website but instead use the existing one where it provisions the virtual applications only. Please read the details [here]([Details](../features/existing-website.md)). |
+| target_website | string | no | *none* | Specifies an existing target website. In this case the driver will not create a new website but instead use the existing one where it provisions the virtual applications only. Please read the details [here](../features/existing-website.md). |
 | managed_pipeline_mode | string | no | *IIS default* | Valid options are *Integrated* or *Classic* |
 | managed_runtime_version | string | no | *IIS default* | Valid options are *v4.0*, *v2.0*, *None* |
 | start_mode | string | no | *IIS default* | Valid options are *OnDemand* or *AlwaysRunning* |

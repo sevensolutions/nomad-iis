@@ -9,7 +9,7 @@ In this case the driver will not create a new website but instead use the existi
 
 Note that there're a few restrictions when using a target_website:
 
-- The feature [needs to be enabled](#-driver-configuration).
+- The feature [needs to be enabled](../getting-started/driver-configuration.md).
 - Re-using an existing website managed by nomad (owned by a different job or task), is not allowed.
 - Bindings and other website-related configuration will have no effect.
 - You need to make sure you constrain your jobs to nodes having this target_website available, otherwise the job will fail.
