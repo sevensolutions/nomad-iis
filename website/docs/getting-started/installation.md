@@ -1,8 +1,13 @@
 ---
-position: 2
+sidebar_position: 2
 ---
 
 # Installation
+
+:::tip
+I suggest to use [*HashiCorp Packer*](https://www.packer.io/) for automating the provisioning of client nodes if you need to maintain a lot of nodes.
+I'll provide an example as soon as i have time.
+:::
 
 ## Requirements
 
@@ -97,11 +102,6 @@ New-NetFirewallRule -DisplayName "Allow Nomad Dynamic Ports 20000-32000" -Action
 Follow the official tutorials from HashiCorp to install a Nomad Client on your Windows Server.
 
 https://developer.hashicorp.com/nomad/tutorials/windows
-
-:::tip
-I suggest to use [*HashiCorp Packer*](https://www.packer.io/) for automating the provisioning of client nodes if you need to maintain a lot of nodes.
-I'll provide an example as soon as i have time.
-:::
 
 ## Download Nomad IIS
 

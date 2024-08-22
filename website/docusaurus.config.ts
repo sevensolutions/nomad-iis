@@ -65,6 +65,12 @@ const config: Config = {
           position: 'left',
           label: 'Getting Started',
         },
+				{
+          type: 'docSidebar',
+					sidebarId: 'featuresSidebar',
+          position: 'left',
+          label: 'Features',
+        },
         {
           href: githubRepo,
           label: 'GitHub',
@@ -81,6 +87,10 @@ const config: Config = {
             {
               label: 'Getting Started',
               to: '/docs/getting-started',
+            },
+						{
+              label: 'Features',
+              to: '/docs/features',
             },
           ],
         },
