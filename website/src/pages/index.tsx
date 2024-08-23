@@ -35,7 +35,7 @@ export default function Home(): JSX.Element {
       description="A TaskDriver plugin for HashiCorp Nomad to run IIS workloads.">
 
 			<div className={styles.container}>
-				<img className={styles.logo} src="img/logo.svg" />
+				<img className={styles.logo} />
 				<h2>{siteConfig.tagline}</h2>
 			</div>
     </Layout>

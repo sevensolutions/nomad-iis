@@ -57,6 +57,7 @@ const config: Config = {
       logo: {
         alt: 'Nomad IIS Logo',
         src: 'img/logo.svg',
+        srcDark: 'img/logo-dark.svg'
       },
       items: [
         {
