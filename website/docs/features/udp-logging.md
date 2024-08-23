@@ -6,6 +6,7 @@ sidebar_position: 6
 
 :::caution
 This feature is considered experimental and not very well tested yet.
+It needs to be [enabled](../getting-started/driver-configuration.md) by specifying a port at `udp_logger_port`.
 :::
 
 Unfortunately, IIS doesn't attach a Console to the *w3wp* processes and therefore *STDOUT* and *STDERR* streams are not available.

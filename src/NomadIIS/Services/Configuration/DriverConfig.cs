@@ -21,7 +21,7 @@ public sealed class DriverConfig
 	[ConfigurationField( "allowed_target_websites" )]
 	public string[]? AllowedTargetWebsites { get; set; }
 
-	[DefaultValue( 64001 )]
+	[DefaultValue( 0 )]
 	[ConfigurationField( "udp_logger_port" )]
-	public int? UdpLoggerPort { get; set; } = 64001;
+	public int? UdpLoggerPort { get; set; } = 0;
 }
