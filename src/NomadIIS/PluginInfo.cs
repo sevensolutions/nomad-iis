@@ -3,5 +3,5 @@
 internal static class PluginInfo
 {
 	public static readonly string Name = "iis";
-	public static readonly string Version = "0.9.0";
+	public static readonly string Version = "0.10.0";
 }
