@@ -89,7 +89,7 @@ public sealed class IisTaskHandle : IDisposable
 					throw new ArgumentException( "Defining a root application with an empty alias is not allowed when using a target_website." );
 			}
 
-			await _owner.LockAsync( async serverManager =>
+			await _owner.LockAsync( serverManager =>
 			{
 				// Get a new port for the UDP logger
 				if ( config.EnableUdpLogging )
@@ -147,6 +147,8 @@ public sealed class IisTaskHandle : IDisposable
 				}
 
 				_state.ApplicationAliases = config.Applications.Select( x => x.Alias ).ToList();
+
+				return Task.CompletedTask;
 			} );
 		}
 		catch ( Exception ex )
@@ -485,7 +487,7 @@ public sealed class IisTaskHandle : IDisposable
 
 		if ( udpLocalPort is not null && udpRemotePort is not null )
 		{
-			AddEnvironmentVariable( envVarsCollection, "NOMAD_STDOUT_UDP_REMOTE_PORT", udpRemotePort.ToString() );
+			AddEnvironmentVariable( envVarsCollection, "NOMAD_STDOUT_UDP_REMOTE_PORT", udpRemotePort.Value.ToString() );
 			AddEnvironmentVariable( envVarsCollection, "NOMAD_STDOUT_UDP_LOCAL_PORT", udpLocalPort.Value.ToString() );
 		}
 
