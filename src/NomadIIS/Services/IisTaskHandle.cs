@@ -71,7 +71,7 @@ public sealed class IisTaskHandle : IDisposable
 			{
 				// In case someone is specifying the alias with a leading slash.
 				if ( app.Alias is not null )
-					app.Alias.TrimStart( '/' );
+					app.Alias = app.Alias.TrimStart( '/' );
 			}
 
 			if ( config.Applications.Select( x => x.Alias ).Distinct().Count() != config.Applications.Length )
