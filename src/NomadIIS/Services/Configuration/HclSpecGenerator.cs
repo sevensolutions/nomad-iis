@@ -103,7 +103,7 @@ internal sealed class HclSpecGenerator
 	private static string ConvertDefaultValue ( object? value )
 	{
 		if ( value is string strValue )
-			return $"\"{strValue}\"";
+			return $"\"{strValue.Replace("\\", "\\\\")}\"";
 		if ( value is bool bValue )
 			return bValue ? "true" : "false";
 		if ( value is int intValue )

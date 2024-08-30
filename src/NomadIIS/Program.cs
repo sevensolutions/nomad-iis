@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using NomadIIS;
 using NomadIIS.Services;
 using NomadIIS.Services.Grpc;
 using Serilog;
@@ -42,14 +43,27 @@ builder.Host.UseSerilog();
 
 //System.Diagnostics.Debugger.Launch();
 
+var grpcPort = builder.Configuration.GetValue( "port", 5003 );
+var managementApiPort = builder.Configuration.GetValue( "management-api-port", 0 );
+
 builder.WebHost.ConfigureKestrel( config =>
 {
-	var port = builder.Configuration.GetValue( "port", 5003 );
-
-	config.Listen( IPAddress.Loopback, port, listenOptions =>
+	config.Listen( IPAddress.Loopback, grpcPort, listenOptions =>
 	{
 		listenOptions.Protocols = HttpProtocols.Http2;
 	} );
+
+	if ( managementApiPort > 0 )
+	{
+		// Needed for the /upload API because ZipArchive.Extract() is synchronous.
+		config.AllowSynchronousIO = true;
+
+		config.Listen( IPAddress.Any, managementApiPort, listenOptions =>
+		{
+			listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
+		} );
+	}
+
 	//config.ListenUnixSocket("/my-socket2.sock", listenOptions =>
 	//{
 	//    listenOptions.Protocols = HttpProtocols.Http2;
@@ -68,6 +82,8 @@ builder.Services
 	.AddGrpcHealthChecks()
 	.AddCheck( "plugin", () => HealthCheckResult.Healthy( "SERVING" ) );
 
+builder.Services.AddProblemDetails();
+
 var app = builder.Build();
 
 app.UseRouting();
@@ -75,11 +91,18 @@ app.UseRouting();
 if ( app.Environment.IsDevelopment() )
 	app.MapGrpcReflectionService();
 
-app.MapGrpcService<ControllerService>();
-app.MapGrpcService<BrokerService>();
-app.MapGrpcService<StdioService>();
-app.MapGrpcService<BaseService>();
-app.MapGrpcService<DriverService>();
+// TODO: Limit them to the gRPC endpoint
+app.MapGrpcService<ControllerService>();//.RequireHost( $"*:{grpcPort}" );
+app.MapGrpcService<BrokerService>();//.RequireHost( $"*:{grpcPort}" );
+app.MapGrpcService<StdioService>();//.RequireHost( $"*:{grpcPort}" );
+app.MapGrpcService<BaseService>();//.RequireHost( $"*:{grpcPort}" );
+app.MapGrpcService<DriverService>();//.RequireHost( $"*:{grpcPort}" );
+
+if ( managementApiPort > 0 )
+{
+	ManagementApi.Map( app )
+		.RequireHost( $"*:{managementApiPort}" );
+}
 
 app.MapGet( "/", () => "This binary is a plugin. These are not meant to be executed directly. Please execute the program that consumes these plugins, which will load any plugins automatically." );
 

@@ -8,11 +8,13 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.IO.Pipes;
 using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Security.AccessControl;
 using System.Security.Cryptography.X509Certificates;
 using System.Security.Principal;
@@ -35,6 +37,8 @@ public sealed class IisTaskHandle : IDisposable
 	private readonly CpuStats _kernelModeCpuStats = new();
 	private readonly CpuStats _userModeCpuStats = new();
 
+	private bool _appPoolStoppedIntentionally = false;
+
 	private NamedPipeClientStream? _stdoutLogStream;
 
 	internal IisTaskHandle ( ManagementService owner, string taskId )
@@ -48,6 +52,7 @@ public sealed class IisTaskHandle : IDisposable
 	}
 
 	public string TaskId { get; }
+	public TaskConfig? TaskConfig => _taskConfig;
 	public int? UdpLoggerPort => _state?.UdpLoggerPort;
 
 	public async Task<DriverStateV1> RunAsync ( ILogger<DriverService> logger, TaskConfig task )
@@ -143,7 +148,7 @@ public sealed class IisTaskHandle : IDisposable
 						throw new InvalidOperationException( $"An application with alias {app.Alias} already exists in website {website.Name}." );
 
 					if ( application is null )
-						CreateApplication( website, appPool, _taskConfig, app );
+						CreateApplication( website, appPool, _taskConfig, app, _owner );
 				}
 
 				_state.ApplicationAliases = config.Applications.Select( x => x.Alias ).ToList();
@@ -314,6 +319,9 @@ public sealed class IisTaskHandle : IDisposable
 				{
 					var appPool = FindApplicationPool( serverManager, _state.AppPoolName );
 
+					if ( _appPoolStoppedIntentionally )
+						return Task.FromResult( 0 );
+
 					if ( appPool is not null )
 					{
 						logger.LogDebug( $"AppPool {_state.AppPoolName} is in state {appPool.State}" );
@@ -378,6 +386,21 @@ public sealed class IisTaskHandle : IDisposable
 			{
 				return Task.FromResult( new TaskResourceUsage() );
 			}
+		} );
+	}
+
+	public async Task<bool> IsAppPoolRunning ()
+	{
+		if ( _state is null || string.IsNullOrEmpty( _state.AppPoolName ) )
+			throw new InvalidOperationException( "Invalid state." );
+
+		return await _owner.LockAsync( serverManager =>
+		{
+			var appPool = GetApplicationPool( serverManager, _state.AppPoolName );
+
+			var w3wpPids = appPool.WorkerProcesses.Select( x => x.ProcessId ).ToArray();
+
+			return Task.FromResult( w3wpPids.Length > 0 );
 		} );
 	}
 
@@ -588,10 +611,34 @@ public sealed class IisTaskHandle : IDisposable
 
 	private static Application? FindApplicationByPath ( Site website, string path )
 		=> website.Applications.FirstOrDefault( x => x.Path == path );
-	private static Application CreateApplication ( Site website, ApplicationPool appPool, TaskConfig taskConfig, DriverTaskConfigApplication appConfig )
+	private static Application CreateApplication ( Site website, ApplicationPool appPool, TaskConfig taskConfig, DriverTaskConfigApplication appConfig, ManagementService managementService )
 	{
 		var alias = $"/{appConfig.Alias}";
-		var physicalPath = appConfig.Path.Replace( '/', '\\' );
+
+		var pathIsSet = !string.IsNullOrEmpty( appConfig.Path );
+
+		var physicalPath = appConfig.Path?.Replace( '/', '\\' );
+
+		if ( !pathIsSet )
+		{
+			// If the user didn't specify a path we create a local subfolder for the app
+			// and copy a placeholder into it.
+			physicalPath = "local";
+
+			if ( alias == "/" )
+				physicalPath = Path.Combine( physicalPath, "root" );
+			else
+				physicalPath = Path.Combine( physicalPath, alias.TrimStart( '/' ).Replace( '/', '_' ) );
+
+			Directory.CreateDirectory( physicalPath );
+		}
+
+		if ( !Path.IsPathRooted( physicalPath ) )
+			physicalPath = Path.Combine( taskConfig.AllocDir, taskConfig.Name, physicalPath! );
+
+		// Copy a placeholder app
+		if ( !pathIsSet && !string.IsNullOrEmpty( managementService.PlaceholderAppPath ) && Directory.Exists( managementService.PlaceholderAppPath ) )
+			FileSystemHelper.CopyDirectory( managementService.PlaceholderAppPath, physicalPath );
 
 		if ( !Path.IsPathRooted( physicalPath ) )
 			physicalPath = Path.Combine( taskConfig.AllocDir, taskConfig.Name, physicalPath );
@@ -831,6 +878,67 @@ public sealed class IisTaskHandle : IDisposable
 				return i;
 
 		return 0;
+	}
+
+	public async Task UploadAsync ( Stream stream, string appAlias = "/" )
+	{
+		if ( _state is null || string.IsNullOrEmpty( _state.AppPoolName ) )
+			throw new InvalidOperationException( "Invalid state." );
+
+		string? physicalPath = null;
+
+		try
+		{
+			await _owner.LockAsync( async serverManager =>
+			{
+				var appPool = serverManager.ApplicationPools.First( x => x.Name == _state.AppPoolName );
+
+				var site = serverManager.Sites.First( x => x.Name == _state.WebsiteName );
+
+				var app = site.Applications.FirstOrDefault( a => a.Path == appAlias );
+				if ( app is null )
+					throw new KeyNotFoundException( $"App {appAlias} not found." );
+
+				var virtualRoot = app.VirtualDirectories.Where( v => v.Path == "/" ).First();
+
+				physicalPath = virtualRoot.PhysicalPath;
+
+				_appPoolStoppedIntentionally = true;
+				if ( appPool.State == ObjectState.Started )
+					appPool.Stop();
+			} );
+
+			await Task.Delay( 500 );
+
+			FileSystemHelper.CleanFolder( physicalPath );
+
+			using var archive = new ZipArchive( stream );
+
+			archive.ExtractToDirectory( physicalPath );
+		}
+		finally
+		{
+			await _owner.LockAsync( async serverManager =>
+			{
+				var appPool = serverManager.ApplicationPools.First( x => x.Name == _state.AppPoolName );
+
+				try
+				{
+					if ( appPool.State == ObjectState.Stopped )
+						appPool.Start();
+				}
+				catch ( COMException )
+				{
+					// Sometimes, restarting the pool too fast doesn't work.
+					// So we wait a bit and try again.
+					await Task.Delay( 2000 );
+					if ( appPool.State == ObjectState.Stopped )
+						appPool.Start();
+				}
+
+				_appPoolStoppedIntentionally = false;
+			} );
+		}
 	}
 
 	private class CpuStats

@@ -25,6 +25,7 @@ public sealed class ManagementService : IHostedService
 	private int? _udpLoggerPort;
 	private UdpClient? _udpLoggerClient;
 	private Task? _udpLoggerTask;
+	private string? _placeholderAppPath;
 	private CancellationTokenSource _cts = new CancellationTokenSource();
 	private readonly ConcurrentDictionary<string, IisTaskHandle> _handles = new();
 	private readonly SemaphoreSlim _lock = new( 1, 1 );
@@ -45,6 +46,7 @@ public sealed class ManagementService : IHostedService
 	public bool DirectorySecurity => _directorySecurity;
 	public string[] AllowedTargetWebsites => _allowedTargetWebsites;
 	public int? UdpLoggerPort => _udpLoggerPort;
+	public string? PlaceholderAppPath => _placeholderAppPath;
 
 	public async void Configure ( DriverConfig config )
 	{
@@ -56,6 +58,7 @@ public sealed class ManagementService : IHostedService
 		_fingerprintInterval = config.FingerprintInterval;
 		_directorySecurity = config.DirectorySecurity;
 		_allowedTargetWebsites = config.AllowedTargetWebsites ?? Array.Empty<string>();
+		_placeholderAppPath = config.PlaceholderAppPath;
 
 		// Setup UDP logger endpoint
 		if ( config.UdpLoggerPort is not null && config.UdpLoggerPort.Value > 0 && _udpLoggerClient is null )
@@ -104,6 +107,13 @@ public sealed class ManagementService : IHostedService
 		if ( _handles.TryGetValue( taskId, out var handle ) )
 			return handle;
 		return null;
+	}
+	public IisTaskHandle? TryGetHandleByJobName ( string namespaceName, string jobName )
+	{
+		var handles = _handles.Values.ToArray();
+
+		return handles.FirstOrDefault(
+			x => x.TaskConfig != null && x.TaskConfig.Namespace == namespaceName && x.TaskConfig.JobName == jobName );
 	}
 
 	internal async Task LockAsync ( Func<ServerManager, Task> action )
