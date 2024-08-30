@@ -47,6 +47,24 @@ namespace NomadIIS
 				return Results.Ok();
 			} );
 
+			jobsApi.MapGet( "{namespaceName}/{jobName}/screenshot", async ( string namespaceName, string jobName, [FromServices] ManagementService managementService, [FromQuery] string appAlias = "/" ) =>
+			{
+				if ( !string.IsNullOrEmpty( appAlias ) && !appAlias.StartsWith( '/' ) )
+					appAlias = $"/{appAlias}";
+
+				var taskHandle = managementService.TryGetHandleByJobName( namespaceName, jobName );
+
+				if ( taskHandle is null )
+					return Results.NotFound();
+
+				var screenshot = await taskHandle.TakeScreenshotAsync( appAlias );
+
+				if ( screenshot is null )
+					return Results.NotFound();
+
+				return Results.Bytes( screenshot, "image/png" );
+			} );
+
 			return api;
 		}
 

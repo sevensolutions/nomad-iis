@@ -4,7 +4,7 @@ using System.Threading;
 
 namespace NomadIIS.Services
 {
-	public class FileSystemHelper
+	public static class FileSystemHelper
 	{
 		public static void CopyDirectory ( string sourcePath, string targetPath )
 			=> CopyDirectory( new DirectoryInfo( sourcePath ), new DirectoryInfo( targetPath ) );

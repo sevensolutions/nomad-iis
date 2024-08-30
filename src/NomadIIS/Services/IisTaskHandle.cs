@@ -389,21 +389,6 @@ public sealed class IisTaskHandle : IDisposable
 		} );
 	}
 
-	public async Task<bool> IsAppPoolRunning ()
-	{
-		if ( _state is null || string.IsNullOrEmpty( _state.AppPoolName ) )
-			throw new InvalidOperationException( "Invalid state." );
-
-		return await _owner.LockAsync( serverManager =>
-		{
-			var appPool = GetApplicationPool( serverManager, _state.AppPoolName );
-
-			var w3wpPids = appPool.WorkerProcesses.Select( x => x.ProcessId ).ToArray();
-
-			return Task.FromResult( w3wpPids.Length > 0 );
-		} );
-	}
-
 	public Task<InspectTaskResponse> InspectAsync ()
 	{
 		if ( _state is null || _taskConfig is null )
@@ -880,6 +865,23 @@ public sealed class IisTaskHandle : IDisposable
 		return 0;
 	}
 
+	#region Management API Methods
+
+	public async Task<bool> IsAppPoolRunning ()
+	{
+		if ( _state is null || string.IsNullOrEmpty( _state.AppPoolName ) )
+			throw new InvalidOperationException( "Invalid state." );
+
+		return await _owner.LockAsync( serverManager =>
+		{
+			var appPool = GetApplicationPool( serverManager, _state.AppPoolName );
+
+			var w3wpPids = appPool.WorkerProcesses.Select( x => x.ProcessId ).ToArray();
+
+			return Task.FromResult( w3wpPids.Length > 0 );
+		} );
+	}
+
 	public async Task UploadAsync ( Stream stream, string appAlias = "/" )
 	{
 		if ( _state is null || string.IsNullOrEmpty( _state.AppPoolName ) )
@@ -889,7 +891,7 @@ public sealed class IisTaskHandle : IDisposable
 
 		try
 		{
-			await _owner.LockAsync( async serverManager =>
+			await _owner.LockAsync( serverManager =>
 			{
 				var appPool = serverManager.ApplicationPools.First( x => x.Name == _state.AppPoolName );
 
@@ -906,15 +908,17 @@ public sealed class IisTaskHandle : IDisposable
 				_appPoolStoppedIntentionally = true;
 				if ( appPool.State == ObjectState.Started )
 					appPool.Stop();
+
+				return Task.CompletedTask;
 			} );
 
 			await Task.Delay( 500 );
 
-			FileSystemHelper.CleanFolder( physicalPath );
+			FileSystemHelper.CleanFolder( physicalPath! );
 
 			using var archive = new ZipArchive( stream );
 
-			archive.ExtractToDirectory( physicalPath );
+			archive.ExtractToDirectory( physicalPath! );
 		}
 		finally
 		{
@@ -940,6 +944,32 @@ public sealed class IisTaskHandle : IDisposable
 			} );
 		}
 	}
+
+	public async Task<byte[]?> TakeScreenshotAsync ( string appAlias = "/" )
+	{
+		if ( _state is null || string.IsNullOrEmpty( _state.AppPoolName ) )
+			throw new InvalidOperationException( "Invalid state." );
+
+		int? port = null;
+
+		await _owner.LockAsync( serverManager =>
+		{
+			var site = serverManager.Sites.First( x => x.Name == _state.WebsiteName );
+
+			var httpBinding = site.Bindings.FirstOrDefault( x => x.Protocol == "http" )?.EndPoint;
+
+			port = httpBinding?.Port;
+
+			return Task.CompletedTask;
+		} );
+
+		if ( port is null )
+			return null;
+
+		return await PlaywrightHelper.TakeScreenshotAsync( $"http://localhost:{port}{appAlias}" );
+	}
+
+	#endregion
 
 	private class CpuStats
 	{

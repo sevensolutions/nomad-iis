@@ -16,6 +16,7 @@
 		<PackageReference Include="Grpc.AspNetCore.HealthChecks" Version="2.65.0" />
 		<PackageReference Include="Grpc.AspNetCore.Server.Reflection" Version="2.65.0" />
 		<PackageReference Include="MessagePack" Version="2.5.172" />
+		<PackageReference Include="Microsoft.Playwright" Version="1.46.0" />
 		<PackageReference Include="Microsoft.Web.Administration" Version="11.1.0" />
 		<PackageReference Include="Serilog.AspNetCore" Version="8.0.2" />
 		<PackageReference Include="System.Management" Version="8.0.0" />
