@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NomadIIS.Services;
+using System;
 using System.Text.Json.Serialization;
 
 namespace NomadIIS
@@ -64,6 +65,34 @@ namespace NomadIIS
 					return Results.NotFound();
 
 				return Results.Bytes( screenshot, "image/png" );
+			} );
+
+			jobsApi.MapGet( "{namespaceName}/{jobName}/procdump", async ( string namespaceName, string jobName, HttpContext httpContext, [FromServices] ManagementService managementService, [FromQuery] string appAlias = "/" ) =>
+			{
+				if ( !string.IsNullOrEmpty( appAlias ) && !appAlias.StartsWith( '/' ) )
+					appAlias = $"/{appAlias}";
+
+				var taskHandle = managementService.TryGetHandleByJobName( namespaceName, jobName );
+
+				if ( taskHandle is null )
+					return Results.NotFound();
+
+				var dumpFile = await taskHandle.TakeProcessDump( appAlias );
+
+				try
+				{
+					// Stream the file to the client
+					await Results
+						.File( dumpFile.FullName, "application/octet-stream", $"procdump_{jobName}_{DateTime.Now:yyyy-MM-dd-HH-mm-ss}.dmp" )
+						.ExecuteAsync( httpContext );
+
+					// Not needed but we need to return something
+					return Results.Ok();
+				}
+				finally
+				{
+					dumpFile.Delete();
+				}
 			} );
 
 			return api;

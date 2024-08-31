@@ -16,6 +16,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<PackageReference Include="CliWrap" Version="3.6.6" Condition="$(DefineConstants.Contains('MANAGEMENT_API'))" />
 		<PackageReference Include="Grpc.AspNetCore" Version="2.65.0" />
 		<PackageReference Include="Grpc.AspNetCore.HealthChecks" Version="2.65.0" />
 		<PackageReference Include="Grpc.AspNetCore.Server.Reflection" Version="2.65.0" />

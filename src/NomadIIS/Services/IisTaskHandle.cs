@@ -1,4 +1,8 @@
-﻿using Hashicorp.Nomad.Plugins.Drivers.Proto;
+﻿#if MANAGEMENT_API
+using CliWrap;
+using CliWrap.Buffered;
+#endif
+using Hashicorp.Nomad.Plugins.Drivers.Proto;
 using MessagePack;
 using Microsoft.Extensions.Logging;
 using Microsoft.Web.Administration;
@@ -6,14 +10,11 @@ using NomadIIS.Services.Configuration;
 using NomadIIS.Services.Grpc;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.IO.Pipes;
 using System.Linq;
-using System.Net;
 using System.Net.NetworkInformation;
-using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Security.AccessControl;
 using System.Security.Cryptography.X509Certificates;
@@ -887,11 +888,9 @@ public sealed class IisTaskHandle : IDisposable
 		if ( _state is null || string.IsNullOrEmpty( _state.AppPoolName ) )
 			throw new InvalidOperationException( "Invalid state." );
 
-		string? physicalPath = null;
-
 		try
 		{
-			await _owner.LockAsync( serverManager =>
+			var physicalPath = await _owner.LockAsync( serverManager =>
 			{
 				var appPool = serverManager.ApplicationPools.First( x => x.Name == _state.AppPoolName );
 
@@ -903,13 +902,13 @@ public sealed class IisTaskHandle : IDisposable
 
 				var virtualRoot = app.VirtualDirectories.Where( v => v.Path == "/" ).First();
 
-				physicalPath = virtualRoot.PhysicalPath;
+				var physicalPath = virtualRoot.PhysicalPath;
 
 				_appPoolStoppedIntentionally = true;
 				if ( appPool.State == ObjectState.Started )
 					appPool.Stop();
 
-				return Task.CompletedTask;
+				return Task.FromResult( physicalPath );
 			} );
 
 			await Task.Delay( 500 );
@@ -950,17 +949,13 @@ public sealed class IisTaskHandle : IDisposable
 		if ( _state is null || string.IsNullOrEmpty( _state.AppPoolName ) )
 			throw new InvalidOperationException( "Invalid state." );
 
-		int? port = null;
-
-		await _owner.LockAsync( serverManager =>
+		var port = await _owner.LockAsync( serverManager =>
 		{
 			var site = serverManager.Sites.First( x => x.Name == _state.WebsiteName );
 
 			var httpBinding = site.Bindings.FirstOrDefault( x => x.Protocol == "http" )?.EndPoint;
 
-			port = httpBinding?.Port;
-
-			return Task.CompletedTask;
+			return Task.FromResult( httpBinding?.Port );
 		} );
 
 		if ( port is null )
@@ -968,6 +963,52 @@ public sealed class IisTaskHandle : IDisposable
 
 		return await PlaywrightHelper.TakeScreenshotAsync( $"http://localhost:{port}{appAlias}" );
 	}
+
+	public async Task<FileInfo> TakeProcessDump ( string appAlias = "/", CancellationToken cancellationToken = default )
+	{
+		if ( _state is null || string.IsNullOrEmpty( _state.AppPoolName ) )
+			throw new InvalidOperationException( "Invalid state." );
+
+		var procdumpExePath = @"C:\procdump.exe";
+
+		// TODO: Make configurable
+		if ( !File.Exists( procdumpExePath ) )
+			throw new NotSupportedException( "C:\\procdump.exe is not available." );
+
+		var w3wpPids = await _owner.LockAsync( serverManager =>
+		{
+			var appPool = GetApplicationPool( serverManager, _state.AppPoolName );
+
+			return Task.FromResult( appPool.WorkerProcesses.Select( x => x.ProcessId ).ToArray() );
+		} );
+
+		if ( w3wpPids is null || w3wpPids.Length == 0 )
+			throw new InvalidOperationException( "No w3wp process running." );
+
+		var pid = w3wpPids[0];
+
+		var dumpFile = new FileInfo( Path.GetTempFileName() );
+
+		var procdump = Cli.Wrap( procdumpExePath )
+			.WithArguments( x => x
+				.Add( "-accepteula" )
+				.Add( "-ma" ).Add( pid )
+				.Add( dumpFile.FullName ) )
+			.WithValidation( CommandResultValidation.None );
+
+		var result = await procdump.ExecuteBufferedAsync( cancellationToken );
+
+		// Add the .dmp extension
+		dumpFile = new FileInfo( Path.Combine( dumpFile.DirectoryName!, $"{dumpFile.Name}.dmp" ) );
+
+		if ( !dumpFile.Exists || dumpFile.Length == 0 )
+		{
+			throw new Exception( result.StandardOutput + Environment.NewLine + result.StandardError );
+		}
+
+		return dumpFile;
+	}
+
 #endif
 	#endregion
 
