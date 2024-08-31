@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Builder;
+﻿#if MANAGEMENT_API
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NomadIIS.Services;
@@ -86,3 +87,4 @@ namespace NomadIIS
 		}
 	}
 }
+#endif

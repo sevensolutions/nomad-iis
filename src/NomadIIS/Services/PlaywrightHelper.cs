@@ -1,4 +1,5 @@
-﻿using Microsoft.Playwright;
+﻿#if MANAGEMENT_API
+using Microsoft.Playwright;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -83,3 +84,4 @@ namespace NomadIIS.Services
 		}
 	}
 }
+#endif

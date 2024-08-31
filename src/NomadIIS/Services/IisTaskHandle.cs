@@ -866,7 +866,7 @@ public sealed class IisTaskHandle : IDisposable
 	}
 
 	#region Management API Methods
-
+#if MANAGEMENT_API
 	public async Task<bool> IsAppPoolRunning ()
 	{
 		if ( _state is null || string.IsNullOrEmpty( _state.AppPoolName ) )
@@ -968,7 +968,7 @@ public sealed class IisTaskHandle : IDisposable
 
 		return await PlaywrightHelper.TakeScreenshotAsync( $"http://localhost:{port}{appAlias}" );
 	}
-
+#endif
 	#endregion
 
 	private class CpuStats

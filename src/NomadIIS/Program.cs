@@ -44,7 +44,10 @@ builder.Host.UseSerilog();
 //System.Diagnostics.Debugger.Launch();
 
 var grpcPort = builder.Configuration.GetValue( "port", 5003 );
+
+#if MANAGEMENT_API
 var managementApiPort = builder.Configuration.GetValue( "management-api-port", 0 );
+#endif
 
 builder.WebHost.ConfigureKestrel( config =>
 {
@@ -53,6 +56,7 @@ builder.WebHost.ConfigureKestrel( config =>
 		listenOptions.Protocols = HttpProtocols.Http2;
 	} );
 
+#if MANAGEMENT_API
 	if ( managementApiPort > 0 )
 	{
 		// Needed for the /upload API because ZipArchive.Extract() is synchronous.
@@ -63,6 +67,7 @@ builder.WebHost.ConfigureKestrel( config =>
 			listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
 		} );
 	}
+#endif
 
 	//config.ListenUnixSocket("/my-socket2.sock", listenOptions =>
 	//{
@@ -98,11 +103,13 @@ app.MapGrpcService<StdioService>();//.RequireHost( $"*:{grpcPort}" );
 app.MapGrpcService<BaseService>();//.RequireHost( $"*:{grpcPort}" );
 app.MapGrpcService<DriverService>();//.RequireHost( $"*:{grpcPort}" );
 
+#if MANAGEMENT_API
 if ( managementApiPort > 0 )
 {
 	ManagementApi.Map( app )
 		.RequireHost( $"*:{managementApiPort}" );
 }
+#endif
 
 app.MapGet( "/", () => "This binary is a plugin. These are not meant to be executed directly. Please execute the program that consumes these plugins, which will load any plugins automatically." );
 
