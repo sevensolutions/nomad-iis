@@ -883,6 +883,65 @@ public sealed class IisTaskHandle : IDisposable
 		} );
 	}
 
+	public async Task StartAppPoolAsync ()
+	{
+		if ( _state is null || string.IsNullOrEmpty( _state.AppPoolName ) )
+			throw new InvalidOperationException( "Invalid state." );
+
+		await _owner.LockAsync( async serverManager =>
+		{
+			var appPool = serverManager.ApplicationPools.First( x => x.Name == _state.AppPoolName );
+
+			try
+			{
+				if ( appPool.State == ObjectState.Stopped )
+					appPool.Start();
+			}
+			catch ( COMException )
+			{
+				// Sometimes, restarting the pool too fast doesn't work.
+				// So we wait a bit and try again.
+				await Task.Delay( 2000 );
+				if ( appPool.State == ObjectState.Stopped )
+					appPool.Start();
+			}
+
+			_appPoolStoppedIntentionally = false;
+
+			return Task.CompletedTask;
+		} );
+	}
+	public async Task StopAppPoolAsync ()
+	{
+		if ( _state is null || string.IsNullOrEmpty( _state.AppPoolName ) )
+			throw new InvalidOperationException( "Invalid state." );
+
+		await _owner.LockAsync( serverManager =>
+		{
+			var appPool = serverManager.ApplicationPools.First( x => x.Name == _state.AppPoolName );
+
+			_appPoolStoppedIntentionally = true;
+			if ( appPool.State == ObjectState.Started )
+				appPool.Stop();
+
+			return Task.CompletedTask;
+		} );
+	}
+	public async Task RecycleAppPoolAsync ()
+	{
+		if ( _state is null || string.IsNullOrEmpty( _state.AppPoolName ) )
+			throw new InvalidOperationException( "Invalid state." );
+
+		await _owner.LockAsync( serverManager =>
+		{
+			var appPool = serverManager.ApplicationPools.First( x => x.Name == _state.AppPoolName );
+
+			appPool.Recycle();
+
+			return Task.CompletedTask;
+		} );
+	}
+
 	public async Task UploadAsync ( Stream stream, string appAlias = "/" )
 	{
 		if ( _state is null || string.IsNullOrEmpty( _state.AppPoolName ) )

@@ -108,12 +108,12 @@ public sealed class ManagementService : IHostedService
 			return handle;
 		return null;
 	}
-	public IisTaskHandle? TryGetHandleByJobName ( string namespaceName, string jobName )
+	public IisTaskHandle? TryGetHandleByAllocId ( string allocId )
 	{
 		var handles = _handles.Values.ToArray();
 
 		return handles.FirstOrDefault(
-			x => x.TaskConfig != null && x.TaskConfig.Namespace == namespaceName && x.TaskConfig.JobName == jobName );
+			x => x.TaskConfig != null && x.TaskConfig.AllocId == allocId );
 	}
 
 	internal async Task LockAsync ( Func<ServerManager, Task> action )

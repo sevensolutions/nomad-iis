@@ -14,11 +14,11 @@ namespace NomadIIS
 		{
 			var api = app.MapGroup( "/api/v1" );
 
-			var jobsApi = api.MapGroup( "/jobs" );
+			var allocsApi = api.MapGroup( "/allocs" );
 
-			jobsApi.MapGet( "{namespaceName}/{jobName}/status", async ( string namespaceName, string jobName, [FromServices] ManagementService managementService ) =>
+			allocsApi.MapGet( "{allocId}/status", async ( string allocId, [FromServices] ManagementService managementService ) =>
 			{
-				var taskHandle = managementService.TryGetHandleByJobName( namespaceName, jobName );
+				var taskHandle = managementService.TryGetHandleByAllocId( allocId );
 
 				if ( taskHandle is null )
 					return Results.NotFound();
@@ -27,19 +27,51 @@ namespace NomadIIS
 
 				return Results.Json( new TaskStatusResponse()
 				{
-					Namespace = namespaceName,
-					JobName = jobName,
+					AllocId = allocId,
 					TaskStatus = isAppPoolRunning ? TaskStatus.Running : TaskStatus.Paused
 				} );
 			} );
 
-			// TODO: Should we put namespcae to a query-param, like on the Nomad REST API?
-			jobsApi.MapPut( "{namespaceName}/{jobName}/upload", async ( string namespaceName, string jobName, HttpContext context, [FromServices] ManagementService managementService, [FromQuery] string appAlias = "/" ) =>
+			allocsApi.MapPut( "{allocId}/start", async ( string allocId, [FromServices] ManagementService managementService ) =>
+			{
+				var taskHandle = managementService.TryGetHandleByAllocId( allocId );
+
+				if ( taskHandle is null )
+					return Results.NotFound();
+
+				await taskHandle.StartAppPoolAsync();
+
+				return Results.Ok();
+			} );
+			allocsApi.MapPut( "{allocId}/stop", async ( string allocId, [FromServices] ManagementService managementService ) =>
+			{
+				var taskHandle = managementService.TryGetHandleByAllocId( allocId );
+
+				if ( taskHandle is null )
+					return Results.NotFound();
+
+				await taskHandle.StopAppPoolAsync();
+
+				return Results.Ok();
+			} );
+			allocsApi.MapPut( "{allocId}/recycle", async ( string allocId, [FromServices] ManagementService managementService ) =>
+			{
+				var taskHandle = managementService.TryGetHandleByAllocId( allocId );
+
+				if ( taskHandle is null )
+					return Results.NotFound();
+
+				await taskHandle.RecycleAppPoolAsync();
+
+				return Results.Ok();
+			} );
+
+			allocsApi.MapPut( "{allocId}/upload", async ( string allocId, HttpContext context, [FromServices] ManagementService managementService, [FromQuery] string appAlias = "/" ) =>
 			{
 				if ( !string.IsNullOrEmpty( appAlias ) && !appAlias.StartsWith( '/' ) )
 					appAlias = $"/{appAlias}";
 
-				var taskHandle = managementService.TryGetHandleByJobName( namespaceName, jobName );
+				var taskHandle = managementService.TryGetHandleByAllocId( allocId );
 
 				if ( taskHandle is null )
 					return Results.NotFound();
@@ -49,12 +81,12 @@ namespace NomadIIS
 				return Results.Ok();
 			} );
 
-			jobsApi.MapGet( "{namespaceName}/{jobName}/screenshot", async ( string namespaceName, string jobName, [FromServices] ManagementService managementService, [FromQuery] string appAlias = "/" ) =>
+			allocsApi.MapGet( "{allocId}/screenshot", async ( string allocId, [FromServices] ManagementService managementService, [FromQuery] string appAlias = "/" ) =>
 			{
 				if ( !string.IsNullOrEmpty( appAlias ) && !appAlias.StartsWith( '/' ) )
 					appAlias = $"/{appAlias}";
 
-				var taskHandle = managementService.TryGetHandleByJobName( namespaceName, jobName );
+				var taskHandle = managementService.TryGetHandleByAllocId( allocId );
 
 				if ( taskHandle is null )
 					return Results.NotFound();
@@ -67,12 +99,12 @@ namespace NomadIIS
 				return Results.Bytes( screenshot, "image/png" );
 			} );
 
-			jobsApi.MapGet( "{namespaceName}/{jobName}/procdump", async ( string namespaceName, string jobName, HttpContext httpContext, [FromServices] ManagementService managementService, [FromQuery] string appAlias = "/" ) =>
+			allocsApi.MapGet( "{allocId}/procdump", async ( string allocId, HttpContext httpContext, [FromServices] ManagementService managementService, [FromQuery] string appAlias = "/" ) =>
 			{
 				if ( !string.IsNullOrEmpty( appAlias ) && !appAlias.StartsWith( '/' ) )
 					appAlias = $"/{appAlias}";
 
-				var taskHandle = managementService.TryGetHandleByJobName( namespaceName, jobName );
+				var taskHandle = managementService.TryGetHandleByAllocId( allocId );
 
 				if ( taskHandle is null )
 					return Results.NotFound();
@@ -83,7 +115,7 @@ namespace NomadIIS
 				{
 					// Stream the file to the client
 					await Results
-						.File( dumpFile.FullName, "application/octet-stream", $"procdump_{jobName}_{DateTime.Now:yyyy-MM-dd-HH-mm-ss}.dmp" )
+						.File( dumpFile.FullName, "application/octet-stream", $"procdump_{allocId}_{DateTime.Now:yyyy-MM-dd-HH-mm-ss}.dmp" )
 						.ExecuteAsync( httpContext );
 
 					// Not needed but we need to return something
@@ -100,10 +132,8 @@ namespace NomadIIS
 
 		private class TaskStatusResponse
 		{
-			[JsonPropertyName( "namespace" )]
-			public string Namespace { get; set; } = default!;
-			[JsonPropertyName( "jobName" )]
-			public string JobName { get; set; } = default!;
+			[JsonPropertyName( "allocId" )]
+			public string AllocId { get; set; } = default!;
 			[JsonPropertyName( "taskStatus" )]
 			public TaskStatus TaskStatus { get; set; } = default!;
 		}
