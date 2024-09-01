@@ -89,9 +89,38 @@ builder.Services
 
 builder.Services.AddProblemDetails();
 
+#if MANAGEMENT_API
+var mgmtApiKey = builder.Configuration.GetValue<string>( "management-api-key" );
+
+if ( managementApiPort > 0 )
+{
+	builder.Services.AddAuthentication( config =>
+		{
+			config.DefaultAuthenticateScheme = ApiKeyAuthenticationDefaults.AuthenticationScheme;
+			config.DefaultChallengeScheme = ApiKeyAuthenticationDefaults.AuthenticationScheme;
+		} )
+		.AddApiKey( config =>
+		{
+			config.ApiKey = mgmtApiKey;
+		} );
+
+	builder.Services.AddAuthorization();
+}
+#endif
+
 var app = builder.Build();
 
+#if MANAGEMENT_API
+if ( managementApiPort > 0 )
+	app.UseAuthentication();
+#endif
+
 app.UseRouting();
+
+#if MANAGEMENT_API
+if ( managementApiPort > 0 )
+	app.UseAuthorization();
+#endif
 
 if ( app.Environment.IsDevelopment() )
 	app.MapGrpcReflectionService();
@@ -106,8 +135,11 @@ app.MapGrpcService<DriverService>();//.RequireHost( $"*:{grpcPort}" );
 #if MANAGEMENT_API
 if ( managementApiPort > 0 )
 {
-	ManagementApi.Map( app )
+	var epApi = ManagementApi.Map( app )
 		.RequireHost( $"*:{managementApiPort}" );
+
+	if ( !string.IsNullOrEmpty( mgmtApiKey ) )
+		epApi.RequireAuthorization();
 }
 #endif
 
