@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using NomadIIS.Services;
 using System;
 using System.Text.Json.Serialization;
@@ -30,7 +31,7 @@ namespace NomadIIS
 					AllocId = allocId,
 					TaskStatus = isAppPoolRunning ? TaskStatus.Running : TaskStatus.Paused
 				} );
-			} );
+			} ).Produces<TaskStatusResponse>();
 
 			allocsApi.MapPut( "{allocId}/start", async ( string allocId, [FromServices] ManagementService managementService ) =>
 			{
@@ -79,7 +80,7 @@ namespace NomadIIS
 				await taskHandle.UploadAsync( context.Request.Body, appAlias );
 
 				return Results.Ok();
-			} );
+			} ).Accepts<object>( "application/zip" );
 
 			allocsApi.MapGet( "{allocId}/screenshot", async ( string allocId, [FromServices] ManagementService managementService, [FromQuery] string appAlias = "/" ) =>
 			{
@@ -99,8 +100,12 @@ namespace NomadIIS
 				return Results.Bytes( screenshot, "image/png" );
 			} );
 
-			allocsApi.MapGet( "{allocId}/procdump", async ( string allocId, HttpContext httpContext, [FromServices] ManagementService managementService, [FromQuery] string appAlias = "/" ) =>
+			allocsApi.MapGet( "{allocId}/procdump", async ( string allocId, HttpContext httpContext, [FromServices] IConfiguration configuration, [FromServices] ManagementService managementService, [FromQuery] string appAlias = "/" ) =>
 			{
+				var eulaAccepted = configuration.GetValue( "procdump-accept-eula", false );
+				if ( !eulaAccepted )
+					throw new InvalidOperationException( "Procdump EULA has not been accepted." );
+
 				if ( !string.IsNullOrEmpty( appAlias ) && !appAlias.StartsWith( '/' ) )
 					appAlias = $"/{appAlias}";
 

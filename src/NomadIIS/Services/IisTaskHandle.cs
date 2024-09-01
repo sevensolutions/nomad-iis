@@ -1051,7 +1051,8 @@ public sealed class IisTaskHandle : IDisposable
 		var procdump = Cli.Wrap( procdumpExePath )
 			.WithArguments( x => x
 				.Add( "-accepteula" )
-				.Add( "-ma" ).Add( pid )
+				.Add( "-ma" )
+				.Add( pid )
 				.Add( dumpFile.FullName ) )
 			.WithValidation( CommandResultValidation.None );
 
