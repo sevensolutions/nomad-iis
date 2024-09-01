@@ -24,18 +24,29 @@ jobs:
         dotnet-version: 8.0.x
 
     # Publish the application
-    - name: Publish the application
+    - name: Publish nomad_iis
       run: dotnet publish "./src/NomadIIS/NomadIIS.csproj" /p:PublishProfile="./src/NomadIIS/Properties/PublishProfiles/Release.pubxml"
+    - name: Publish nomad_iis with management API
+      run: dotnet publish "./src/NomadIIS/NomadIIS.csproj" /p:PublishProfile="./src/NomadIIS/Properties/PublishProfiles/ReleaseWithMgmtApi.pubxml"
 
     # Copy to output
     - name: Copy to output folder
       run: |
         mkdir dist
         copy .\src\NomadIIS\bin\Release\net8.0\win-x64\publish\nomad_iis.exe .\dist\nomad_iis.exe
+    - name: Copy to output folder
+      run: |
+        mkdir distMgmtApi
+        copy .\src\NomadIIS\bin\Release\net8.0\win-x64\publish\nomad_iis.exe .\distMgmtApi\nomad_iis.exe
 
-    # Upload the artifact
-    - name: Upload build artifacts
+    # Upload the artifacts
+    - name: Upload build artifact
       uses: actions/upload-artifact@v4
       with:
         name: nomad_iis
         path: ./dist
+    - name: Upload build artifact with API
+      uses: actions/upload-artifact@v4
+      with:
+        name: nomad_iis_mgmt_api
+        path: ./distMgmtApi
