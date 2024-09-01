@@ -8,18 +8,24 @@ root = true
 indent_style = tab
 
 # XML, XAML
-[*.{XML,XAML}]
+[*.{xml,xaml}]
 indent_size = 2
 tab_width = 2
+
+# YML, YAML
+[*.{yml,yaml}]
+indent_size = 2
+tab_width = 2
+indent_style = space
 
 # HCL
-[*.{HCL}]
+[*.hcl]
 indent_size = 2
 tab_width = 2
-indent_style = spaces
+indent_style = space
 
 # CSPROJ
-[*.CSPROJ]
+[*.csproj]
 indent_size = 2
 tab_width = 2
 

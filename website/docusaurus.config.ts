@@ -72,6 +72,12 @@ const config: Config = {
           position: 'left',
           label: 'Features',
         },
+				{
+          type: 'docSidebar',
+					sidebarId: 'tipsAndTricksSidebar',
+          position: 'left',
+          label: 'Tips & Tricks',
+        },
         {
           href: githubRepo,
           label: 'GitHub',
@@ -92,6 +98,10 @@ const config: Config = {
 						{
               label: 'Features',
               to: '/docs/features',
+            },
+						{
+              label: 'Tips & Tricks',
+              to: '/docs/tips-and-tricks',
             },
           ],
         },
