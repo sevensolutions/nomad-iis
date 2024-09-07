@@ -1003,10 +1003,13 @@ public sealed class IisTaskHandle : IDisposable
 		}
 	}
 
-	public async Task<byte[]?> TakeScreenshotAsync ( string appAlias = "/" )
+	public async Task<byte[]?> TakeScreenshotAsync ( string path = "/" )
 	{
 		if ( _state is null || string.IsNullOrEmpty( _state.AppPoolName ) )
 			throw new InvalidOperationException( "Invalid state." );
+
+		if ( string.IsNullOrEmpty( path ) || !path.StartsWith( '/' ) )
+			path = $"/{path}";
 
 		var port = await _owner.LockAsync( serverManager =>
 		{
@@ -1020,10 +1023,10 @@ public sealed class IisTaskHandle : IDisposable
 		if ( port is null )
 			return null;
 
-		return await PlaywrightHelper.TakeScreenshotAsync( $"http://localhost:{port}{appAlias}" );
+		return await PlaywrightHelper.TakeScreenshotAsync( $"http://localhost:{port}{path}" );
 	}
 
-	public async Task<FileInfo> TakeProcessDump ( string appAlias = "/", CancellationToken cancellationToken = default )
+	public async Task<FileInfo> TakeProcessDump ( CancellationToken cancellationToken = default )
 	{
 		if ( _state is null || string.IsNullOrEmpty( _state.AppPoolName ) )
 			throw new InvalidOperationException( "Invalid state." );

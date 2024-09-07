@@ -82,17 +82,14 @@ namespace NomadIIS
 				return Results.Ok();
 			} ).Accepts<object>( "application/zip" );
 
-			allocsApi.MapGet( "{allocId}/screenshot", async ( string allocId, [FromServices] ManagementService managementService, [FromQuery] string appAlias = "/" ) =>
+			allocsApi.MapGet( "{allocId}/screenshot", async ( string allocId, [FromServices] ManagementService managementService, [FromQuery] string path = "/" ) =>
 			{
-				if ( !string.IsNullOrEmpty( appAlias ) && !appAlias.StartsWith( '/' ) )
-					appAlias = $"/{appAlias}";
-
 				var taskHandle = managementService.TryGetHandleByAllocId( allocId );
 
 				if ( taskHandle is null )
 					return Results.NotFound();
 
-				var screenshot = await taskHandle.TakeScreenshotAsync( appAlias );
+				var screenshot = await taskHandle.TakeScreenshotAsync( path );
 
 				if ( screenshot is null )
 					return Results.NotFound();
@@ -100,21 +97,18 @@ namespace NomadIIS
 				return Results.Bytes( screenshot, "image/png" );
 			} );
 
-			allocsApi.MapGet( "{allocId}/procdump", async ( string allocId, HttpContext httpContext, [FromServices] IConfiguration configuration, [FromServices] ManagementService managementService, [FromQuery] string appAlias = "/" ) =>
+			allocsApi.MapGet( "{allocId}/procdump", async ( string allocId, HttpContext httpContext, [FromServices] IConfiguration configuration, [FromServices] ManagementService managementService ) =>
 			{
 				var eulaAccepted = configuration.GetValue( "procdump-accept-eula", false );
 				if ( !eulaAccepted )
 					throw new InvalidOperationException( "Procdump EULA has not been accepted." );
-
-				if ( !string.IsNullOrEmpty( appAlias ) && !appAlias.StartsWith( '/' ) )
-					appAlias = $"/{appAlias}";
 
 				var taskHandle = managementService.TryGetHandleByAllocId( allocId );
 
 				if ( taskHandle is null )
 					return Results.NotFound();
 
-				var dumpFile = await taskHandle.TakeProcessDump( appAlias );
+				var dumpFile = await taskHandle.TakeProcessDump();
 
 				try
 				{
