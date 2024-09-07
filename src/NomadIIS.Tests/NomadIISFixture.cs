@@ -47,7 +47,13 @@ public sealed class NomadIISFixture : IAsyncLifetime
 	{
 		var nomadDirectory = Path.GetFullPath( @"..\..\..\..\..\nomad" );
 		var dataDirectory = Path.Combine( nomadDirectory, "data" );
-		var pluginDirectory = Path.GetFullPath( @"..\..\..\..\NomadIIS\bin\Debug\net8.0" );
+
+		var pluginDir = Environment.GetEnvironmentVariable( "TEST_PLUGIN_DIRECTORY" );
+		if ( string.IsNullOrEmpty( pluginDir ) )
+			pluginDir = @"..\..\..\..\NomadIIS\bin\Debug\net8.0";
+
+		var pluginDirectory = Path.GetFullPath( pluginDir );
+		
 #if MANAGEMENT_API
 		var configFile = Path.GetFullPath( @"Data\configs\with_api.hcl" );
 #else
