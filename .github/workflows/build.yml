@@ -5,9 +5,10 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
 
 jobs:
-
   build:
     runs-on: windows-latest
 
@@ -39,3 +40,33 @@ jobs:
       with:
         name: nomad_iis
         path: ./dist
+
+  test:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    # Install the .NET Core workload
+    - name: Install .NET Core
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.0.x
+
+    # Download Nomad
+    - name: Run setup.ps1
+      shell: pwsh
+      run: .\setup.ps1
+        
+    - uses: actions/download-artifact@4
+      with:
+        name: nomad_iis
+        path: artifacts
+    - name: Extract nomad_iis
+      run: |
+        7z x artifacts\nomad_iis.zip
+        cd artifacts
+        dir
