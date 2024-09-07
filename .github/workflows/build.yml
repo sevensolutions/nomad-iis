@@ -43,6 +43,7 @@ jobs:
 
   test:
     runs-on: windows-latest
+    needs: ["build"]
 
     steps:
     - name: Checkout
@@ -61,7 +62,7 @@ jobs:
       shell: pwsh
       run: .\setup.ps1
         
-    - uses: actions/download-artifact@4
+    - uses: actions/download-artifact@master
       with:
         name: nomad_iis
         path: artifacts
