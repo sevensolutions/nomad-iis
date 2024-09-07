@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Text;
 using System.Threading;
 
 namespace NomadIIS.Tests;
@@ -13,6 +14,9 @@ namespace NomadIIS.Tests;
 public sealed class NomadIISFixture : IAsyncLifetime
 {
 	private readonly HttpClient _httpClient;
+#if MANAGEMENT_API
+	private readonly HttpClient _apiHttpClient;
+#endif
 	private CancellationTokenSource _ctsNomad = new CancellationTokenSource();
 	private Thread? _nomadThread;
 
@@ -23,6 +27,18 @@ public sealed class NomadIISFixture : IAsyncLifetime
 			BaseAddress = new Uri( "http://localhost:4646/v1/" ),
 			Timeout = TimeSpan.FromSeconds( 10 )
 		};
+
+#if MANAGEMENT_API
+		_apiHttpClient = new HttpClient()
+		{
+			BaseAddress = new Uri( "http://localhost:5004/api/v1/" ),
+			Timeout = TimeSpan.FromSeconds( 30 ),
+			DefaultRequestHeaders =
+			{
+				{ "X-Api-Key", "12345" }
+			}
+		};
+#endif
 	}
 
 	public HttpClient HttpClient => _httpClient;
@@ -32,19 +48,39 @@ public sealed class NomadIISFixture : IAsyncLifetime
 		var nomadDirectory = Path.GetFullPath( @"..\..\..\..\..\nomad" );
 		var dataDirectory = Path.Combine( nomadDirectory, "data" );
 		var pluginDirectory = Path.GetFullPath( @"..\..\..\..\NomadIIS\bin\Debug\net8.0" );
-		var configFile = Path.GetFullPath( @"Data\serverAndClient.hcl" );
+#if MANAGEMENT_API
+		var configFile = Path.GetFullPath( @"Data\configs\with_api.hcl" );
+#else
+		var configFile = Path.GetFullPath( @"Data\configs\default.hcl" );
+#endif
 
 		_nomadThread = new Thread( async () =>
 		{
+			var stdout = new StringBuilder();
+			var stderr = new StringBuilder();
+
 			var nomadCommand = Cli.Wrap( Path.Combine( nomadDirectory, "nomad.exe" ) )
-				.WithArguments( $"agent -dev -plugin-dir=\"{pluginDirectory}\"" )
+				.WithArguments( $"agent -dev -config=\"{configFile}\" -plugin-dir=\"{pluginDirectory}\"" )
 				.WithWorkingDirectory( nomadDirectory )
-				.WithValidation( CommandResultValidation.None );
+				.WithStandardOutputPipe( PipeTarget.ToDelegate( line =>
+				{
+					stdout.AppendLine( line );
+					Debug.WriteLine( line );
+				} ) )
+				.WithStandardOutputPipe( PipeTarget.ToDelegate( line =>
+				{
+					stderr.AppendLine( line );
+					Debug.WriteLine( line );
+				} ) );
 
-			var result = await nomadCommand.ExecuteBufferedAsync( _ctsNomad.Token );
-
-			Debug.WriteLine( result.StandardOutput );
-			Debug.WriteLine( result.StandardError );
+			try
+			{
+				var result = await nomadCommand.ExecuteBufferedAsync( _ctsNomad.Token );
+			}
+			catch ( Exception ex )
+			{
+				Debug.WriteLine( ex.Message );
+			}
 		} );
 
 		_nomadThread.Start();
@@ -167,4 +203,17 @@ public sealed class NomadIISFixture : IAsyncLifetime
 
 		action( handle );
 	}
+
+#if MANAGEMENT_API
+	public async Task<byte[]> TakeScreenshotAsync ( string allocId, string taskName )
+	{
+		var response = await _apiHttpClient.GetAsync( $"allocs/{allocId}/{taskName}/screenshot" );
+
+		response.EnsureSuccessStatusCode();
+
+		using var ms = new MemoryStream();
+		await response.Content.CopyToAsync( ms );
+		return ms.ToArray();
+	}
+#endif
 }

@@ -16,8 +16,10 @@ client {
 }
 
 plugin "nomad_iis" {
+  args = ["--management-api-port=5004", "--management-api-key=12345", "--procdump-accept-eula=true"]
   config {
     enabled = true,
     fingerprint_interval = "10s"
+    allowed_target_websites = [ "Default Web Site" ]
   }
 }

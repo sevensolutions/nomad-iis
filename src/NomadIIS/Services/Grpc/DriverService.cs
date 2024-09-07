@@ -94,7 +94,7 @@ public sealed class DriverService : Driver.DriverBase
 				{
 					status = FingerprintResponse.Types.HealthState.Undetected;
 					healthDescription = "Driver disabled";
-				}				
+				}
 
 				await responseStream.WriteAsync( new FingerprintResponse()
 				{
@@ -125,10 +125,10 @@ public sealed class DriverService : Driver.DriverBase
 		var task = request.Task;
 
 		var handle = _managementService.CreateHandle( task.Id );
-		
+
 		try
 		{
-			var driverState = await handle.RunAsync( _logger, task );
+			var driverState = await handle.RunAsync( task );
 
 			return new StartTaskResponse()
 			{
@@ -170,7 +170,7 @@ public sealed class DriverService : Driver.DriverBase
 
 		if ( handle is not null )
 		{
-			await handle.StopAsync( _logger );
+			await handle.StopAsync();
 
 			handle.Dispose();
 		}
@@ -185,7 +185,7 @@ public sealed class DriverService : Driver.DriverBase
 		var handle = _managementService.TryGetHandle( request.TaskId );
 
 		if ( handle is not null )
-			await handle.SignalAsync( _logger, request.Signal );
+			await handle.SignalAsync( request.Signal );
 
 		return new SignalTaskResponse();
 	}
@@ -198,7 +198,7 @@ public sealed class DriverService : Driver.DriverBase
 
 		if ( handle is not null )
 		{
-			await handle.DestroyAsync( _logger );
+			await handle.DestroyAsync();
 
 			handle.Dispose();
 		}
@@ -262,7 +262,7 @@ public sealed class DriverService : Driver.DriverBase
 		// Note: Looks like request.TaskId is always empty here.
 		var handle = _managementService.CreateHandle( request.Handle.Config.Id );
 
-		handle.RecoverState( _logger, request );
+		handle.RecoverState( request );
 
 		return Task.FromResult( new RecoverTaskResponse() );
 	}
@@ -282,7 +282,7 @@ public sealed class DriverService : Driver.DriverBase
 				if ( handle is null )
 					break;
 
-				var statistics = await handle.GetStatisticsAsync( _logger );
+				var statistics = await handle.GetStatisticsAsync();
 
 				await responseStream.WriteAsync( new TaskStatsResponse()
 				{
@@ -308,7 +308,7 @@ public sealed class DriverService : Driver.DriverBase
 
 		var handle = _managementService.TryGetHandle( request.TaskId );
 
-		var exitCode = handle is not null ? await handle.WaitAsync( _logger ) : 0;
+		var exitCode = handle is not null ? await handle.WaitAsync() : 0;
 
 		return new WaitTaskResponse()
 		{

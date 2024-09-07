@@ -33,10 +33,10 @@ plugin "nomad_iis" {
 It is highly recommended to provide an API-Key to secure the API.
 In this case, every API-call needs to provide this key as `X-Api-Key` header.
 
-## Upload (Push) an Application
+## Upload (Push) an Application{#push-app}
 
 ```
-PUT /api/v1/allocs/{allocId}/upload[?appAlias=...]
+PUT /api/v1/allocs/{allocId}/{taskName}/upload[?appAlias=...]
 ```
 
 It is possible to upload an application into a previously deployed allocation. This can be thought as the opposite of Nomad pulling the application from somewhere. This is usefull if you want to run an application shortly, eg. to run UI-tests against.
@@ -49,14 +49,14 @@ If Nomad reschedules the allocation, all uploaded application files will be lost
 
 | API | Description |
 |---|---|
-| `GET /api/v1/allocs/{allocId}/start` | Start the Application Pool |
-| `GET /api/v1/allocs/{allocId}/stop` | Stop the Application Pool while keeping the Nomad allocation running |
-| `GET /api/v1/allocs/{allocId}/recycle` | Recycle the Application Pool |
+| `PUT /api/v1/allocs/{allocId}/{taskName}/start` | Start the Application Pool |
+| `PUT /api/v1/allocs/{allocId}/{taskName}/stop` | Stop the Application Pool while keeping the Nomad allocation running |
+| `PUT /api/v1/allocs/{allocId}/{taskName}/recycle` | Recycle the Application Pool |
 
 ## Taking a local Screenshot
 
 ```
-GET /api/v1/allocs/{allocId}/screenshot[?path=/]
+GET /api/v1/allocs/{allocId}/{taskName}/screenshot[?path=/]
 ```
 
 :::info
@@ -66,7 +66,7 @@ Screenshots will be taken by Playwright, which starts a local Chrome browser. Th
 ## Taking a Process Dump
 
 ```
-GET /api/v1/allocs/{allocId}/procdump
+GET /api/v1/allocs/{allocId}/{taskName}/procdump
 ```
 
 Sometimes you need to investigate a performance or memory issue and need a process dump of the *w3wp* worker process.

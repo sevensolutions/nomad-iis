@@ -89,7 +89,7 @@ public sealed class ManagementService : IHostedService
 		if ( string.IsNullOrWhiteSpace( taskId ) )
 			throw new ArgumentNullException( nameof( taskId ) );
 
-		return _handles.GetOrAdd( taskId, id => new IisTaskHandle( this, id ) );
+		return _handles.GetOrAdd( taskId, id => new IisTaskHandle( this, _logger, id ) );
 	}
 
 	public IisTaskHandle GetHandle ( string taskId )
@@ -108,12 +108,12 @@ public sealed class ManagementService : IHostedService
 			return handle;
 		return null;
 	}
-	public IisTaskHandle? TryGetHandleByAllocId ( string allocId )
+	public IisTaskHandle? TryGetHandleByAllocIdAndTaskName ( string allocId, string taskName )
 	{
 		var handles = _handles.Values.ToArray();
 
-		return handles.FirstOrDefault(
-			x => x.TaskConfig != null && x.TaskConfig.AllocId == allocId );
+		return handles.SingleOrDefault(
+			x => x.TaskConfig != null && x.TaskConfig.AllocId == allocId && x.TaskConfig.Name == taskName );
 	}
 
 	internal async Task LockAsync ( Func<ServerManager, Task> action )
@@ -155,7 +155,7 @@ public sealed class ManagementService : IHostedService
 	internal void Delete ( IisTaskHandle handle )
 		=> _handles.TryRemove( handle.TaskId, out _ );
 
-	private async Task UdpLoggerReceiverTask()
+	private async Task UdpLoggerReceiverTask ()
 	{
 		if ( _udpLoggerClient is null )
 			return;
@@ -170,7 +170,7 @@ public sealed class ManagementService : IHostedService
 					.FirstOrDefault( x => x.UdpLoggerPort == result.RemoteEndPoint.Port );
 
 				if ( handle is not null )
-					await handle.ShipLogsAsync( _logger, result.Buffer );
+					await handle.ShipLogsAsync( result.Buffer );
 			}
 			catch ( Exception ex )
 			{

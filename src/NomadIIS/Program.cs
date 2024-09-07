@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using NomadIIS;
+using NomadIIS.ManagementApi;
 using NomadIIS.Services;
 using NomadIIS.Services.Grpc;
 using Serilog;
@@ -95,14 +95,14 @@ var mgmtApiKey = builder.Configuration.GetValue<string>( "management-api-key" );
 if ( managementApiPort > 0 )
 {
 	builder.Services.AddAuthentication( config =>
-		{
-			config.DefaultAuthenticateScheme = ApiKeyAuthenticationDefaults.AuthenticationScheme;
-			config.DefaultChallengeScheme = ApiKeyAuthenticationDefaults.AuthenticationScheme;
-		} )
-		.AddApiKey( config =>
-		{
-			config.ApiKey = mgmtApiKey;
-		} );
+	{
+		config.DefaultAuthenticateScheme = ApiKeyAuthenticationDefaults.AuthenticationScheme;
+		config.DefaultChallengeScheme = ApiKeyAuthenticationDefaults.AuthenticationScheme;
+	} )
+	.AddApiKey( config =>
+	{
+		config.ApiKey = mgmtApiKey;
+	} );
 
 	builder.Services.AddAuthorization();
 }
@@ -135,7 +135,7 @@ app.MapGrpcService<DriverService>();//.RequireHost( $"*:{grpcPort}" );
 #if MANAGEMENT_API
 if ( managementApiPort > 0 )
 {
-	var epApi = ManagementApi.Map( app )
+	var epApi = ManagementApiService.Map( app )
 		.RequireHost( $"*:{managementApiPort}" );
 
 	if ( !string.IsNullOrEmpty( mgmtApiKey ) )

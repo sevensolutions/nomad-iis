@@ -1,14 +1,13 @@
 ﻿using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Microsoft.Web.Administration;
-using NomadIIS;
+using NomadIIS.ManagementApi;
 using System;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using System.Threading.Tasks;
 
-namespace NomadIIS
+namespace NomadIIS.ManagementApi
 {
 	public static class ApiKeyAuthenticationDefaults
 	{
@@ -46,7 +45,7 @@ namespace NomadIIS
 				return Task.FromResult( AuthenticateResult.Fail( "Invalid token." ) );
 
 			var principal = new ClaimsPrincipal( new ClaimsIdentity( Scheme.Name ) );
-			
+
 			var ticket = new AuthenticationTicket( principal, Scheme.Name );
 
 			return Task.FromResult( AuthenticateResult.Success( ticket ) );
