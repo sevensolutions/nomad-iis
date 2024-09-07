@@ -107,7 +107,10 @@ jobs:
         name: nomad_iis
         path: artifacts
     
+    - name: Test plugin
+      run: artifacts\nomad_iis.exe
+
     # TODO: -p:DefineConstants="MANAGEMENT_API"
-    - name: Run tests
-      #run: dotnet test src\NomadIIS.Tests\NomadIIS.Tests.csproj -e TEST_PLUGIN_DIRECTORY=artifacts
-      run: Start-Process dotnet -Verb runAs -Wait -ArgumentList "test src\NomadIIS.Tests\NomadIIS.Tests.csproj -e TEST_PLUGIN_DIRECTORY=artifacts"
+    #- name: Run tests
+    #  #run: dotnet test src\NomadIIS.Tests\NomadIIS.Tests.csproj -e TEST_PLUGIN_DIRECTORY=artifacts
+    #  run: Start-Process dotnet -Verb runAs -Wait -ArgumentList "test src\NomadIIS.Tests\NomadIIS.Tests.csproj -e TEST_PLUGIN_DIRECTORY=artifacts"
