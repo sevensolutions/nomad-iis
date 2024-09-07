@@ -274,7 +274,7 @@ public sealed class IisTaskHandle : IDisposable
 		switch ( signal.ToUpperInvariant() )
 		{
 			case "START":
-				await StartAppPoolAsync();
+				await StartAppPoolAsync( true );
 				break;
 			case "STOP":
 				await StopAppPoolAsync();
@@ -861,7 +861,7 @@ public sealed class IisTaskHandle : IDisposable
 		return 0;
 	}
 
-	public async Task StartAppPoolAsync ()
+	public async Task StartAppPoolAsync ( bool logEvent )
 	{
 		if ( _state is null || string.IsNullOrEmpty( _state.AppPoolName ) )
 			throw new InvalidOperationException( "Invalid state." );
@@ -889,7 +889,8 @@ public sealed class IisTaskHandle : IDisposable
 			return Task.CompletedTask;
 		} );
 
-		await SendTaskEventAsync( $"ApplicationPool started, Name = {_state.AppPoolName}" );
+		if ( logEvent )
+			await SendTaskEventAsync( $"ApplicationPool started, Name = {_state.AppPoolName}" );
 	}
 	public async Task StopAppPoolAsync ()
 	{
@@ -978,29 +979,16 @@ public sealed class IisTaskHandle : IDisposable
 			using var archive = new ZipArchive( stream );
 
 			archive.ExtractToDirectory( physicalPath! );
+
+			await SendTaskEventAsync( $"Updated application {appAlias} using Management API." );
+		}
+		catch ( Exception ex )
+		{
+			await SendTaskEventAsync( $"Failed to update application {appAlias} using Management API. " + ex.Message );
 		}
 		finally
 		{
-			await _owner.LockAsync( async serverManager =>
-			{
-				var appPool = serverManager.ApplicationPools.First( x => x.Name == _state.AppPoolName );
-
-				try
-				{
-					if ( appPool.State == ObjectState.Stopped )
-						appPool.Start();
-				}
-				catch ( COMException )
-				{
-					// Sometimes, restarting the pool too fast doesn't work.
-					// So we wait a bit and try again.
-					await Task.Delay( 2000 );
-					if ( appPool.State == ObjectState.Stopped )
-						appPool.Start();
-				}
-
-				_appPoolStoppedIntentionally = false;
-			} );
+			await StartAppPoolAsync( false );
 		}
 	}
 
@@ -1027,16 +1015,18 @@ public sealed class IisTaskHandle : IDisposable
 		return await PlaywrightHelper.TakeScreenshotAsync( $"http://localhost:{port}{path}" );
 	}
 
-	public async Task<FileInfo> TakeProcessDump ( CancellationToken cancellationToken = default )
+	public async Task TakeProcessDump ( FileInfo targetFile, CancellationToken cancellationToken = default )
 	{
 		if ( _state is null || string.IsNullOrEmpty( _state.AppPoolName ) )
 			throw new InvalidOperationException( "Invalid state." );
 
-		var procdumpExePath = @"C:\procdump.exe";
+		if ( string.IsNullOrEmpty( _owner.ProcdumpBinaryPath ) )
+			throw new NotSupportedException( $"Missing procdump_binary_path in driver configuration." );
+		if ( !File.Exists( _owner.ProcdumpBinaryPath ) )
+			throw new NotSupportedException( $"{_owner.ProcdumpBinaryPath} is not available." );
 
-		// TODO: Make configurable
-		if ( !File.Exists( procdumpExePath ) )
-			throw new NotSupportedException( "C:\\procdump.exe is not available." );
+		if ( !_owner.ProcdumpEulaAccepted )
+			throw new InvalidOperationException( "Procdump EULA has not been accepted." );
 
 		var w3wpPids = await _owner.LockAsync( serverManager =>
 		{
@@ -1050,27 +1040,18 @@ public sealed class IisTaskHandle : IDisposable
 
 		var pid = w3wpPids[0];
 
-		var dumpFile = new FileInfo( Path.GetTempFileName() );
-
-		var procdump = Cli.Wrap( procdumpExePath )
+		var procdump = Cli.Wrap( _owner.ProcdumpBinaryPath )
 			.WithArguments( x => x
 				.Add( "-accepteula" )
 				.Add( "-ma" )
 				.Add( pid )
-				.Add( dumpFile.FullName ) )
+				.Add( targetFile.FullName ) )
 			.WithValidation( CommandResultValidation.None );
 
 		var result = await procdump.ExecuteBufferedAsync( cancellationToken );
 
-		// Add the .dmp extension
-		dumpFile = new FileInfo( Path.Combine( dumpFile.DirectoryName!, $"{dumpFile.Name}.dmp" ) );
-
-		if ( !dumpFile.Exists || dumpFile.Length == 0 )
-		{
+		if ( !targetFile.Exists || targetFile.Length == 0 )
 			throw new Exception( result.StandardOutput + Environment.NewLine + result.StandardError );
-		}
-
-		return dumpFile;
 	}
 
 #endif

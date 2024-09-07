@@ -5,7 +5,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using NomadIIS.Services;
 using System;
+using System.IO;
 using System.Text.Json.Serialization;
+using System.Threading;
 
 namespace NomadIIS.ManagementApi;
 
@@ -40,7 +42,7 @@ public sealed class ManagementApiService
 			if ( taskHandle is null )
 				return Results.NotFound();
 
-			await taskHandle.StartAppPoolAsync();
+			await taskHandle.StartAppPoolAsync( true );
 
 			return Results.Ok();
 		} );
@@ -97,24 +99,24 @@ public sealed class ManagementApiService
 			return Results.Bytes( screenshot, "image/png" );
 		} );
 
-		allocsApi.MapGet( "{allocId}/{taskName}/procdump", async ( string allocId, string taskName, HttpContext httpContext, [FromServices] IConfiguration configuration, [FromServices] ManagementService managementService ) =>
+		allocsApi.MapGet( "{allocId}/{taskName}/procdump", async (
+			string allocId, string taskName, HttpContext httpContext, CancellationToken cancellationToken,
+			[FromServices] ManagementService managementService ) =>
 		{
-			var eulaAccepted = configuration.GetValue( "procdump-accept-eula", false );
-			if ( !eulaAccepted )
-				throw new InvalidOperationException( "Procdump EULA has not been accepted." );
-
 			var taskHandle = managementService.TryGetHandleByAllocIdAndTaskName( allocId, taskName );
 
 			if ( taskHandle is null )
 				return Results.NotFound();
 
-			var dumpFile = await taskHandle.TakeProcessDump();
+			var dumpFile = new FileInfo( Path.GetTempFileName() + ".dmp" );
 
 			try
 			{
+				await taskHandle.TakeProcessDump( dumpFile, cancellationToken );
+
 				// Stream the file to the client
 				await Results
-					.File( dumpFile.FullName, "application/octet-stream", $"procdump_{allocId}_{DateTime.Now:yyyy-MM-dd-HH-mm-ss}.dmp" )
+					.File( dumpFile.FullName, "application/octet-stream", $"procdump_{allocId}_{taskName}_{DateTime.Now:yyyy-MM-dd-HH-mm-ss}.dmp" )
 					.ExecuteAsync( httpContext );
 
 				// Not needed but we need to return something
@@ -122,7 +124,8 @@ public sealed class ManagementApiService
 			}
 			finally
 			{
-				dumpFile.Delete();
+				if ( dumpFile.Exists )
+					dumpFile.Delete();
 			}
 		} );
 

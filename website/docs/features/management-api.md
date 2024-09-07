@@ -21,7 +21,7 @@ In order to use *procdump* you need to accept it's EULA by providing another arg
 
 ```hcl
 plugin "nomad_iis" {
-  args = ["--management-api-port=5004", "--management-api-key=12345", "--procdump-accept-eula=true"]
+  args = ["--management-api-port=5004", "--management-api-key=12345"]
   config {
     enabled = true
   }
@@ -64,6 +64,11 @@ Screenshots will be taken by Playwright, which starts a local Chrome browser. Th
 :::
 
 ## Taking a Process Dump
+
+:::info
+To use this feature you need to download and install [procdump.exe](https://learn.microsoft.com/en-us/sysinternals/downloads/procdump) to `C:\procdump.exe` or specify a different location in the [driver configuration](../getting-started/driver-configuration.md).  
+You also have to agree to the EULA of procdump by setting `accept_eula` to `true`.
+:::
 
 ```
 GET /api/v1/allocs/{allocId}/{taskName}/procdump

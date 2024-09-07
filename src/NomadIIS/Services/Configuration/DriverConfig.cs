@@ -28,4 +28,18 @@ public sealed class DriverConfig
 	[DefaultValue( "C:\\inetpub\\wwwroot" )]
 	[ConfigurationField( "placeholder_app_path" )]
 	public string? PlaceholderAppPath { get; set; }
+
+	[ConfigurationCollectionField( "procdumps", "procdump", 0, 1 )]
+	public DriverConfigProcdump[] Procdumps { get; set; } = default!;
+}
+
+public sealed class DriverConfigProcdump
+{
+	[DefaultValue( "C:\\procdump.exe" )]
+	[ConfigurationField( "binary_path" )]
+	public string? BinaryPath { get; set; }
+
+	[DefaultValue( false )]
+	[ConfigurationField( "accept_eula" )]
+	public bool AcceptEula { get; set; }
 }
