@@ -57,17 +57,56 @@ jobs:
       with:
         dotnet-version: 8.0.x
 
+    # Install IIS
+    - name: Install IIS
+      run: |
+        $features = @(
+          "IIS-WebServerRole",
+          "IIS-WebServer",
+          "IIS-CommonHttpFeatures",
+          "IIS-HttpErrors",
+          "IIS-HttpRedirect",
+          "IIS-ApplicationDevelopment",
+          "NetFx4Extended-ASPNET45",
+          "IIS-NetFxExtensibility45",
+          "IIS-HealthAndDiagnostics",
+          "IIS-HttpLogging",
+          "IIS-LoggingLibraries",
+          "IIS-RequestMonitor",
+          "IIS-HttpTracing",
+          "IIS-Security",
+          "IIS-RequestFiltering",
+          "IIS-Performance",
+          "IIS-WebServerManagementTools",
+          "IIS-IIS6ManagementCompatibility",
+          "IIS-Metabase",
+          "IIS-ManagementConsole",
+          "IIS-BasicAuthentication",
+          "IIS-WindowsAuthentication",
+          "IIS-StaticContent",
+          "IIS-DefaultDocument",
+          "IIS-WebSockets",
+          "IIS-ApplicationInit",
+          "IIS-ISAPIExtensions",
+          "IIS-ISAPIFilter",
+          "IIS-HttpCompressionStatic",
+          "IIS-ASP",
+          "IIS-ServerSideIncludes",
+          "IIS-ASPNET45"
+        )
+        Enable-WindowsOptionalFeature -Online -FeatureName $features
+
     # Download Nomad
     - name: Run setup.ps1
       shell: pwsh
       run: .\setup.ps1
-        
+    
+    # Download nomad_iis.exe
     - uses: actions/download-artifact@master
       with:
         name: nomad_iis
         path: artifacts
-    - name: Extract nomad_iis
-      run: |
-        7z x artifacts\nomad_iis.zip
-        cd artifacts
-        dir
+    
+    # TODO: -p:DefineConstants="MANAGEMENT_API"
+    - name: Run tests
+      run: dotnet test src\NomadIIS.Tests\NomadIIS.Tests.csproj -e TEST_PLUGIN_DIRECTORY=artifacts
