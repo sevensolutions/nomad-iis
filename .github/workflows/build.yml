@@ -109,4 +109,5 @@ jobs:
     
     # TODO: -p:DefineConstants="MANAGEMENT_API"
     - name: Run tests
-      run: dotnet test src\NomadIIS.Tests\NomadIIS.Tests.csproj -e TEST_PLUGIN_DIRECTORY=artifacts
+      #run: dotnet test src\NomadIIS.Tests\NomadIIS.Tests.csproj -e TEST_PLUGIN_DIRECTORY=artifacts
+      run: Start-Process dotnet -Verb runAs -ArgumentList "test src\NomadIIS.Tests\NomadIIS.Tests.csproj -e TEST_PLUGIN_DIRECTORY=artifacts"
