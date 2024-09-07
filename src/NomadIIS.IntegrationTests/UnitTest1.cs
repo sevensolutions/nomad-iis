@@ -9,66 +9,36 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 
-namespace NomadIIS.IntegrationTests
+namespace NomadIIS.IntegrationTests;
+
+public class UnitTest1 : IClassFixture<NomadIISFixture>
 {
-	public class UnitTest1
+	private readonly NomadIISFixture _fixture;
+
+	public UnitTest1 ( NomadIISFixture fixture )
 	{
-		[Fact]
-		public async Task Test1 ()
-		{
-			var nomadDirectory = Path.GetFullPath( @"..\..\..\..\..\nomad" );
-			var dataDirectory = Path.Combine( nomadDirectory, "data" );
-			var pluginDirectory = Path.GetFullPath( @"..\..\..\..\NomadIIS\bin\Debug\net8.0" );
-			var configFile = Path.GetFullPath( @"Data\serverAndClient.hcl" );
+		_fixture = fixture;
+	}
 
-			//var nomadCommand = Cli.Wrap( Path.Combine( nomadDirectory, "nomad.exe" ) )
-			//	.WithArguments( $"agent -config=\"{configFile}\" -data-dir=\"{dataDirectory}\" -plugin-dir=\"{pluginDirectory}\"" )
-			//	.WithWorkingDirectory( nomadDirectory );
-			var nomadCommand = Cli.Wrap( Path.Combine( nomadDirectory, "nomad.exe" ) )
-				.WithArguments( $"agent -dev -plugin-dir=\"{pluginDirectory}\"" )
-				.WithWorkingDirectory( nomadDirectory );
+	[Fact]
+	public async Task Test1 ()
+	{
+		Console.WriteLine( "Waiting for nomad to start..." );
 
-			var ctsNomad = new CancellationTokenSource();
+		var jobHcl = File.ReadAllText( @"Data\simple-job.hcl" );
 
-			var nomadTask = nomadCommand.ExecuteBufferedAsync( ctsNomad.Token );
+		var jobId = await _fixture.ScheduleJobAsync( jobHcl );
 
-			var testTask = Task.Run( async () =>
-			{
-				Console.WriteLine( "Waiting for nomad to start..." );
+		var allocations = await _fixture.ListJobAllocationsAsync( jobId );
 
-				await Task.Delay( 30_000 );
+		if ( allocations is null || allocations.Length == 0 )
+			Assert.Fail( "No job allocations" );
 
-				using var httpClient = new HttpClient()
-				{
-					BaseAddress = new Uri( "http://localhost:4646/" )
-				};
+		_fixture.AssertApplicationPool( $"nomad-{allocations[0].Id}-iis-simple" );
+		_fixture.AssertWebsite( $"nomad-{allocations[0].Id}-iis-simple" );
 
-				var jobHcl = File.ReadAllText( @"Data\simple-job.hcl" );
-				var request = new Dictionary<string, object>()
-				{
-					{ "JobHCL", jobHcl },
-					{ "Canonicalize", false }
-				};
+		await Task.Delay( 2000 );
 
-				var r = await httpClient.PostAsJsonAsync( "v1/jobs/parse", request );
-				var jobJson = await r.Content.ReadAsStringAsync();
-
-				var jobJsonObject = JsonSerializer.Deserialize<Dictionary<string, object>>( jobJson );
-
-				request = new Dictionary<string, object>()
-				{
-					{ "Job", jobJsonObject }
-				};
-
-				var r2 = await httpClient.PostAsJsonAsync( "v1/jobs", request );
-				var response2 = await r2.Content.ReadAsStringAsync();
-			} );
-
-			await Task.WhenAny( nomadTask, testTask );
-
-			Console.WriteLine( "Stopping nomad..." );
-
-			ctsNomad.Cancel();
-		}
+		await _fixture.StopJobAsync( jobId );
 	}
 }
