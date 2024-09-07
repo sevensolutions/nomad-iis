@@ -1,4 +1,7 @@
+using Microsoft.Web.Administration;
+using System;
 using Xunit.Abstractions;
+
 namespace NomadIIS.Tests;
 
 public class IntegrationTests : IClassFixture<NomadIISFixture>
@@ -16,18 +19,18 @@ public class IntegrationTests : IClassFixture<NomadIISFixture>
 	public async Task SubmitSimpleJob_PoolAndWebsiteShouldBeRunning ()
 	{
 		var jobHcl = """
-			job "iis-simple" {
+			job "simple-job" {
 			  datacenters = ["dc1"]
 			  type = "service"
 
-			  group "iis-simple" {
+			  group "app" {
 			    count = 1
 
 			    network {
 			      port "httplabel" {}
 			    }
 
-			    task "iis-simple" {
+			    task "app" {
 			      driver = "iis"
 
 			      config {
@@ -56,18 +59,14 @@ public class IntegrationTests : IClassFixture<NomadIISFixture>
 		if ( allocations is null || allocations.Length == 0 )
 			Assert.Fail( "No job allocations" );
 
-		var poolAndWebsiteName = $"nomad-{allocations[0].Id}-iis-simple";
+		var poolAndWebsiteName = $"nomad-{allocations[0].Id}-app";
 
 		_output.WriteLine( $"AppPool and Website Name: {poolAndWebsiteName}" );
 
-		_fixture.AccessIIS( sm =>
+		_fixture.AccessIIS( iis =>
 		{
-			Assert.True(
-				sm.ApplicationPoolExists( poolAndWebsiteName ),
-				$"No application pool with name \"{poolAndWebsiteName}\" found in IIS." );
-			Assert.True(
-				sm.WebsiteExists( poolAndWebsiteName ),
-				$"No website with name \"{poolAndWebsiteName}\" found in IIS." );
+			iis.AppPool( poolAndWebsiteName ).ShouldExist();
+			iis.Website( poolAndWebsiteName ).ShouldExist();
 		} );
 
 		_output.WriteLine( "Stopping job..." );
@@ -76,14 +75,10 @@ public class IntegrationTests : IClassFixture<NomadIISFixture>
 
 		_output.WriteLine( "Job stopped." );
 
-		_fixture.AccessIIS( sm =>
+		_fixture.AccessIIS( iis =>
 		{
-			Assert.False(
-				sm.ApplicationPoolExists( poolAndWebsiteName ),
-				$"Application pool with name \"{poolAndWebsiteName}\" still exists in IIS." );
-			Assert.False(
-				sm.WebsiteExists( poolAndWebsiteName ),
-				$"Website with name \"{poolAndWebsiteName}\" still exists in IIS." );
+			iis.AppPool( poolAndWebsiteName ).ShouldNotExist();
+			iis.Website( poolAndWebsiteName ).ShouldNotExist();
 		} );
 	}
 
@@ -91,18 +86,18 @@ public class IntegrationTests : IClassFixture<NomadIISFixture>
 	public async Task JobWithEnvVars_PoolShouldHaveEnvVars ()
 	{
 		var jobHcl = """
-			job "iis-simple" {
+			job "job-with-env-vars" {
 			  datacenters = ["dc1"]
 			  type = "service"
 
-			  group "iis-simple" {
+			  group "app" {
 			    count = 1
 
 			    network {
 			      port "httplabel" {}
 			    }
 
-			    task "iis-simple" {
+			    task "app" {
 			      driver = "iis"
 
 			      config {
@@ -135,17 +130,89 @@ public class IntegrationTests : IClassFixture<NomadIISFixture>
 		if ( allocations is null || allocations.Length == 0 )
 			Assert.Fail( "No job allocations" );
 
-		var poolAndWebsiteName = $"nomad-{allocations[0].Id}-iis-simple";
+		var poolAndWebsiteName = $"nomad-{allocations[0].Id}-app";
 
 		_output.WriteLine( $"AppPool and Website Name: {poolAndWebsiteName}" );
 
-		_fixture.AccessIIS( sm =>
+		_fixture.AccessIIS( iis =>
 		{
-			Assert.True(
-				sm.ApplicationPoolExists( poolAndWebsiteName ),
-				$"No application pool with name \"{poolAndWebsiteName}\" found in IIS." );
+			iis.AppPool( poolAndWebsiteName ).ShouldExist();
+			iis.AppPool( poolAndWebsiteName ).ShouldHaveEnvironmentVariable( "MY_VARIABLE", "hello" );
+		} );
 
-			Assert.Equal( "hello", sm.GetApplicationPoolEnvironmentVariable( poolAndWebsiteName, "MY_VARIABLE" ) );
+		_output.WriteLine( "Stopping job..." );
+
+		await _fixture.StopJobAsync( jobId );
+
+		_output.WriteLine( "Job stopped." );
+	}
+
+	[Fact]
+	public async Task JobWithSettings_PoolShouldHaveSettings ()
+	{
+		var jobHcl = """
+			job "job-with-settings" {
+			  datacenters = ["dc1"]
+			  type = "service"
+
+			  group "app" {
+			    count = 1
+
+			    network {
+			      port "httplabel" {}
+			    }
+
+			    task "app" {
+			      driver = "iis"
+
+			      config {
+			        application {
+			          path = "C:\\inetpub\\wwwroot"
+			        }
+
+			        managed_pipeline_mode = "Integrated"
+			        managed_runtime_version = "v4.0"
+			        start_mode = "AlwaysRunning"
+			        idle_timeout = "45m"
+			        disable_overlapped_recycle = true
+			        periodic_restart = "1h30m"
+
+			        binding {
+			          type = "http"
+			          port = "httplabel"
+			        }
+			      }
+			    }
+			  }
+			}
+			""";
+
+		_output.WriteLine( "Submitting job..." );
+
+		var jobId = await _fixture.ScheduleJobAsync( jobHcl );
+
+		_output.WriteLine( $"Job Id: {jobId}" );
+
+		var allocations = await _fixture.ListJobAllocationsAsync( jobId );
+
+		if ( allocations is null || allocations.Length == 0 )
+			Assert.Fail( "No job allocations" );
+
+		var poolAndWebsiteName = $"nomad-{allocations[0].Id}-app";
+
+		_output.WriteLine( $"AppPool and Website Name: {poolAndWebsiteName}" );
+
+		_fixture.AccessIIS( iis =>
+		{
+			var appPool = iis.AppPool( poolAndWebsiteName );
+
+			appPool.ShouldExist();
+			appPool.ShouldHaveManagedPipelineMode( ManagedPipelineMode.Integrated );
+			appPool.ShouldHaveManagedRuntimeVersion( "v4.0" );
+			appPool.ShouldHaveStartMode( StartMode.AlwaysRunning );
+			appPool.ShouldHaveIdleTimeout( TimeSpan.FromMinutes( 45 ) );
+			appPool.ShouldHaveDisableOverlappedRecycle( true );
+			appPool.ShouldHavePeriodicRestart( new TimeSpan( 1, 30, 0 ) );
 		} );
 
 		_output.WriteLine( "Stopping job..." );

@@ -2,13 +2,10 @@
 using CliWrap.Buffered;
 using Microsoft.Web.Administration;
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Json;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Threading;
 
 namespace NomadIIS.Tests;
@@ -108,26 +105,24 @@ public sealed class NomadIISFixture : IAsyncLifetime
 
 	public async Task<string> ScheduleJobAsync ( string jobHcl, bool waitUntilRunning = true )
 	{
-		var request = new Dictionary<string, object>()
-			{
-				{ "JobHCL", jobHcl },
-				{ "Canonicalize", false }
-			};
+		var response = await _httpClient.PostAsJsonAsync( "jobs/parse", new ParseJobRequest()
+		{
+			JobHcl = jobHcl,
+			Canonicalize = false
+		} );
 
-		var r = await _httpClient.PostAsJsonAsync( "jobs/parse", request );
-		var jobJson = await r.Content.ReadAsStringAsync();
+		var parsedJob = await response.Content.ReadFromJsonAsync<ParseJobResponse>();
 
-		var jobJsonObject = JsonSerializer.Deserialize<Dictionary<string, object>>( jobJson );
+		var jobId = parsedJob?.Data["ID"]?.ToString();
+		if ( string.IsNullOrEmpty( jobId ) )
+			throw new InvalidDataException( "Invalid job spec" );
 
-		request = new Dictionary<string, object>()
-			{
-				{ "Job", jobJsonObject }
-			};
+		var createJobHttpResponse = await _httpClient.PostAsJsonAsync( "jobs", new CreateJobRequest()
+		{
+			Job = parsedJob!.Data
+		} );
 
-		var createJobHttpResponse = await _httpClient.PostAsJsonAsync( "jobs", request );
 		var createJobResponse = await createJobHttpResponse.Content.ReadFromJsonAsync<CreateJobResponse>();
-
-		var jobId = jobJsonObject["ID"].ToString();
 
 		if ( waitUntilRunning )
 		{
@@ -149,7 +144,15 @@ public sealed class NomadIISFixture : IAsyncLifetime
 	{
 		await _httpClient.DeleteAsync( $"job/{jobId}" );
 
-		await Task.Delay( 3000 );
+		await TryUntilAsync( async () =>
+		{
+			var job = await ReadJobAsync( jobId );
+
+			if ( job is not null && job.Status == JobStatus.Dead )
+				return job;
+
+			return null;
+		} );
 	}
 
 	public Task<JobResponse?> ReadJobAsync ( string jobId )
@@ -158,60 +161,10 @@ public sealed class NomadIISFixture : IAsyncLifetime
 	public Task<JobAllocationResponse[]?> ListJobAllocationsAsync ( string jobId )
 		=> _httpClient.GetFromJsonAsync<JobAllocationResponse[]>( $"job/{jobId}/allocations" );
 
-	public void AccessIIS ( Action<ServerManager> action )
+	public void AccessIIS ( Action<IisHandle> action )
 	{
-		using var serverManager = new ServerManager();
+		using var handle = new IisHandle();
 
-		action( serverManager );
+		action( handle );
 	}
-}
-
-public sealed class AgentHealthResponse
-{
-	[JsonPropertyName( "client" )]
-	public AgentHealth Client { get; set; }
-	[JsonPropertyName( "server" )]
-	public AgentHealth Server { get; set; }
-}
-public sealed class AgentHealth
-{
-	[JsonPropertyName( "ok" )]
-	public bool Ok { get; set; }
-	[JsonPropertyName( "message" )]
-	public string Message { get; set; }
-}
-
-public sealed class CreateJobResponse
-{
-	[JsonPropertyName( "EvalID" )]
-	public string EvalId { get; set; }
-}
-
-public sealed class JobResponse
-{
-	[JsonPropertyName( "ID" )]
-	public string Id { get; set; }
-	[JsonPropertyName( "Name" )]
-	public string Name { get; set; }
-	[JsonPropertyName( "Status" )]
-	public JobStatus Status { get; set; }
-}
-
-public sealed class JobAllocationResponse
-{
-	[JsonPropertyName( "ID" )]
-	public string Id { get; set; }
-	[JsonPropertyName( "Name" )]
-	public string Name { get; set; }
-}
-
-[JsonConverter( typeof( JsonStringEnumConverter<JobStatus> ) )]
-public enum JobStatus
-{
-	[JsonPropertyName( "pending" )]
-	Pending,
-	[JsonPropertyName( "running" )]
-	Running,
-	[JsonPropertyName( "dead" )]
-	Dead
 }
