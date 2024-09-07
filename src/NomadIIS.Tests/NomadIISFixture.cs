@@ -1,22 +1,17 @@
 ﻿using CliWrap;
 using CliWrap.Buffered;
-using CliWrap.EventStream;
 using Microsoft.Web.Administration;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
-using System.Threading.Tasks;
-using System.Xml.Linq;
 
-namespace NomadIIS.IntegrationTests;
+namespace NomadIIS.Tests;
 
 public sealed class NomadIISFixture : IAsyncLifetime
 {

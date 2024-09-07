@@ -1,7 +1,7 @@
 ﻿using Microsoft.Web.Administration;
 using System.Linq;
 
-namespace NomadIIS.IntegrationTests;
+namespace NomadIIS.Tests;
 
 public static class ServerManagerExtensions
 {

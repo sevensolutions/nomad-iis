@@ -1,25 +1,12 @@
-using CliWrap;
-using CliWrap.Buffered;
-using Microsoft.VisualStudio.TestPlatform.Utilities;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Net.Http;
-using System.Net.Http.Json;
-using System.Text;
-using System.Text.Json;
-using System.Threading;
-using System.Xml.Linq;
 using Xunit.Abstractions;
+namespace NomadIIS.Tests;
 
-namespace NomadIIS.IntegrationTests;
-
-public class UnitTest1 : IClassFixture<NomadIISFixture>
+public class IntegrationTests : IClassFixture<NomadIISFixture>
 {
 	private readonly NomadIISFixture _fixture;
 	private readonly ITestOutputHelper _output;
 
-	public UnitTest1 ( NomadIISFixture fixture, ITestOutputHelper output )
+	public IntegrationTests ( NomadIISFixture fixture, ITestOutputHelper output )
 	{
 		_fixture = fixture;
 		_output = output;

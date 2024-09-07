@@ -12,7 +12,6 @@
   <ItemGroup>
     <PackageReference Include="CliWrap" Version="3.6.6" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
-    <PackageReference Include="Microsoft.Web.Administration" Version="11.1.0" />
     <PackageReference Include="xunit" Version="2.9.0" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.0.0-pre.30">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -32,6 +31,10 @@
 
   <ItemGroup>
     <None Remove="Data\serverAndClient.hcl" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NomadIIS\NomadIIS.csproj" />
   </ItemGroup>
 
 </Project>
