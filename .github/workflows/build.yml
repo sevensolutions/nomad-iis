@@ -7,9 +7,16 @@ on:
     branches: [ "main" ]
 
 jobs:
-
   build:
     runs-on: windows-latest
+
+    strategy:
+      matrix:
+        profile:
+          - publishProfile: "Release.pubxml"
+            artifactName: "nomad_iis"
+          - publishProfile: "ReleaseWithMgmtApi.pubxml"
+            artifactName: "nomad_iis_mgmt_api"
 
     steps:
     - name: Checkout
@@ -23,32 +30,19 @@ jobs:
       with:
         dotnet-version: 8.0.x
 
-    # Publish nomad_iis
-    - name: Publish nomad_iis
-      run: dotnet publish "./src/NomadIIS/NomadIIS.csproj" /p:PublishProfile="./src/NomadIIS/Properties/PublishProfiles/Release.pubxml"
+    # Publish the application
+    - name: Publish the application
+      run: dotnet publish "./src/NomadIIS/NomadIIS.csproj" /p:PublishProfile="./src/NomadIIS/Properties/PublishProfiles/${{ matrix.profile.publishProfile }}"
+
     # Copy to output
     - name: Copy to output folder
       run: |
         mkdir dist
         copy .\src\NomadIIS\bin\Release\net8.0\win-x64\publish\nomad_iis.exe .\dist\nomad_iis.exe
-    # Upload the artifacts
-    - name: Upload build artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: nomad_iis
-        path: ./dist
 
-    # Publish nomad_iis with management API
-    - name: Publish nomad_iis with management API
-      run: dotnet publish "./src/NomadIIS/NomadIIS.csproj" /p:PublishProfile="./src/NomadIIS/Properties/PublishProfiles/ReleaseWithMgmtApi.pubxml"
-    # Copy to output
-    - name: Copy to output folder
-      run: |
-        mkdir distMgmtApi
-        copy .\src\NomadIIS\bin\Release\net8.0\win-x64\publish\nomad_iis.exe .\distMgmtApi\nomad_iis.exe
-    # Upload the artifacts
-    - name: Upload build artifact
+    # Upload the artifact
+    - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: nomad_iis_mgmt_api
-        path: ./distMgmtApi
+        name: ${{ matrix.profile.artifactName }}
+        path: ./dist
