@@ -8,7 +8,11 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Pipes;
 using System.Linq;
+using System.Net;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using System.Security.AccessControl;
 using System.Security.Cryptography.X509Certificates;
 using System.Security.Principal;
@@ -31,6 +35,8 @@ public sealed class IisTaskHandle : IDisposable
 	private readonly CpuStats _kernelModeCpuStats = new();
 	private readonly CpuStats _userModeCpuStats = new();
 
+	private NamedPipeClientStream? _stdoutLogStream;
+
 	internal IisTaskHandle ( ManagementService owner, string taskId )
 	{
 		if ( string.IsNullOrWhiteSpace( taskId ) )
@@ -42,12 +48,15 @@ public sealed class IisTaskHandle : IDisposable
 	}
 
 	public string TaskId { get; }
+	public int? UdpLoggerPort => _state?.UdpLoggerPort;
 
 	public async Task<DriverStateV1> RunAsync ( ILogger<DriverService> logger, TaskConfig task )
 	{
 		logger.LogInformation( $"Starting task {task.Id} (Alloc: {task.AllocId})..." );
 
 		_state = new DriverStateV1();
+
+		DriverTaskConfig config;
 
 		try
 		{
@@ -56,13 +65,13 @@ public sealed class IisTaskHandle : IDisposable
 
 			_state.AppPoolName = BuildAppPoolOrWebsiteName( task );
 
-			var config = MessagePackHelper.Deserialize<DriverTaskConfig>( task.MsgpackDriverConfig );
+			config = MessagePackHelper.Deserialize<DriverTaskConfig>( task.MsgpackDriverConfig );
 
 			foreach ( var app in config.Applications )
 			{
 				// In case someone is specifying the alias with a leading slash.
 				if ( app.Alias is not null )
-					app.Alias.TrimStart( '/' );
+					app.Alias = app.Alias.TrimStart( '/' );
 			}
 
 			if ( config.Applications.Select( x => x.Alias ).Distinct().Count() != config.Applications.Length )
@@ -82,13 +91,17 @@ public sealed class IisTaskHandle : IDisposable
 
 			await _owner.LockAsync( serverManager =>
 			{
+				// Get a new port for the UDP logger
+				if ( config.EnableUdpLogging )
+					_state.UdpLoggerPort = GetAvailablePort( 10000 );
+
 				// Create AppPool
 				var appPool = FindApplicationPool( serverManager, _state.AppPoolName );
 				if ( appPool is null )
 				{
 					logger.LogInformation( $"Task {task.Id}: Creating AppPool with name {_state.AppPoolName}..." );
 
-					appPool = CreateApplicationPool( serverManager, _state.AppPoolName, _taskConfig, config );
+					appPool = CreateApplicationPool( serverManager, _state.AppPoolName, _taskConfig, config, _state.UdpLoggerPort, _owner.UdpLoggerPort );
 				}
 
 				// Create Website
@@ -148,7 +161,7 @@ public sealed class IisTaskHandle : IDisposable
 		try
 		{
 			if ( _owner.DirectorySecurity )
-				SetupDirectoryPermissions( logger );
+				await SetupDirectoryPermissions( logger, config );
 
 			await SendTaskEventAsync( logger, $"Application started, Name: {_state.AppPoolName}" );
 		}
@@ -397,6 +410,9 @@ public sealed class IisTaskHandle : IDisposable
 	{
 		_ctsDisposed.Cancel();
 
+		if ( _stdoutLogStream is not null )
+			_stdoutLogStream.Dispose();
+
 		_owner.Delete( this );
 	}
 
@@ -414,20 +430,26 @@ public sealed class IisTaskHandle : IDisposable
 
 		foreach ( var c in rawName )
 		{
-			if ( invalidChars.Contains( c ) )
+			if ( invalidChars.Contains( c ) || c == ' ' )
 				sb.Append( '_' );
 			else
 				sb.Append( c );
 		}
 
-		return sb.ToString();
+		var finalName = sb.ToString();
+
+		// AppPool name limit is 64 characters. Website's doesn't seem to have a limit.
+		if ( finalName.Length > 64 )
+			finalName = $"nomad-{taskConfig.AllocId}";
+
+		return finalName;
 	}
 
 	private static ApplicationPool GetApplicationPool ( ServerManager serverManager, string name )
 		=> FindApplicationPool( serverManager, name ) ?? throw new KeyNotFoundException( $"No AppPool with name {name} found." );
 	private static ApplicationPool? FindApplicationPool ( ServerManager serverManager, string name )
 		=> serverManager.ApplicationPools.FirstOrDefault( x => x.Name == name );
-	private static ApplicationPool CreateApplicationPool ( ServerManager serverManager, string name, TaskConfig taskConfig, DriverTaskConfig config )
+	private static ApplicationPool CreateApplicationPool ( ServerManager serverManager, string name, TaskConfig taskConfig, DriverTaskConfig config, int? udpLocalPort, int? udpRemotePort )
 	{
 		var appPool = serverManager.ApplicationPools.Add( name );
 		appPool.AutoStart = true;
@@ -463,9 +485,11 @@ public sealed class IisTaskHandle : IDisposable
 		foreach ( var env in taskConfig.Env )
 			AddEnvironmentVariable( envVarsCollection, env.Key, env.Value );
 
-		// TODOPEI: Doesn't work because of wrong permission
-		//AddEnvironmentVariable( envVarsCollection, "NOMAD_STDOUT_PATH", task.StdoutPath );
-		//AddEnvironmentVariable( envVarsCollection, "NOMAD_STDERR_PATH", task.StderrPath );
+		if ( udpLocalPort is not null && udpRemotePort is not null )
+		{
+			AddEnvironmentVariable( envVarsCollection, "NOMAD_STDOUT_UDP_REMOTE_PORT", udpRemotePort.Value.ToString() );
+			AddEnvironmentVariable( envVarsCollection, "NOMAD_STDOUT_UDP_LOCAL_PORT", udpLocalPort.Value.ToString() );
+		}
 
 		return appPool;
 
@@ -489,16 +513,31 @@ public sealed class IisTaskHandle : IDisposable
 	{
 		var bindings = config.Bindings.Select( binding =>
 		{
-			var port = taskConfig.Resources.Ports.FirstOrDefault( x => x.Label == binding.PortLabel );
-			if ( port is null )
-				throw new KeyNotFoundException( $"Couldn't resolve binding-port with label \"{binding.PortLabel}\" in the network config." );
+			int? port;
+			PortMapping? portMapping = null;
 
-			return new { Binding = binding, PortMapping = port };
+			if ( int.TryParse( binding.Port, out var staticPort ) )
+			{
+				if ( string.IsNullOrEmpty( binding.Hostname ) )
+					throw new Exception( $"Static port {staticPort} can only be used in combination with the hostname-setting. You can also use a network stanza to specify the port." );
+
+				port = staticPort;
+			}
+			else
+			{
+				portMapping = taskConfig.Resources.Ports.FirstOrDefault( x => x.Label == binding.Port );
+				if ( portMapping is null )
+					throw new KeyNotFoundException( $"Couldn't resolve binding-port with label \"{binding.Port}\" in the network config." );
+
+				port = portMapping.Value;
+			}
+
+			return new { Binding = binding, Port = port, PortMapping = portMapping };
 		} ).ToArray();
 
 		var website = serverManager.Sites.CreateElement();
 
-		website.Id = serverManager.Sites.Count > 0 ? serverManager.Sites.Max( x => x.Id ) + 1 : 1;
+		website.Id = GetNextAvailableWebsiteId( serverManager );
 		website.Name = name;
 		website.ApplicationDefaults.ApplicationPoolName = appPool.Name;
 
@@ -536,7 +575,7 @@ public sealed class IisTaskHandle : IDisposable
 
 			// Note: Certificate needs to be specified in this Add() method. Otherwise it doesn't work.
 			var binding = website.Bindings.Add(
-				$"{ipAddress}:{b.PortMapping.Value}:{b.Binding.Hostname}",
+				$"{ipAddress}:{b.Port}:{b.Binding.Hostname}",
 				certificateHash, certificateStoreName, sslFlags );
 
 			binding.Protocol = b.Binding.Type.ToString().ToLower();
@@ -620,7 +659,25 @@ public sealed class IisTaskHandle : IDisposable
 		}
 	}
 
-	private void SetupDirectoryPermissions ( ILogger logger )
+	private async Task SetupDirectoryPermissions ( ILogger logger, DriverTaskConfig config )
+	{
+		try
+		{
+			// GH-43: It may happen that this throws an IdentityNotMappedException sometimes.
+			// I think setting up the AppPoolIdentity takes some time.
+			// So if we're too early, we try again in 2 seconds.
+			SetupDirectoryPermissionsCore( logger, config );
+		}
+		catch ( IdentityNotMappedException ex )
+		{
+			logger.LogDebug( ex, "Failed to setup directory permissions for allocation {allocation}. Retrying in 2 seconds...", _taskConfig?.AllocId );
+
+			await Task.Delay( 2000 );
+
+			SetupDirectoryPermissionsCore( logger, config );
+		}
+	}
+	private void SetupDirectoryPermissionsCore ( ILogger logger, DriverTaskConfig config )
 	{
 		// https://developer.hashicorp.com/nomad/docs/concepts/filesystem
 		// https://learn.microsoft.com/en-us/troubleshoot/developer/webapps/iis/www-authentication-authorization/default-permissions-user-rights
@@ -628,23 +685,25 @@ public sealed class IisTaskHandle : IDisposable
 
 #pragma warning disable CA1416 // Plattformkompatibilität überprüfen
 
-		var identity = $"IIS AppPool\\{_state!.AppPoolName}";
+		var appPoolIdentity = $"IIS AppPool\\{_state!.AppPoolName}";
+
+		string[] identities = config.PermitIusr ? [appPoolIdentity, "IUSR"] : [appPoolIdentity];
 
 		var allocDir = new DirectoryInfo( _taskConfig!.AllocDir );
 
 		var builtinUsersSid = TryGetSid( WellKnownSidType.BuiltinUsersSid, logger );
 		var authenticatedUserSid = TryGetSid( WellKnownSidType.AuthenticatedUserSid, logger );
 
-		SetupDirectory( @"alloc", null, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, logger );
-		SetupDirectory( @"alloc\data", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, logger );
-		SetupDirectory( @"alloc\logs", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, logger );
-		SetupDirectory( @"alloc\tmp", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, logger );
-		SetupDirectory( $@"{_taskConfig.Name}\private", null, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, logger );
-		SetupDirectory( $@"{_taskConfig.Name}\local", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, logger );
-		SetupDirectory( $@"{_taskConfig.Name}\secrets", FileSystemRights.Read, InheritanceFlags.ObjectInherit, logger );
-		SetupDirectory( $@"{_taskConfig.Name}\tmp", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, logger );
+		SetupDirectory( [appPoolIdentity], @"alloc", null, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, logger );
+		SetupDirectory( [appPoolIdentity], @"alloc\data", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, logger );
+		SetupDirectory( [appPoolIdentity], @"alloc\logs", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, logger );
+		SetupDirectory( [appPoolIdentity], @"alloc\tmp", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, logger );
+		SetupDirectory( null, $@"{_taskConfig.Name}\private", null, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, logger );
+		SetupDirectory( identities, $@"{_taskConfig.Name}\local", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, logger );
+		SetupDirectory( [appPoolIdentity], $@"{_taskConfig.Name}\secrets", FileSystemRights.Read, InheritanceFlags.ObjectInherit, PropagationFlags.InheritOnly, logger );
+		SetupDirectory( [appPoolIdentity], $@"{_taskConfig.Name}\tmp", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, logger );
 
-		void SetupDirectory ( string subDirectory, FileSystemRights? fileSystemRights, InheritanceFlags inheritanceFlags, ILogger logger )
+		void SetupDirectory ( string[]? identities, string subDirectory, FileSystemRights? fileSystemRights, InheritanceFlags inheritanceFlags, PropagationFlags propagationFlags, ILogger logger )
 		{
 			var directory = allocDir;
 
@@ -672,10 +731,13 @@ public sealed class IisTaskHandle : IDisposable
 			}
 
 			// Add new Rules
-			if ( fileSystemRights is not null )
+			if ( identities is not null && identities.Length > 0 && fileSystemRights is not null )
 			{
-				acl.AddAccessRule( new FileSystemAccessRule(
-					identity, fileSystemRights.Value, inheritanceFlags, PropagationFlags.InheritOnly, AccessControlType.Allow ) );
+				foreach ( var identity in identities )
+				{
+					acl.AddAccessRule( new FileSystemAccessRule(
+						identity, fileSystemRights.Value, inheritanceFlags, propagationFlags, AccessControlType.Allow ) );
+				}
 			}
 
 			// Apply the new ACL
@@ -699,6 +761,76 @@ public sealed class IisTaskHandle : IDisposable
 			return null;
 		}
 #pragma warning restore CA1416 // Plattformkompatibilität überprüfen
+	}
+
+	private static long GetNextAvailableWebsiteId ( ServerManager serverManager )
+	{
+		var usedIds = serverManager.Sites
+			.Select( x => x.Id )
+			.ToHashSet();
+
+		for ( var id = 0L; id < long.MaxValue - 1; id++ )
+		{
+			var next = id + 1;
+
+			if ( !usedIds.Contains( next ) )
+				return next;
+		}
+
+		throw new Exception( "No more website IDs available." );
+	}
+
+
+
+	internal async Task ShipLogsAsync ( ILogger logger, byte[] data )
+	{
+		if ( _taskConfig?.StdoutPath is null )
+			return;
+
+		if ( _stdoutLogStream is null || !_stdoutLogStream.IsConnected )
+		{
+			if ( _stdoutLogStream is not null )
+				await _stdoutLogStream.DisposeAsync();
+
+			_stdoutLogStream = new NamedPipeClientStream( _taskConfig.StdoutPath.Replace( "//./pipe/", "" ) );
+
+			await _stdoutLogStream.ConnectAsync();
+		}
+
+		await _stdoutLogStream.WriteAsync( data, _ctsDisposed.Token );
+	}
+
+	private static int GetAvailablePort ( int startingPort )
+	{
+		var portArray = new List<int>();
+
+		var properties = IPGlobalProperties.GetIPGlobalProperties();
+
+		// Ignore active connections
+		var connections = properties.GetActiveTcpConnections();
+		portArray.AddRange( from n in connections
+							where n.LocalEndPoint.Port >= startingPort
+							select n.LocalEndPoint.Port );
+
+		// Ignore active TCP listners
+		var endPoints = properties.GetActiveTcpListeners();
+		portArray.AddRange( from n in endPoints
+							where n.Port >= startingPort
+							select n.Port );
+
+		// Ignore active UDP listeners
+		endPoints = properties.GetActiveUdpListeners();
+		portArray.AddRange( from n in endPoints
+							where n.Port >= startingPort
+							select n.Port );
+
+		portArray.Sort();
+
+		for ( var i = startingPort; i < ushort.MaxValue; i++ )
+			if ( !portArray.Contains( i ) )
+				return i;
+
+		return 0;
 	}
 
 	private class CpuStats

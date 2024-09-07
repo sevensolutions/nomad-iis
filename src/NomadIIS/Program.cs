@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
@@ -39,10 +40,14 @@ var builder = WebApplication.CreateBuilder( args );
 builder.Logging.ClearProviders();
 builder.Host.UseSerilog();
 
-//Debugger.Launch();
+//System.Diagnostics.Debugger.Launch();
 
-builder.WebHost.ConfigureKestrel( config => {
-	config.Listen( IPAddress.Loopback, 5003, listenOptions => {
+builder.WebHost.ConfigureKestrel( config =>
+{
+	var port = builder.Configuration.GetValue( "port", 5003 );
+
+	config.Listen( IPAddress.Loopback, port, listenOptions =>
+	{
 		listenOptions.Protocols = HttpProtocols.Http2;
 	} );
 	//config.ListenUnixSocket("/my-socket2.sock", listenOptions =>
@@ -53,6 +58,7 @@ builder.WebHost.ConfigureKestrel( config => {
 
 builder.Services.AddSingleton<ManagementService>();
 
+builder.Services.AddHostedService( sp => sp.GetRequiredService<ManagementService>() );
 builder.Services.AddHostedService<HandshakeService>();
 
 builder.Services.AddGrpc();

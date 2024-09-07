@@ -89,6 +89,8 @@ internal sealed class HclSpecGenerator
 			return "string";
 		if ( type == typeof( bool ) || type == typeof( bool? ) )
 			return "bool";
+		if ( type == typeof( int ) || type == typeof( int? ) )
+			return "number";
 		if ( type == typeof( TimeSpan ) || type == typeof( TimeSpan? ) )
 			return "string";
 		if ( type.IsEnum || Nullable.GetUnderlyingType( type ) is not null && Nullable.GetUnderlyingType( type )!.IsEnum )
@@ -104,6 +106,8 @@ internal sealed class HclSpecGenerator
 			return $"\"{strValue}\"";
 		if ( value is bool bValue )
 			return bValue ? "true" : "false";
+		if ( value is int intValue )
+			return intValue.ToString();
 
 		return "";
 	}

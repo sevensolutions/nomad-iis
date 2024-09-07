@@ -1,5 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using System;
+﻿using System;
+using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 
 namespace NomadIIS.Services.Configuration;
@@ -29,6 +29,13 @@ public sealed class DriverTaskConfig
 
 	[ConfigurationField( "periodic_restart" )]
 	public TimeSpan? PeriodicRestart { get; set; }
+
+	[ConfigurationField( "enable_udp_logging" )]
+	public bool EnableUdpLogging { get; set; }
+
+	[DefaultValue( true )]
+	[ConfigurationField( "permit_iusr" )]
+	public bool PermitIusr { get; set; } = true;
 
 	[ConfigurationCollectionField( "bindings", "binding", 0, 2 )]
 	public DriverTaskConfigBinding[] Bindings { get; set; } = default!;
@@ -69,7 +76,7 @@ public sealed class DriverTaskConfigBinding
 
 	[Required]
 	[ConfigurationField( "port" )]
-	public string PortLabel { get; set; } = default!;
+	public string Port { get; set; } = default!;
 
 	[ConfigurationField( "hostname" )]
 	public string? Hostname { get; set; }
