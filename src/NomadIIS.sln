@@ -17,7 +17,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Projektmappenelemente", "Pr
 		..\examples\static_sample_app.hcl = ..\examples\static_sample_app.hcl
 	EndProjectSection
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NomadIIS.IntegrationTests", "NomadIIS.IntegrationTests\NomadIIS.IntegrationTests.csproj", "{410B7E45-AFA4-49BA-B30C-D95A47DEF61A}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NomadIIS.Tests", "NomadIIS.Tests\NomadIIS.Tests.csproj", "{410B7E45-AFA4-49BA-B30C-D95A47DEF61A}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

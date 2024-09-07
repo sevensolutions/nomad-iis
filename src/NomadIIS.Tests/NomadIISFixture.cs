@@ -14,6 +14,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 
 namespace NomadIIS.IntegrationTests;
 
@@ -22,7 +23,6 @@ public sealed class NomadIISFixture : IAsyncLifetime
 	private readonly HttpClient _httpClient;
 	private CancellationTokenSource _ctsNomad = new CancellationTokenSource();
 	private Thread? _nomadThread;
-	private readonly ServerManager _serverManager = new ServerManager();
 
 	public NomadIISFixture ()
 	{
@@ -71,7 +71,6 @@ public sealed class NomadIISFixture : IAsyncLifetime
 	public Task DisposeAsync ()
 	{
 		_httpClient.Dispose();
-		_serverManager.Dispose();
 
 		_ctsNomad.Cancel();
 
@@ -164,17 +163,11 @@ public sealed class NomadIISFixture : IAsyncLifetime
 	public Task<JobAllocationResponse[]?> ListJobAllocationsAsync ( string jobId )
 		=> _httpClient.GetFromJsonAsync<JobAllocationResponse[]>( $"job/{jobId}/allocations" );
 
-	public void AssertApplicationPool ( string name )
+	public void AccessIIS ( Action<ServerManager> action )
 	{
-		Assert.True(
-			_serverManager.ApplicationPools.Any( x => x.Name == name ),
-			$"No application pool with name \"{name}\" found in IIS." );
-	}
-	public void AssertWebsite ( string name )
-	{
-		Assert.True(
-			_serverManager.Sites.Any( x => x.Name == name ),
-			$"No website with name \"{name}\" found in IIS." );
+		using var serverManager = new ServerManager();
+
+		action( serverManager );
 	}
 }
 

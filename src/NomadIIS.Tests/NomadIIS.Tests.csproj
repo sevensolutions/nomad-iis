@@ -32,7 +32,6 @@
 
   <ItemGroup>
     <None Remove="Data\serverAndClient.hcl" />
-    <None Remove="data\simple-job.hcl" />
   </ItemGroup>
 
 </Project>
