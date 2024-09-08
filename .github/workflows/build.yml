@@ -9,9 +9,16 @@ on:
   workflow_dispatch:
 
 jobs:
-
   build:
     runs-on: windows-latest
+
+    strategy:
+      matrix:
+        profile:
+          - publishProfile: "Release.pubxml"
+            artifactName: "nomad_iis"
+          - publishProfile: "ReleaseWithMgmtApi.pubxml"
+            artifactName: "nomad_iis_mgmt_api"
 
     steps:
     - name: Checkout
@@ -27,7 +34,7 @@ jobs:
 
     # Publish the application
     - name: Publish the application
-      run: dotnet publish "./src/NomadIIS/NomadIIS.csproj" /p:PublishProfile="./src/NomadIIS/Properties/PublishProfiles/Release.pubxml"
+      run: dotnet publish "./src/NomadIIS/NomadIIS.csproj" /p:PublishProfile="./src/NomadIIS/Properties/PublishProfiles/${{ matrix.profile.publishProfile }}"
 
     # Copy to output
     - name: Copy to output folder
@@ -39,5 +46,5 @@ jobs:
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: nomad_iis
+        name: ${{ matrix.profile.artifactName }}
         path: ./dist

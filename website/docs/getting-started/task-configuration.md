@@ -22,7 +22,7 @@ sidebar_position: 5
 
 | Option | Type | Required | Default Value | Description |
 |---|---|---|---|---|
-| path | string | yes | *none* | Defines the path of the web application, containing the application files |
+| path | string | yes | *none* | Defines the path of the web application, containing the application files. If this folder is empty, the [Placeholder App](../getting-started/driver-configuration.md) will be copied into. |
 | alias | string | no | / | Defines an optional alias at which the application should be hosted below the website. If not set, the application will be hosted at the website level. |
 | enable_preload | bool | no | *IIS default* | Specifies whether the application should be pre-loaded. |
 | *virtual_directory* | block list | no | *none* | Defines optional virtual directories below this application. See *virtual_directory* schema below for details. |

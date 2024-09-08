@@ -9,6 +9,10 @@
     <IsTestProject>true</IsTestProject>
   </PropertyGroup>
 
+	<PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+		<DefineConstants>MANAGEMENT_API;$(DefineConstants)</DefineConstants>
+	</PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="CliWrap" Version="3.6.6" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
@@ -27,6 +31,10 @@
 		<Content Include="Data\**">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="Data\nomad_api_config.hcl" />
   </ItemGroup>
 
   <ItemGroup>
