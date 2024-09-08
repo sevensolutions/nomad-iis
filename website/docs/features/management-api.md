@@ -17,7 +17,6 @@ Most endpoints will need you to provide the allocation id which means, you first
 ## Enabling the API
 
 You need to enable the Management API by providing a dedicated port as shown below.
-In order to use *procdump* you need to accept it's EULA by providing another argument.
 
 ```hcl
 plugin "nomad_iis" {
@@ -28,9 +27,9 @@ plugin "nomad_iis" {
 }
 ```
 
-## Securing the API
+### Securing the API
 
-It is highly recommended to provide an API-Key to secure the API.
+It is highly recommended to provide an API-Key to secure the API. Specify the key using the `--management-api-key`-argument as shown above.
 In this case, every API-call needs to provide this key as `X-Api-Key` header.
 
 ## Filesystem Access
@@ -42,7 +41,7 @@ GET /api/v1/allocs/{allocId}/{taskName}/fs/{path}
 ```
 
 This allows you to download a single file or an entire folder from the task directory.
-Single files are downloaded directly whereas folders will be zipped and streamed as a ZIP-archive.
+The path needs to be URL-encoded and point to a single file when downloading a file and to a folder, when downloading an entire folder as a ZIP-archive.
 
 ### Upload a File or ZIP-Archive
 
@@ -53,7 +52,7 @@ PATCH /api/v1/allocs/{allocId}/{taskName}/fs/{path}[?clean=true/false]
 
 With this API you can upload a single file or an entire ZIP-archive into the specified folder of the task directory.
 Make sure you send the correct `Content-Type`-header (`application-zip` for ZIP-files and `application/octet-stream` for files).
-The path needs to point to a single file when sending a file and to a folder, when sending a ZIP-archive.
+The path needs to be URL-encoded and point to a single file when sending a file and to a folder, when sending a ZIP-archive.
 
 Setting the `clean`-parameter to true will delete all files in the target-directory before uploading the new ones. The default is false.
 
