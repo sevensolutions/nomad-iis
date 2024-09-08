@@ -1,6 +1,7 @@
 ﻿using System.IO;
 using System;
 using System.Threading;
+using System.Linq;
 
 namespace NomadIIS.Services
 {
@@ -40,13 +41,32 @@ namespace NomadIIS.Services
 				Try();
 			}
 
-			void Try()
+			void Try ()
 			{
 				foreach ( FileInfo file in directory.EnumerateFiles() )
 					file.Delete();
 				foreach ( DirectoryInfo dir in directory.EnumerateDirectories() )
 					dir.Delete( true );
 			}
+		}
+
+		public static string SanitizeRelativePath ( string path )
+		{
+			if ( string.IsNullOrEmpty( path ) )
+				throw new ArgumentNullException( nameof( path ) );
+
+			// Sanitize the path
+			path = path.Replace( '/', '\\' );
+
+			if ( Path.IsPathRooted( path ) )
+				throw new ArgumentException( "Invalid path. Path must be relative to the task directory and not contain any path traversal.", nameof( path ) );
+
+			// I don't know if this is enough but better than nothing
+			var pathParts = path.Split( '\\' );
+			if ( pathParts.Any( x => x == ".." ) )
+				throw new ArgumentException( "Invalid path. Path must be relative to the task directory and not contain any path traversal.", nameof( path ) );
+
+			return path;
 		}
 	}
 }

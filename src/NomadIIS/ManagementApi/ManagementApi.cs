@@ -116,6 +116,21 @@ public sealed class ManagementApiController : Controller
 
 		return Ok();
 	}
+	[HttpDelete( "v1/allocs/{allocId}/{taskName}/fs/{path}" )]
+	public async Task<IActionResult> DeleteFileAsync ( string allocId, string taskName, string path )
+	{
+		var taskHandle = _managementService.TryGetHandleByAllocIdAndTaskName( allocId, taskName );
+
+		if ( taskHandle is null )
+			return NotFound();
+
+		path = HttpUtility.UrlDecode( path );
+
+		await taskHandle.DeleteFileAsync( path );
+
+		return Ok();
+	}
+
 
 	[HttpGet( "v1/allocs/{allocId}/{taskName}/screenshot" )]
 	public async Task<IActionResult> GetScreenshotAsync ( string allocId, string taskName, [FromQuery] string path = "/", CancellationToken cancellationToken = default )

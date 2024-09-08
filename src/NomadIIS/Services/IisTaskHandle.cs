@@ -954,22 +954,10 @@ public sealed class IisTaskHandle : IDisposable
 
 	public async Task DownloadFileAsync ( HttpResponse response, string path )
 	{
-		if ( string.IsNullOrEmpty( path ) )
-			throw new ArgumentNullException( nameof( path ) );
-
 		if ( _state is null || _taskConfig is null || string.IsNullOrEmpty( _state.AppPoolName ) )
 			throw new InvalidOperationException( "Invalid state." );
 
-		// Sanitize the path
-		path = path.Replace( '/', '\\' );
-
-		if ( Path.IsPathRooted( path ) )
-			throw new ArgumentException( "Invalid path. Path must be relative to the task directory and not contain any path traversal.", nameof( path ) );
-
-		// I don't know if this is enough but better than nothing
-		var pathParts = path.Split( '\\' );
-		if ( pathParts.Any( x => x == ".." ) )
-			throw new ArgumentException( "Invalid path. Path must be relative to the task directory and not contain any path traversal.", nameof( path ) );
+		path = FileSystemHelper.SanitizeRelativePath( path );
 
 		var physicalPath = Path.Combine( _taskConfig.AllocDir, _taskConfig.Name, path );
 
@@ -999,22 +987,11 @@ public sealed class IisTaskHandle : IDisposable
 	{
 		if ( stream is null )
 			throw new ArgumentNullException( nameof( stream ) );
-		if ( string.IsNullOrEmpty( path ) )
-			throw new ArgumentNullException( nameof( path ) );
 
 		if ( _state is null || _taskConfig is null || string.IsNullOrEmpty( _state.AppPoolName ) )
 			throw new InvalidOperationException( "Invalid state." );
 
-		// Sanitize the path
-		path = path.Replace( '/', '\\' );
-
-		if ( Path.IsPathRooted( path ) )
-			throw new ArgumentException( "Invalid path. Path must be relative to the task directory and not contain any path traversal.", nameof( path ) );
-
-		// I don't know if this is enough but better than nothing
-		var pathParts = path.Split( '\\' );
-		if ( pathParts.Any( x => x == ".." ) )
-			throw new ArgumentException( "Invalid path. Path must be relative to the task directory and not contain any path traversal.", nameof( path ) );
+		path = FileSystemHelper.SanitizeRelativePath( path );
 
 		try
 		{
@@ -1045,6 +1022,36 @@ public sealed class IisTaskHandle : IDisposable
 			if ( !hot )
 				await StartAppPoolAsync();
 		}
+	}
+	public Task DeleteFileAsync ( string path )
+	{
+		if ( _state is null || _taskConfig is null || string.IsNullOrEmpty( _state.AppPoolName ) )
+			throw new InvalidOperationException( "Invalid state." );
+
+		path = FileSystemHelper.SanitizeRelativePath( path );
+
+		string physicalPath;
+
+		if ( path.EndsWith( "/*" ) || path.EndsWith( "/*.*" ) )
+		{
+			if ( path.EndsWith( "/*" ) )
+				path = path[..2];
+			else
+				path = path[..4];
+
+			physicalPath = Path.Combine( _taskConfig.AllocDir, _taskConfig.Name, path );
+			FileSystemHelper.CleanFolder( physicalPath );
+			return Task.CompletedTask;
+		}
+
+		physicalPath = Path.Combine( _taskConfig.AllocDir, _taskConfig.Name, path );
+
+		if ( File.Exists( physicalPath ) )
+			File.Delete( physicalPath );
+		else
+			Directory.Delete( physicalPath, true );
+
+		return Task.CompletedTask;
 	}
 
 	public async Task<byte[]?> TakeScreenshotAsync ( string path = "/", CancellationToken cancellationToken = default )

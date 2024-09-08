@@ -100,6 +100,14 @@ curl -X GET \
   http://localhost:5004/api/v1/allocs/e4c0ee58-2e27-2cd6-7ca5-6ef1ed036aad/app/fs/local%2findex.html
 ```
 
+### Delete a file or folder
+
+```
+DELETE /api/v1/allocs/{allocId}/{taskName}/fs/{path}
+```
+
+Deletes a file or folder. If the path ends with `/*` or `/*.*` the folder will only be cleaned.
+
 ## Application Pool Lifecycle Management
 
 | API | Description |
