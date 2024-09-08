@@ -10,23 +10,27 @@ namespace NomadIIS.Services
 	{
 		private static SemaphoreSlim _semaphore = new SemaphoreSlim( 1, 1 );
 
-		public static async Task<byte[]?> TakeScreenshotAsync ( string url )
+		public static async Task<byte[]?> TakeScreenshotAsync ( string url, CancellationToken cancellationToken = default )
 		{
+			cancellationToken.ThrowIfCancellationRequested();
+
 			using var playwright = await Playwright.CreateAsync();
 
 			IBrowser? browser = null;
+
+			cancellationToken.ThrowIfCancellationRequested();
 
 			try
 			{
 				browser = await playwright.Chromium.LaunchAsync( new BrowserTypeLaunchOptions()
 				{
-					Headless = true,
+					Headless = true
 				} );
 			}
 			catch ( PlaywrightException )
 			{
 				// Install Playwright
-				await EnsurePlaywrightInstalled();
+				await EnsurePlaywrightInstalled( cancellationToken );
 
 				browser = await playwright.Chromium.LaunchAsync( new BrowserTypeLaunchOptions()
 				{
@@ -36,6 +40,8 @@ namespace NomadIIS.Services
 
 			try
 			{
+				cancellationToken.ThrowIfCancellationRequested();
+
 				var page = await browser.NewPageAsync( new BrowserNewPageOptions()
 				{
 					ViewportSize = new ViewportSize()
@@ -50,7 +56,11 @@ namespace NomadIIS.Services
 					}
 				} );
 
+				cancellationToken.ThrowIfCancellationRequested();
+
 				await page.GotoAsync( url );
+
+				cancellationToken.ThrowIfCancellationRequested();
 
 				var screenshot = await page.ScreenshotAsync( new PageScreenshotOptions()
 				{
@@ -67,9 +77,9 @@ namespace NomadIIS.Services
 			}
 		}
 
-		private static async Task EnsurePlaywrightInstalled ()
+		private static async Task EnsurePlaywrightInstalled ( CancellationToken cancellationToken )
 		{
-			await _semaphore.WaitAsync( 30_000 );
+			await _semaphore.WaitAsync( 30_000, cancellationToken );
 
 			try
 			{

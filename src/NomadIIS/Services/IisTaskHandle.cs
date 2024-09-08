@@ -1047,7 +1047,7 @@ public sealed class IisTaskHandle : IDisposable
 		}
 	}
 
-	public async Task<byte[]?> TakeScreenshotAsync ( string path = "/" )
+	public async Task<byte[]?> TakeScreenshotAsync ( string path = "/", CancellationToken cancellationToken = default )
 	{
 		if ( _state is null || string.IsNullOrEmpty( _state.AppPoolName ) )
 			throw new InvalidOperationException( "Invalid state." );
@@ -1067,7 +1067,7 @@ public sealed class IisTaskHandle : IDisposable
 		if ( port is null )
 			return null;
 
-		return await PlaywrightHelper.TakeScreenshotAsync( $"http://localhost:{port}{path}" );
+		return await PlaywrightHelper.TakeScreenshotAsync( $"http://localhost:{port}{path}", cancellationToken );
 	}
 
 	public async Task TakeProcessDump ( FileInfo targetFile, CancellationToken cancellationToken = default )

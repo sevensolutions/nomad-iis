@@ -118,14 +118,14 @@ public sealed class ManagementApiController : Controller
 	}
 
 	[HttpGet( "v1/allocs/{allocId}/{taskName}/screenshot" )]
-	public async Task<IActionResult> GetScreenshotAsync ( string allocId, string taskName, [FromQuery] string path = "/" )
+	public async Task<IActionResult> GetScreenshotAsync ( string allocId, string taskName, [FromQuery] string path = "/", CancellationToken cancellationToken = default )
 	{
 		var taskHandle = _managementService.TryGetHandleByAllocIdAndTaskName( allocId, taskName );
 
 		if ( taskHandle is null )
 			return NotFound();
 
-		var screenshot = await taskHandle.TakeScreenshotAsync( path );
+		var screenshot = await taskHandle.TakeScreenshotAsync( path, cancellationToken );
 
 		if ( screenshot is null )
 			return NotFound();
@@ -134,7 +134,7 @@ public sealed class ManagementApiController : Controller
 	}
 
 	[HttpGet( "v1/allocs/{allocId}/{taskName}/procdump" )]
-	public async Task<IActionResult> GetProcdumpAsync ( string allocId, string taskName, [FromQuery] string path = "/", CancellationToken cancellationToken = default )
+	public async Task<IActionResult> GetProcdumpAsync ( string allocId, string taskName, CancellationToken cancellationToken = default )
 	{
 		var taskHandle = _managementService.TryGetHandleByAllocIdAndTaskName( allocId, taskName );
 
