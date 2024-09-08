@@ -105,6 +105,8 @@ if ( managementApiPort > 0 )
 	} );
 
 	builder.Services.AddAuthorization();
+
+	builder.Services.AddControllers();
 }
 #endif
 
@@ -135,7 +137,8 @@ app.MapGrpcService<DriverService>();//.RequireHost( $"*:{grpcPort}" );
 #if MANAGEMENT_API
 if ( managementApiPort > 0 )
 {
-	var epApi = ManagementApiService.Map( app )
+	var epApi = app
+		.MapControllers()
 		.RequireHost( $"*:{managementApiPort}" );
 
 	if ( !string.IsNullOrEmpty( mgmtApiKey ) )

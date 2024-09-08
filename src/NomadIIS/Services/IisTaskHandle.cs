@@ -927,18 +927,28 @@ public sealed class IisTaskHandle : IDisposable
 
 	#region Management API Methods
 #if MANAGEMENT_API
-	public async Task<bool> IsAppPoolRunning ()
+	public async Task<NomadIIS.ManagementApi.ApiModel.TaskStatusResponse> GetStatusAsync ()
 	{
-		if ( _state is null || string.IsNullOrEmpty( _state.AppPoolName ) )
+		if ( _state is null || _taskConfig is null || string.IsNullOrEmpty( _state.AppPoolName ) )
 			throw new InvalidOperationException( "Invalid state." );
 
 		return await _owner.LockAsync( serverManager =>
 		{
 			var appPool = GetApplicationPool( serverManager, _state.AppPoolName );
 
-			var w3wpPids = appPool.WorkerProcesses.Select( x => x.ProcessId ).ToArray();
+			var isWorkerProcessRunning = appPool.WorkerProcesses.Any(
+				x => x.State == WorkerProcessState.Starting || x.State == WorkerProcessState.Running );
 
-			return Task.FromResult( w3wpPids.Length > 0 );
+			return Task.FromResult( new NomadIIS.ManagementApi.ApiModel.TaskStatusResponse()
+			{
+				AllocId = _taskConfig.AllocId,
+				TaskName = _taskConfig.Name,
+				ApplicationPool = new NomadIIS.ManagementApi.ApiModel.ApplicationPool()
+				{
+					Status = (NomadIIS.ManagementApi.ApiModel.ApplicationPoolStatus)(int)appPool.State,
+					IsWorkerProcessRunning = isWorkerProcessRunning
+				}
+			} );
 		} );
 	}
 
@@ -1000,7 +1010,7 @@ public sealed class IisTaskHandle : IDisposable
 
 		if ( Path.IsPathRooted( path ) )
 			throw new ArgumentException( "Invalid path. Path must be relative to the task directory and not contain any path traversal.", nameof( path ) );
-		
+
 		// I don't know if this is enough but better than nothing
 		var pathParts = path.Split( '\\' );
 		if ( pathParts.Any( x => x == ".." ) )
@@ -1013,7 +1023,7 @@ public sealed class IisTaskHandle : IDisposable
 				await StopAppPoolAsync();
 				await Task.Delay( 500 );
 			}
-			
+
 			var physicalPath = Path.Combine( _taskConfig.AllocDir, _taskConfig.Name, path );
 
 			if ( cleanFolder )

@@ -1,188 +1,165 @@
 ﻿#if MANAGEMENT_API
-using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
 using NomadIIS.Services;
 using System;
 using System.IO;
-using System.Text.Json.Serialization;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Web;
 
 namespace NomadIIS.ManagementApi;
 
-public sealed class ManagementApiService
+[Route( "/api" )]
+public sealed class ManagementApiController : Controller
 {
-	public static IEndpointConventionBuilder Map ( WebApplication app )
+	private readonly ManagementService _managementService;
+
+	public ManagementApiController ( ManagementService managementService )
 	{
-		var api = app.MapGroup( "/api/v1" );
-
-		var allocsApi = api.MapGroup( "/allocs" );
-
-		allocsApi.MapGet( "{allocId}/{taskName}/status", async ( string allocId, string taskName, [FromServices] ManagementService managementService ) =>
-		{
-			var taskHandle = managementService.TryGetHandleByAllocIdAndTaskName( allocId, taskName );
-
-			if ( taskHandle is null )
-				return Results.NotFound();
-
-			var isAppPoolRunning = await taskHandle.IsAppPoolRunning();
-
-			return Results.Json( new TaskStatusResponse()
-			{
-				AllocId = allocId,
-				TaskStatus = isAppPoolRunning ? TaskStatus.Running : TaskStatus.Paused
-			} );
-		} ).Produces<TaskStatusResponse>();
-
-		allocsApi.MapPut( "{allocId}/{taskName}/start", async ( string allocId, string taskName, [FromServices] ManagementService managementService ) =>
-		{
-			var taskHandle = managementService.TryGetHandleByAllocIdAndTaskName( allocId, taskName );
-
-			if ( taskHandle is null )
-				return Results.NotFound();
-
-			await taskHandle.StartAppPoolAsync();
-
-			return Results.Ok();
-		} );
-		allocsApi.MapPut( "{allocId}/{taskName}/stop", async ( string allocId, string taskName, [FromServices] ManagementService managementService ) =>
-		{
-			var taskHandle = managementService.TryGetHandleByAllocIdAndTaskName( allocId, taskName );
-
-			if ( taskHandle is null )
-				return Results.NotFound();
-
-			await taskHandle.StopAppPoolAsync();
-
-			return Results.Ok();
-		} );
-		allocsApi.MapPut( "{allocId}/{taskName}/recycle", async ( string allocId, string taskName, [FromServices] ManagementService managementService ) =>
-		{
-			var taskHandle = managementService.TryGetHandleByAllocIdAndTaskName( allocId, taskName );
-
-			if ( taskHandle is null )
-				return Results.NotFound();
-
-			await taskHandle.RecycleAppPoolAsync();
-
-			return Results.Ok();
-		} );
-
-		allocsApi.MapGet( "{allocId}/{taskName}/fs/{path}",
-			async ( string allocId, string taskName, string path, HttpContext context,
-			[FromServices] ManagementService managementService ) =>
-			{
-				var taskHandle = managementService.TryGetHandleByAllocIdAndTaskName( allocId, taskName );
-
-				if ( taskHandle is null )
-					return Results.NotFound();
-
-				path = HttpUtility.UrlDecode( path );
-
-				await taskHandle.DownloadFileAsync( context.Response, path );
-
-				return Results.Ok();
-			} ).Produces<object>( 200, "application/zip", "application/octet-stream" );
-
-		allocsApi.MapPut( "{allocId}/{taskName}/fs/{path}",
-			async ( string allocId, string taskName, string path, HttpContext context,
-			[FromServices] ManagementService managementService, [FromQuery] bool clean = false ) =>
-		{
-			var taskHandle = managementService.TryGetHandleByAllocIdAndTaskName( allocId, taskName );
-
-			if ( taskHandle is null )
-				return Results.NotFound();
-
-			path = HttpUtility.UrlDecode( path );
-
-			var isZip = context.Request.ContentType == "application/zip";
-
-			await taskHandle.UploadFileAsync( context.Request.Body, isZip, path, false, clean );
-
-			return Results.Ok();
-		} ).Accepts<object>( "application/zip", "application/octet-stream" );
-		
-		allocsApi.MapPatch( "{allocId}/{taskName}/fs/{path}",
-			async ( string allocId, string taskName, string path, HttpContext context,
-			[FromServices] ManagementService managementService, [FromQuery] bool clean = false ) =>
-			{
-				var taskHandle = managementService.TryGetHandleByAllocIdAndTaskName( allocId, taskName );
-
-				if ( taskHandle is null )
-					return Results.NotFound();
-
-				path = HttpUtility.UrlDecode( path );
-
-				var isZip = context.Request.ContentType == "application/zip";
-
-				await taskHandle.UploadFileAsync( context.Request.Body, isZip, path, true, clean );
-
-				return Results.Ok();
-			} ).Accepts<object>( "application/zip", "application/octet-stream" );
-
-		allocsApi.MapGet( "{allocId}/{taskName}/screenshot", async ( string allocId, string taskName, [FromServices] ManagementService managementService, [FromQuery] string path = "/" ) =>
-		{
-			var taskHandle = managementService.TryGetHandleByAllocIdAndTaskName( allocId, taskName );
-
-			if ( taskHandle is null )
-				return Results.NotFound();
-
-			var screenshot = await taskHandle.TakeScreenshotAsync( path );
-
-			if ( screenshot is null )
-				return Results.NotFound();
-
-			return Results.Bytes( screenshot, "image/png", $"screenshot_{allocId}_{taskName}_{DateTime.Now:yyyy-MM-dd-HH-mm-ss}.png" );
-		} );
-
-		allocsApi.MapGet( "{allocId}/{taskName}/procdump", async (
-			string allocId, string taskName, HttpContext httpContext, CancellationToken cancellationToken,
-			[FromServices] ManagementService managementService ) =>
-		{
-			var taskHandle = managementService.TryGetHandleByAllocIdAndTaskName( allocId, taskName );
-
-			if ( taskHandle is null )
-				return Results.NotFound();
-
-			var dumpFile = new FileInfo( Path.GetTempFileName() + ".dmp" );
-
-			try
-			{
-				await taskHandle.TakeProcessDump( dumpFile, cancellationToken );
-
-				// Stream the file to the client
-				await Results
-					.File( dumpFile.FullName, "application/octet-stream", $"procdump_{allocId}_{taskName}_{DateTime.Now:yyyy-MM-dd-HH-mm-ss}.dmp" )
-					.ExecuteAsync( httpContext );
-
-				// Not needed but we need to return something
-				return Results.Ok();
-			}
-			finally
-			{
-				if ( dumpFile.Exists )
-					dumpFile.Delete();
-			}
-		} );
-
-		return api;
+		_managementService = managementService;
 	}
 
-	private class TaskStatusResponse
+	[HttpGet( "v1/allocs/{allocId}/{taskName}/status" )]
+	public async Task<IActionResult> GetStatus ( string allocId, string taskName )
 	{
-		[JsonPropertyName( "allocId" )]
-		public string AllocId { get; set; } = default!;
-		[JsonPropertyName( "taskStatus" )]
-		public TaskStatus TaskStatus { get; set; } = default!;
+		var taskHandle = _managementService.TryGetHandleByAllocIdAndTaskName( allocId, taskName );
+
+		if ( taskHandle is null )
+			return NotFound();
+
+		var status = await taskHandle.GetStatusAsync();
+
+		return Ok( status );
 	}
 
-	[JsonConverter( typeof( JsonStringEnumConverter<TaskStatus> ) )]
-	private enum TaskStatus
+	[HttpPut( "v1/allocs/{allocId}/{taskName}/start" )]
+	public async Task<IActionResult> StartAppPool ( string allocId, string taskName )
 	{
-		Paused,
-		Running
+		var taskHandle = _managementService.TryGetHandleByAllocIdAndTaskName( allocId, taskName );
+
+		if ( taskHandle is null )
+			return NotFound();
+
+		await taskHandle.StartAppPoolAsync();
+
+		return Ok();
+	}
+	[HttpPut( "v1/allocs/{allocId}/{taskName}/stop" )]
+	public async Task<IActionResult> StopAppPool ( string allocId, string taskName )
+	{
+		var taskHandle = _managementService.TryGetHandleByAllocIdAndTaskName( allocId, taskName );
+
+		if ( taskHandle is null )
+			return NotFound();
+
+		await taskHandle.StopAppPoolAsync();
+
+		return Ok();
+	}
+	[HttpPut( "v1/allocs/{allocId}/{taskName}/recycle" )]
+	public async Task<IActionResult> RecycleAppPool ( string allocId, string taskName )
+	{
+		var taskHandle = _managementService.TryGetHandleByAllocIdAndTaskName( allocId, taskName );
+
+		if ( taskHandle is null )
+			return NotFound();
+
+		await taskHandle.RecycleAppPoolAsync();
+
+		return Ok();
+	}
+
+	[HttpGet( "v1/allocs/{allocId}/{taskName}/fs/{path}" )]
+	public async Task<IActionResult> GetFileAsync ( string allocId, string taskName, string path )
+	{
+		var taskHandle = _managementService.TryGetHandleByAllocIdAndTaskName( allocId, taskName );
+
+		if ( taskHandle is null )
+			return NotFound();
+
+		path = HttpUtility.UrlDecode( path );
+
+		await taskHandle.DownloadFileAsync( HttpContext.Response, path );
+
+		return Ok();
+	}
+	[HttpPut( "v1/allocs/{allocId}/{taskName}/fs/{path}" )]
+	public async Task<IActionResult> PutFileAsync ( string allocId, string taskName, string path, [FromQuery] bool clean = false )
+	{
+		var taskHandle = _managementService.TryGetHandleByAllocIdAndTaskName( allocId, taskName );
+
+		if ( taskHandle is null )
+			return NotFound();
+
+		path = HttpUtility.UrlDecode( path );
+
+		var isZip = HttpContext.Request.ContentType == "application/zip";
+
+		await taskHandle.UploadFileAsync( HttpContext.Request.Body, isZip, path, false, clean );
+
+		return Ok();
+	}
+	[HttpPatch( "v1/allocs/{allocId}/{taskName}/fs/{path}" )]
+	public async Task<IActionResult> PatchFileAsync ( string allocId, string taskName, string path, [FromQuery] bool clean = false )
+	{
+		var taskHandle = _managementService.TryGetHandleByAllocIdAndTaskName( allocId, taskName );
+
+		if ( taskHandle is null )
+			return NotFound();
+
+		path = HttpUtility.UrlDecode( path );
+
+		var isZip = HttpContext.Request.ContentType == "application/zip";
+
+		await taskHandle.UploadFileAsync( HttpContext.Request.Body, isZip, path, true, clean );
+
+		return Ok();
+	}
+
+	[HttpGet( "v1/allocs/{allocId}/{taskName}/screenshot" )]
+	public async Task<IActionResult> GetScreenshotAsync ( string allocId, string taskName, [FromQuery] string path = "/" )
+	{
+		var taskHandle = _managementService.TryGetHandleByAllocIdAndTaskName( allocId, taskName );
+
+		if ( taskHandle is null )
+			return NotFound();
+
+		var screenshot = await taskHandle.TakeScreenshotAsync( path );
+
+		if ( screenshot is null )
+			return NotFound();
+
+		return File( screenshot, "image/png", $"screenshot_{allocId}_{taskName}_{DateTime.Now:yyyy-MM-dd-HH-mm-ss}.png" );
+	}
+
+	[HttpGet( "v1/allocs/{allocId}/{taskName}/procdump" )]
+	public async Task<IActionResult> GetProcdumpAsync ( string allocId, string taskName, [FromQuery] string path = "/", CancellationToken cancellationToken = default )
+	{
+		var taskHandle = _managementService.TryGetHandleByAllocIdAndTaskName( allocId, taskName );
+
+		if ( taskHandle is null )
+			return NotFound();
+
+		var dumpFile = new FileInfo( Path.GetTempFileName() + ".dmp" );
+
+		try
+		{
+			await taskHandle.TakeProcessDump( dumpFile, cancellationToken );
+
+			// Stream the file to the client
+			await Results
+				.File( dumpFile.FullName, "application/octet-stream", $"procdump_{allocId}_{taskName}_{DateTime.Now:yyyy-MM-dd-HH-mm-ss}.dmp" )
+				.ExecuteAsync( HttpContext );
+
+			// Not needed but we need to return something
+			return Ok();
+		}
+		finally
+		{
+			if ( dumpFile.Exists )
+				dumpFile.Delete();
+		}
 	}
 }
 #endif
