@@ -4,6 +4,7 @@ using CliWrap.Buffered;
 #endif
 using Hashicorp.Nomad.Plugins.Drivers.Proto;
 using MessagePack;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Web.Administration;
 using NomadIIS.Services.Configuration;
@@ -274,7 +275,7 @@ public sealed class IisTaskHandle : IDisposable
 		switch ( signal.ToUpperInvariant() )
 		{
 			case "START":
-				await StartAppPoolAsync( true );
+				await StartAppPoolAsync();
 				break;
 			case "STOP":
 				await StopAppPoolAsync();
@@ -859,7 +860,7 @@ public sealed class IisTaskHandle : IDisposable
 		return 0;
 	}
 
-	public async Task StartAppPoolAsync ( bool logEvent )
+	public async Task StartAppPoolAsync ()
 	{
 		if ( _state is null || string.IsNullOrEmpty( _state.AppPoolName ) )
 			throw new InvalidOperationException( "Invalid state." );
@@ -887,8 +888,7 @@ public sealed class IisTaskHandle : IDisposable
 			return Task.CompletedTask;
 		} );
 
-		if ( logEvent )
-			await SendTaskEventAsync( $"ApplicationPool started, Name = {_state.AppPoolName}" );
+		await SendTaskEventAsync( $"ApplicationPool started, Name = {_state.AppPoolName}" );
 	}
 	public async Task StopAppPoolAsync ()
 	{
@@ -942,51 +942,98 @@ public sealed class IisTaskHandle : IDisposable
 		} );
 	}
 
-	public async Task UploadAsync ( Stream stream, string appAlias = "/" )
+	public async Task DownloadFileAsync ( HttpResponse response, string path )
 	{
-		if ( _state is null || string.IsNullOrEmpty( _state.AppPoolName ) )
+		if ( string.IsNullOrEmpty( path ) )
+			throw new ArgumentNullException( nameof( path ) );
+
+		if ( _state is null || _taskConfig is null || string.IsNullOrEmpty( _state.AppPoolName ) )
 			throw new InvalidOperationException( "Invalid state." );
+
+		// Sanitize the path
+		path = path.Replace( '/', '\\' );
+
+		if ( Path.IsPathRooted( path ) )
+			throw new ArgumentException( "Invalid path. Path must be relative to the task directory and not contain any path traversal.", nameof( path ) );
+
+		// I don't know if this is enough but better than nothing
+		var pathParts = path.Split( '\\' );
+		if ( pathParts.Any( x => x == ".." ) )
+			throw new ArgumentException( "Invalid path. Path must be relative to the task directory and not contain any path traversal.", nameof( path ) );
+
+		var physicalPath = Path.Combine( _taskConfig.AllocDir, _taskConfig.Name, path );
+
+		if ( File.Exists( physicalPath ) )
+		{
+			response.Headers.ContentType = "application/octet-stream";
+			response.Headers.ContentDisposition = $"attachment; filename=\"{Path.GetFileName( physicalPath )}\"";
+			response.StatusCode = StatusCodes.Status200OK;
+
+			await response.StartAsync();
+
+			using var fs = File.OpenRead( physicalPath );
+			await fs.CopyToAsync( response.Body );
+		}
+		else
+		{
+			response.Headers.ContentType = "application/zip";
+			response.Headers.ContentDisposition = $"attachment; filename=\"{Path.GetFileName( physicalPath )}.zip\"";
+			response.StatusCode = StatusCodes.Status200OK;
+
+			await response.StartAsync();
+
+			ZipFile.CreateFromDirectory( physicalPath, response.Body );
+		}
+	}
+	public async Task UploadFileAsync ( Stream stream, bool isZip, string path, bool hot, bool cleanFolder )
+	{
+		if ( stream is null )
+			throw new ArgumentNullException( nameof( stream ) );
+		if ( string.IsNullOrEmpty( path ) )
+			throw new ArgumentNullException( nameof( path ) );
+
+		if ( _state is null || _taskConfig is null || string.IsNullOrEmpty( _state.AppPoolName ) )
+			throw new InvalidOperationException( "Invalid state." );
+
+		// Sanitize the path
+		path = path.Replace( '/', '\\' );
+
+		if ( Path.IsPathRooted( path ) )
+			throw new ArgumentException( "Invalid path. Path must be relative to the task directory and not contain any path traversal.", nameof( path ) );
+		
+		// I don't know if this is enough but better than nothing
+		var pathParts = path.Split( '\\' );
+		if ( pathParts.Any( x => x == ".." ) )
+			throw new ArgumentException( "Invalid path. Path must be relative to the task directory and not contain any path traversal.", nameof( path ) );
 
 		try
 		{
-			var physicalPath = await _owner.LockAsync( serverManager =>
+			if ( !hot )
 			{
-				var appPool = serverManager.ApplicationPools.First( x => x.Name == _state.AppPoolName );
+				await StopAppPoolAsync();
+				await Task.Delay( 500 );
+			}
+			
+			var physicalPath = Path.Combine( _taskConfig.AllocDir, _taskConfig.Name, path );
 
-				var site = serverManager.Sites.First( x => x.Name == _state.WebsiteName );
+			if ( cleanFolder )
+				FileSystemHelper.CleanFolder( physicalPath );
 
-				var app = site.Applications.FirstOrDefault( a => a.Path == appAlias );
-				if ( app is null )
-					throw new KeyNotFoundException( $"App {appAlias} not found." );
-
-				var virtualRoot = app.VirtualDirectories.Where( v => v.Path == "/" ).First();
-
-				var physicalPath = virtualRoot.PhysicalPath;
-
-				_appPoolStoppedIntentionally = true;
-				if ( appPool.State == ObjectState.Started )
-					appPool.Stop();
-
-				return Task.FromResult( physicalPath );
-			} );
-
-			await Task.Delay( 500 );
-
-			FileSystemHelper.CleanFolder( physicalPath! );
-
-			using var archive = new ZipArchive( stream );
-
-			archive.ExtractToDirectory( physicalPath! );
-
-			await SendTaskEventAsync( $"Updated application {appAlias} using Management API." );
-		}
-		catch ( Exception ex )
-		{
-			await SendTaskEventAsync( $"Failed to update application {appAlias} using Management API. " + ex.Message );
+			if ( isZip )
+			{
+				using var archive = new ZipArchive( stream );
+				archive.ExtractToDirectory( physicalPath );
+			}
+			else
+			{
+				using var fs = File.OpenWrite( physicalPath );
+				await stream.CopyToAsync( fs );
+			}
 		}
 		finally
 		{
-			await StartAppPoolAsync( false );
+			if ( !hot )
+				await StartAppPoolAsync();
 		}
 	}
 

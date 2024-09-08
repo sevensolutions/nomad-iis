@@ -8,6 +8,7 @@ using System;
 using System.IO;
 using System.Text.Json.Serialization;
 using System.Threading;
+using System.Web;
 
 namespace NomadIIS.ManagementApi;
 
@@ -42,7 +43,7 @@ public sealed class ManagementApiService
 			if ( taskHandle is null )
 				return Results.NotFound();
 
-			await taskHandle.StartAppPoolAsync( true );
+			await taskHandle.StartAppPoolAsync();
 
 			return Results.Ok();
 		} );
@@ -69,20 +70,57 @@ public sealed class ManagementApiService
 			return Results.Ok();
 		} );
 
-		allocsApi.MapPut( "{allocId}/{taskName}/upload", async ( string allocId, string taskName, HttpContext context, [FromServices] ManagementService managementService, [FromQuery] string appAlias = "/" ) =>
-		{
-			if ( !string.IsNullOrEmpty( appAlias ) && !appAlias.StartsWith( '/' ) )
-				appAlias = $"/{appAlias}";
+		allocsApi.MapGet( "{allocId}/{taskName}/fs/{path}",
+			async ( string allocId, string taskName, string path, HttpContext context,
+			[FromServices] ManagementService managementService ) =>
+			{
+				var taskHandle = managementService.TryGetHandleByAllocIdAndTaskName( allocId, taskName );
 
+				if ( taskHandle is null )
+					return Results.NotFound();
+
+				path = HttpUtility.UrlDecode( path );
+
+				await taskHandle.DownloadFileAsync( context.Response, path );
+
+				return Results.Ok();
+			} ).Produces<object>( 200, "application/zip", "application/octet-stream" );
+
+		allocsApi.MapPut( "{allocId}/{taskName}/fs/{path}",
+			async ( string allocId, string taskName, string path, HttpContext context,
+			[FromServices] ManagementService managementService, [FromQuery] bool clean = false ) =>
+		{
 			var taskHandle = managementService.TryGetHandleByAllocIdAndTaskName( allocId, taskName );
 
 			if ( taskHandle is null )
 				return Results.NotFound();
 
-			await taskHandle.UploadAsync( context.Request.Body, appAlias );
+			path = HttpUtility.UrlDecode( path );
+
+			var isZip = context.Request.ContentType == "application/zip";
+
+			await taskHandle.UploadFileAsync( context.Request.Body, isZip, path, false, clean );
 
 			return Results.Ok();
-		} ).Accepts<object>( "application/zip" );
+		} ).Accepts<object>( "application/zip", "application/octet-stream" );
+		
+		allocsApi.MapPatch( "{allocId}/{taskName}/fs/{path}",
+			async ( string allocId, string taskName, string path, HttpContext context,
+			[FromServices] ManagementService managementService, [FromQuery] bool clean = false ) =>
+			{
+				var taskHandle = managementService.TryGetHandleByAllocIdAndTaskName( allocId, taskName );
+
+				if ( taskHandle is null )
+					return Results.NotFound();
+
+				path = HttpUtility.UrlDecode( path );
+
+				var isZip = context.Request.ContentType == "application/zip";
+
+				await taskHandle.UploadFileAsync( context.Request.Body, isZip, path, true, clean );
+
+				return Results.Ok();
+			} ).Accepts<object>( "application/zip", "application/octet-stream" );
 
 		allocsApi.MapGet( "{allocId}/{taskName}/screenshot", async ( string allocId, string taskName, [FromServices] ManagementService managementService, [FromQuery] string path = "/" ) =>
 		{
