@@ -594,37 +594,35 @@ public sealed class IisTaskHandle : IDisposable
 		=> website.Applications.FirstOrDefault( x => x.Path == path );
 	private static Application CreateApplication ( Site website, ApplicationPool appPool, TaskConfig taskConfig, DriverTaskConfigApplication appConfig, ManagementService managementService )
 	{
+		if ( string.IsNullOrEmpty( appConfig.Path ) )
+			throw new ArgumentNullException( $"Missing application path." );
+
 		var alias = $"/{appConfig.Alias}";
+		var physicalPath = appConfig.Path.Replace( '/', '\\' );
 
-		var pathIsSet = !string.IsNullOrEmpty( appConfig.Path );
-
-		var physicalPath = appConfig.Path?.Replace( '/', '\\' );
-
-		if ( !pathIsSet )
-		{
-			// If the user didn't specify a path we create a local subfolder for the app
-			// and copy a placeholder into it.
-			physicalPath = "local";
-
-			if ( alias == "/" )
-				physicalPath = Path.Combine( physicalPath, "root" );
-			else
-				physicalPath = Path.Combine( physicalPath, alias.TrimStart( '/' ).Replace( '/', '_' ) );
-
-			Directory.CreateDirectory( physicalPath );
-		}
-
-		if ( !Path.IsPathRooted( physicalPath ) )
-			physicalPath = Path.Combine( taskConfig.AllocDir, taskConfig.Name, physicalPath! );
-
-		// Copy a placeholder app
-		if ( !pathIsSet && !string.IsNullOrEmpty( managementService.PlaceholderAppPath ) && Directory.Exists( managementService.PlaceholderAppPath ) )
-			FileSystemHelper.CopyDirectory( managementService.PlaceholderAppPath, physicalPath );
-
+		// If the path is not an absolute path, make it relative to the task-directory.
 		if ( !Path.IsPathRooted( physicalPath ) )
 			physicalPath = Path.Combine( taskConfig.AllocDir, taskConfig.Name, physicalPath );
 
-		var application = website.Applications.Add( alias, physicalPath );
+		var diPhysicalPath = new DirectoryInfo( physicalPath );
+
+		// Check if we want to use a placeholder app
+		if ( Directory.Exists( managementService.PlaceholderAppPath ) )
+		{
+			var directoryIsNew = false;
+
+			if ( !diPhysicalPath.Exists )
+			{
+				diPhysicalPath.Create();
+				directoryIsNew = true;
+			}
+
+			// If the directory is new or empty, copy the placeholder app
+			if ( directoryIsNew || !diPhysicalPath.EnumerateFileSystemInfos().Any() )
+				FileSystemHelper.CopyDirectory( managementService.PlaceholderAppPath, diPhysicalPath.FullName );
+		}
+
+		var application = website.Applications.Add( alias, diPhysicalPath.FullName );
 
 		application.ApplicationPoolName = appPool.Name;
 

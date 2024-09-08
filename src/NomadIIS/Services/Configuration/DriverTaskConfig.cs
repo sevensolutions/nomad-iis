@@ -46,7 +46,7 @@ public sealed class DriverTaskConfigApplication
 	[ConfigurationField( "alias" )]
 	public string? Alias { get; set; }
 
-	//[Required]
+	[Required]
 	[ConfigurationField( "path" )]
 	public string Path { get; set; } = default!;
 
