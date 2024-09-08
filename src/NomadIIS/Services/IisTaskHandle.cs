@@ -1062,7 +1062,7 @@ public sealed class IisTaskHandle : IDisposable
 			var httpBinding = site.Bindings.FirstOrDefault( x => x.Protocol == "http" )?.EndPoint;
 
 			return Task.FromResult( httpBinding?.Port );
-		} );
+		}, cancellationToken );
 
 		if ( port is null )
 			return null;
@@ -1088,7 +1088,7 @@ public sealed class IisTaskHandle : IDisposable
 			var appPool = GetApplicationPool( serverManager, _state.AppPoolName );
 
 			return Task.FromResult( appPool.WorkerProcesses.Select( x => x.ProcessId ).ToArray() );
-		} );
+		}, cancellationToken );
 
 		if ( w3wpPids is null || w3wpPids.Length == 0 )
 			throw new InvalidOperationException( "No w3wp process running." );
@@ -1102,6 +1102,8 @@ public sealed class IisTaskHandle : IDisposable
 				.Add( pid )
 				.Add( targetFile.FullName ) )
 			.WithValidation( CommandResultValidation.None );
+
+		cancellationToken.ThrowIfCancellationRequested();
 
 		var result = await procdump.ExecuteBufferedAsync( cancellationToken );
 

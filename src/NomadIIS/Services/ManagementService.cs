@@ -120,17 +120,17 @@ public sealed class ManagementService : IHostedService
 			x => x.TaskConfig != null && x.TaskConfig.AllocId == allocId && x.TaskConfig.Name == taskName );
 	}
 
-	internal async Task LockAsync ( Func<ServerManager, Task> action )
+	internal async Task LockAsync ( Func<ServerManager, Task> action, CancellationToken cancellationToken = default )
 	{
 		_ = await LockAsync( async serverManager =>
 		{
 			await action( serverManager );
 			return true;
-		} );
+		}, cancellationToken );
 	}
-	internal async Task<T> LockAsync<T> ( Func<ServerManager, Task<T>> action )
+	internal async Task<T> LockAsync<T> ( Func<ServerManager, Task<T>> action, CancellationToken cancellationToken = default )
 	{
-		await _lock.WaitAsync();
+		await _lock.WaitAsync( cancellationToken );
 
 		var serverManager = new ServerManager();
 
