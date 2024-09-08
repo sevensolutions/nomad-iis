@@ -134,7 +134,7 @@ public sealed class ManagementApiService
 			if ( screenshot is null )
 				return Results.NotFound();
 
-			return Results.Bytes( screenshot, "image/png" );
+			return Results.Bytes( screenshot, "image/png", $"screenshot_{allocId}_{taskName}_{DateTime.Now:yyyy-MM-dd-HH-mm-ss}.png" );
 		} );
 
 		allocsApi.MapGet( "{allocId}/{taskName}/procdump", async (

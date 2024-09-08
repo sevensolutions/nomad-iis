@@ -71,6 +71,36 @@ ZIP-archives will be extracted by default. If you want to upload the ZIP-file *a
 If Nomad reschedules the allocation, all uploaded application files will be lost.
 :::
 
+### Examples
+
+**Upload a zipped application to the *local* directory**
+
+```cmd
+curl -X PUT \
+  -H "X-Api-Key: 12345" \
+  -H "Content-Type: application/zip" \
+  --data-binary @"C:\Path\To\static-sample-app.zip" \
+  http://localhost:5004/api/v1/allocs/e4c0ee58-2e27-2cd6-7ca5-6ef1ed036aad/app/fs/local?clean=true
+```
+
+**Download the entire *local* directory as a zip archive**
+
+```cmd
+curl -X GET \
+  -H "X-Api-Key: 12345" \
+  -o "local.zip" \
+  http://localhost:5004/api/v1/allocs/e4c0ee58-2e27-2cd6-7ca5-6ef1ed036aad/app/fs/local
+```
+
+**Download just a single file from the *local* directory**
+
+```cmd
+curl -X GET \
+  -H "X-Api-Key: 12345" \
+  -o "index.html" \
+  http://localhost:5004/api/v1/allocs/e4c0ee58-2e27-2cd6-7ca5-6ef1ed036aad/app/fs/local%2findex.html
+```
+
 ## Application Pool Lifecycle Management
 
 | API | Description |
@@ -89,6 +119,16 @@ GET /api/v1/allocs/{allocId}/{taskName}/screenshot[?path=/]
 Screenshots will be taken by Playwright, which starts a local Chrome browser. This requires downloading some necessary drivers from the Internet, which means the first request will take a few seconds.
 :::
 
+### Examples
+
+**Take a screenshot**
+
+```cmd
+curl -X GET -O \
+  -H "X-Api-Key: 12345" \
+  http://localhost:5004/api/v1/allocs/e4c0ee58-2e27-2cd6-7ca5-6ef1ed036aad/app/screenshot
+```
+
 ## Taking a Process Dump
 
 :::info
@@ -102,3 +142,13 @@ GET /api/v1/allocs/{allocId}/{taskName}/procdump
 
 Sometimes you need to investigate a performance or memory issue and need a process dump of the *w3wp* worker process.
 By calling this API, a process dump will be created using *procdump.exe* which will be streamed to the client.
+
+### Examples
+
+**Take a process dump**
+
+```cmd
+curl -X GET -O \
+  -H "X-Api-Key: 12345" \
+  http://localhost:5004/api/v1/allocs/e4c0ee58-2e27-2cd6-7ca5-6ef1ed036aad/app/procdump
+```
