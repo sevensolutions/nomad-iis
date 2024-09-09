@@ -2,6 +2,7 @@
 using Grpc.Core;
 using Hashicorp.Nomad.Plugins.Drivers.Proto;
 using MessagePack;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using NomadIIS.Services.Configuration;
 using System;
@@ -16,11 +17,13 @@ public sealed class DriverService : Driver.DriverBase
 {
 	private readonly ILogger<DriverService> _logger;
 	private readonly ManagementService _managementService;
+	private readonly IConfiguration _configuration;
 
-	public DriverService ( ILogger<DriverService> logger, ManagementService managementService )
+	public DriverService ( ILogger<DriverService> logger, ManagementService managementService, IConfiguration configuration )
 	{
 		_logger = logger;
 		_managementService = managementService;
+		_configuration = configuration;
 	}
 
 	public override Task<CapabilitiesResponse> Capabilities ( CapabilitiesRequest request, ServerCallContext context )
@@ -60,6 +63,10 @@ public sealed class DriverService : Driver.DriverBase
 
 		try
 		{
+#if MANAGEMENT_API
+			var managementApiPort = _configuration.GetValue( "management-api-port", 0 );
+#endif
+
 			while ( !context.CancellationToken.IsCancellationRequested )
 			{
 				FingerprintResponse.Types.HealthState status = FingerprintResponse.Types.HealthState.Undetected;
@@ -105,6 +112,10 @@ public sealed class DriverService : Driver.DriverBase
 						{ $"driver.{PluginInfo.Name}.directory_security_enabled", new Hashicorp.Nomad.Plugins.Shared.Structs.Attribute(){ BoolVal = _managementService.DirectorySecurity } },
 						{ $"driver.{PluginInfo.Name}.udp_logging_enabled", new Hashicorp.Nomad.Plugins.Shared.Structs.Attribute(){ BoolVal = _managementService.UdpLoggerPort is not null } },
 						{ $"driver.{PluginInfo.Name}.target_websites_enabled", new Hashicorp.Nomad.Plugins.Shared.Structs.Attribute(){ BoolVal = _managementService.AllowedTargetWebsites.Length > 0 } },
+#if MANAGEMENT_API
+						{ $"driver.{PluginInfo.Name}.management_api_enabled", new Hashicorp.Nomad.Plugins.Shared.Structs.Attribute(){ BoolVal = managementApiPort > 0 } },
+						{ $"driver.{PluginInfo.Name}.management_api_port", new Hashicorp.Nomad.Plugins.Shared.Structs.Attribute(){ IntVal = managementApiPort } },
+#endif
 					},
 					Health = status,
 					HealthDescription = healthDescription

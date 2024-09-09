@@ -6,7 +6,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+#if MANAGEMENT_API
 using NomadIIS.ManagementApi;
+#endif
 using NomadIIS.Services;
 using NomadIIS.Services.Grpc;
 using Serilog;

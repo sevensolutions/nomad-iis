@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Authentication;
+﻿#if MANAGEMENT_API
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NomadIIS.ManagementApi;
@@ -63,3 +64,5 @@ namespace Microsoft.Extensions.DependencyInjection
 			=> builder.AddScheme<ApiKeyAuthenticationOptions, ApiKeyAuthenticationHandler>( ApiKeyAuthenticationDefaults.AuthenticationScheme, options );
 	}
 }
+
+#endif

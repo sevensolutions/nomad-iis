@@ -1,4 +1,5 @@
-﻿using System.Text.Json.Serialization;
+﻿#if MANAGEMENT_API
+using System.Text.Json.Serialization;
 
 namespace NomadIIS.ManagementApi.ApiModel;
 
@@ -28,3 +29,4 @@ public enum ApplicationPoolStatus
 	Stopped,
 	Unknown
 }
+#endif
