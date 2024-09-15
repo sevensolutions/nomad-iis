@@ -1035,9 +1035,9 @@ public sealed class IisTaskHandle : IDisposable
 		if ( path.EndsWith( "/*" ) || path.EndsWith( "/*.*" ) )
 		{
 			if ( path.EndsWith( "/*" ) )
-				path = path[..2];
+				path = path[..^2];
 			else
-				path = path[..4];
+				path = path[..^4];
 
 			physicalPath = Path.Combine( _taskConfig.AllocDir, _taskConfig.Name, path );
 			FileSystemHelper.CleanFolder( physicalPath );
