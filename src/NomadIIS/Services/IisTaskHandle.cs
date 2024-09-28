@@ -97,7 +97,7 @@ public sealed class IisTaskHandle : IDisposable
 					throw new ArgumentException( "Defining a root application with an empty alias is not allowed when using a target_website." );
 			}
 
-			await _owner.LockAsync( serverManager =>
+			await _owner.LockAsync( async serverManager =>
 			{
 				// Get a new port for the UDP logger
 				if ( config.EnableUdpLogging )
@@ -138,7 +138,7 @@ public sealed class IisTaskHandle : IDisposable
 					{
 						_logger.LogInformation( $"Task {task.Id}: Creating Website with name {_state.WebsiteName}..." );
 
-						website = CreateWebsite( serverManager, _state.WebsiteName, _taskConfig, config, appPool );
+						website = await CreateWebsiteAsync( serverManager, _state.WebsiteName, _taskConfig, config, appPool );
 					}
 				}
 
@@ -514,7 +514,7 @@ public sealed class IisTaskHandle : IDisposable
 
 	private static Site? FindWebsiteByName ( ServerManager serverManager, string name )
 		=> serverManager.Sites.FirstOrDefault( x => x.Name == name );
-	private static Site CreateWebsite ( ServerManager serverManager, string name, TaskConfig taskConfig, DriverTaskConfig config, ApplicationPool appPool )
+	private async Task<Site> CreateWebsiteAsync ( ServerManager serverManager, string name, TaskConfig taskConfig, DriverTaskConfig config, ApplicationPool appPool )
 	{
 		var bindings = config.Bindings.Select( binding =>
 		{
@@ -553,24 +553,37 @@ public sealed class IisTaskHandle : IDisposable
 
 		foreach ( var b in bindings )
 		{
-			(X509Certificate2 Certificate, string? StoreName)? certificate = null;
+			(X509Certificate2 Certificate, string? StoreName)? usedCertificate = null;
 			var sslFlags = SslFlags.None;
 
 			if ( b.Binding.Type == DriverTaskConfigBindingType.Https )
 			{
 				if ( !string.IsNullOrEmpty( b.Binding.CertificateHash ) )
 				{
-					certificate = CertificateHelper.FindCertificateByHashString( b.Binding.CertificateHash );
+					usedCertificate = CertificateHelper.FindCertificateByHashString( b.Binding.CertificateHash );
 
-					if ( certificate is null )
+					if ( usedCertificate is null )
 						throw new KeyNotFoundException( $"Couldn't find certificate with hash {b.Binding.CertificateHash}." );
 				}
 				else if ( !string.IsNullOrEmpty( b.Binding.CertificateFile ) )
 				{
+					var certificateFilePath = b.Binding.CertificateFile;
 
+					// If the path is not an absolute path, make it relative to the task-directory.
+					if ( !Path.IsPathRooted( certificateFilePath ) )
+						certificateFilePath = Path.Combine( taskConfig.AllocDir, taskConfig.Name, certificateFilePath );
+
+					if ( !File.Exists( certificateFilePath ) )
+						throw new FileNotFoundException( $"Couldn't find certificate file {certificateFilePath}." );
+
+					usedCertificate = CertificateHelper.InstallCertificate(
+						certificateFilePath, out var installed, b.Binding.CertificatePassword );
+
+					if ( installed )
+						await SendTaskEventAsync( $"Installed certificate: {usedCertificate.Value.Certificate.FriendlyName}" );
 				}
 				else
-					throw new ArgumentException( $"An HTTPS binding requires the specification of a certificate." );
+					throw new ArgumentException( $"No certificate has been specified for the HTTPS binding on port {b.Port}." );
 
 				if ( b.Binding.RequireSni is not null && b.Binding.RequireSni.Value )
 					sslFlags |= SslFlags.Sni;
@@ -581,7 +594,7 @@ public sealed class IisTaskHandle : IDisposable
 			// Note: Certificate needs to be specified in this Add() method. Otherwise it doesn't work.
 			var binding = website.Bindings.Add(
 				$"{ipAddress}:{b.Port}:{b.Binding.Hostname}",
-				certificate?.Certificate.GetCertHash(), certificate?.StoreName, sslFlags );
+				usedCertificate?.Certificate.GetCertHash(), usedCertificate?.StoreName, sslFlags );
 
 			binding.Protocol = b.Binding.Type.ToString().ToLower();
 		}
@@ -639,6 +652,7 @@ public sealed class IisTaskHandle : IDisposable
 			{
 				var physicalVdirPath = vdir.Path.Replace( '/', '\\' );
 
+				// If the path is not an absolute path, make it relative to the task-directory.
 				if ( !Path.IsPathRooted( physicalVdirPath ) )
 					physicalVdirPath = Path.Combine( taskConfig.AllocDir, taskConfig.Name, physicalVdirPath );
 

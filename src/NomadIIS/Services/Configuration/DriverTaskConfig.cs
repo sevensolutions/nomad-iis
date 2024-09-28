@@ -92,6 +92,9 @@ public sealed class DriverTaskConfigBinding
 
 	[ConfigurationField( "certificate_file" )]
 	public string? CertificateFile { get; set; }
+
+	[ConfigurationField( "certificate_password" )]
+	public string? CertificatePassword { get; set; }
 }
 
 public enum DriverTaskConfigBindingType
