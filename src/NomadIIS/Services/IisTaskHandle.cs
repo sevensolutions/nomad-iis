@@ -553,35 +553,35 @@ public sealed class IisTaskHandle : IDisposable
 
 		foreach ( var b in bindings )
 		{
-			string? certificateStoreName = null;
-			byte[]? certificateHash = null;
-
-			if ( b.Binding.CertificateHash is not null )
-			{
-				using var store = new X509Store( StoreName.My, StoreLocation.LocalMachine );
-
-				store.Open( OpenFlags.ReadOnly );
-
-				var certificate = store.Certificates
-					.FirstOrDefault( x => x.GetCertHashString().Equals( b.Binding.CertificateHash, StringComparison.InvariantCultureIgnoreCase ) );
-
-				if ( certificate is null )
-					throw new KeyNotFoundException( $"Couldn't find certificate with hash {b.Binding.CertificateHash}." );
-
-				certificateStoreName = store.Name;
-				certificateHash = certificate.GetCertHash();
-			}
-
+			(X509Certificate2 Certificate, string? StoreName)? certificate = null;
 			var sslFlags = SslFlags.None;
-			if ( b.Binding.RequireSni is not null && b.Binding.RequireSni.Value )
-				sslFlags |= SslFlags.Sni;
+
+			if ( b.Binding.Type == DriverTaskConfigBindingType.Https )
+			{
+				if ( !string.IsNullOrEmpty( b.Binding.CertificateHash ) )
+				{
+					certificate = CertificateHelper.FindCertificateByHashString( b.Binding.CertificateHash );
+
+					if ( certificate is null )
+						throw new KeyNotFoundException( $"Couldn't find certificate with hash {b.Binding.CertificateHash}." );
+				}
+				else if ( !string.IsNullOrEmpty( b.Binding.CertificateFile ) )
+				{
+
+				}
+				else
+					throw new ArgumentException( $"An HTTPS binding requires the specification of a certificate." );
+
+				if ( b.Binding.RequireSni is not null && b.Binding.RequireSni.Value )
+					sslFlags |= SslFlags.Sni;
+			}
 
 			var ipAddress = b.Binding.IPAddress ?? "*";
 
 			// Note: Certificate needs to be specified in this Add() method. Otherwise it doesn't work.
 			var binding = website.Bindings.Add(
 				$"{ipAddress}:{b.Port}:{b.Binding.Hostname}",
-				certificateHash, certificateStoreName, sslFlags );
+				certificate?.Certificate.GetCertHash(), certificate?.StoreName, sslFlags );
 
 			binding.Protocol = b.Binding.Type.ToString().ToLower();
 		}
