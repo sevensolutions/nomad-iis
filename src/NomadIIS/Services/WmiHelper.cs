@@ -7,8 +7,6 @@ internal static class WmiHelper
 {
 	public static (ulong KernelModeTime, ulong UserModeTime, ulong WorkingSetPrivate) QueryWmiStatistics ( params int[] processIds )
 	{
-#pragma warning disable CA1416 // Validate platform compatibility
-
 		if ( processIds is null || processIds.Length <= 0 )
 			throw new ArgumentNullException( nameof( processIds ) );
 
@@ -50,7 +48,5 @@ internal static class WmiHelper
 		//userModeTime *= 100;
 
 		return (kernelModeTime, userModeTime, workingSetPrivate);
-
-#pragma warning restore CA1416 // Validate platform compatibility
 	}
 }

@@ -17,7 +17,6 @@ using System;
 using System.Net;
 using System.Security.Principal;
 
-#pragma warning disable CA1416 // Plattformkompatibilität überprüfen
 using ( var identity = WindowsIdentity.GetCurrent() )
 {
 	var principal = new WindowsPrincipal( identity );
@@ -27,7 +26,6 @@ using ( var identity = WindowsIdentity.GetCurrent() )
 		return -1;
 	}
 }
-#pragma warning restore CA1416 // Plattformkompatibilität überprüfen
 
 var excludeRouting = Matching.FromSource( "Microsoft.AspNetCore.Routing" );
 var excludeHosting = Matching.FromSource( "Microsoft.AspNetCore.Hosting" );

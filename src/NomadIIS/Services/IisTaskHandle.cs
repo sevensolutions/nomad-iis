@@ -189,6 +189,8 @@ public sealed class IisTaskHandle : IDisposable
 
 		_logger.LogInformation( $"Stopping task {_taskConfig.Id} (Alloc: {_taskConfig.AllocId})..." );
 
+		var hadCertificates = false;
+
 		await _owner.LockAsync( serverManager =>
 		{
 			var website = FindWebsiteByName( serverManager, _state.WebsiteName );
@@ -209,6 +211,9 @@ public sealed class IisTaskHandle : IDisposable
 
 			if ( website is not null )
 			{
+				// Check if this website had any SSL bindings so we can uninstall the certificate below.
+				hadCertificates = website.Bindings.Any( x => x.CertificateHash != null );
+
 				if ( !_state.TaskOwnsWebsite )
 				{
 					// Just remove the applications
@@ -236,6 +241,16 @@ public sealed class IisTaskHandle : IDisposable
 
 			return Task.CompletedTask;
 		} );
+
+		try
+		{
+			if ( hadCertificates )
+				CertificateHelper.UninstallCertificatesByFriendlyName( _state.WebsiteName );
+		}
+		catch ( Exception ex )
+		{
+			_logger.LogError( ex, $"Failed to uninstall certificates of ${_state.WebsiteName}" );
+		}
 	}
 	public async Task DestroyAsync ()
 	{
@@ -577,10 +592,10 @@ public sealed class IisTaskHandle : IDisposable
 						throw new FileNotFoundException( $"Couldn't find certificate file {certificateFilePath}." );
 
 					usedCertificate = CertificateHelper.InstallCertificate(
-						certificateFilePath, out var installed, b.Binding.CertificatePassword );
+						certificateFilePath, name, out var installed, b.Binding.CertificatePassword );
 
 					if ( installed )
-						await SendTaskEventAsync( $"Installed certificate: {usedCertificate.Value.Certificate.FriendlyName}" );
+						await SendTaskEventAsync( $"Installed certificate: {usedCertificate.Value.Certificate.Thumbprint}" );
 				}
 				else
 					throw new ArgumentException( $"No certificate has been specified for the HTTPS binding on port {b.Port}." );
@@ -724,8 +739,6 @@ public sealed class IisTaskHandle : IDisposable
 		// https://learn.microsoft.com/en-us/troubleshoot/developer/webapps/iis/www-authentication-authorization/default-permissions-user-rights
 		// https://stackoverflow.com/questions/51277338/remove-users-group-permission-for-folder-inside-programdata
 
-#pragma warning disable CA1416 // Plattformkompatibilität überprüfen
-
 		var appPoolIdentity = $"IIS AppPool\\{_state!.AppPoolName}";
 
 		string[] identities = config.PermitIusr ? [appPoolIdentity, "IUSR"] : [appPoolIdentity];
@@ -784,13 +797,10 @@ public sealed class IisTaskHandle : IDisposable
 			// Apply the new ACL
 			directory.SetAccessControl( acl );
 		}
-
-#pragma warning restore CA1416 // Plattformkompatibilität überprüfen
 	}
 
 	private SecurityIdentifier? TryGetSid ( WellKnownSidType sidType )
 	{
-#pragma warning disable CA1416 // Plattformkompatibilität überprüfen
 		try
 		{
 			return new SecurityIdentifier( sidType, null );
@@ -801,7 +811,6 @@ public sealed class IisTaskHandle : IDisposable
 
 			return null;
 		}
-#pragma warning restore CA1416 // Plattformkompatibilität überprüfen
 	}
 
 	private static long GetNextAvailableWebsiteId ( ServerManager serverManager )
