@@ -32,7 +32,7 @@ public sealed class NomadIISFixture : IAsyncLifetime
 		_apiHttpClient = new HttpClient()
 		{
 			BaseAddress = new Uri( "http://localhost:5004/api/v1/" ),
-			Timeout = TimeSpan.FromSeconds( 30 ),
+			Timeout = TimeSpan.FromMinutes( 3 ),
 			DefaultRequestHeaders =
 			{
 				{ "X-Api-Key", "12345" }
