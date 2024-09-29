@@ -245,7 +245,7 @@ public sealed class IisTaskHandle : IDisposable
 		try
 		{
 			if ( hadCertificates )
-				await CertificateHelper.UninstallCertificatesByFriendlyNameAsync( _state.WebsiteName );
+				await CertificateHelper.UninstallCertificatesAsync( _state.WebsiteName );
 		}
 		catch ( Exception ex )
 		{
