@@ -3,19 +3,24 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Text.RegularExpressions;
 
 namespace NomadIIS.Services;
 
 internal static class CertificateHelper
 {
+	private static Regex _safeThumbprintRegex = new Regex( @"[^\da-fA-F]" );
+
 	private static readonly SemaphoreSlim _semaphore = new SemaphoreSlim( 1, 1 );
 
-	public static async Task<(X509Certificate2? Certificate, string? StoreName)> InstallCertificateAsync ( string filePath, string friendlyName, string? password )
+	public static async Task<(X509Certificate2 Certificate, string? StoreName)?> InstallCertificateAsync ( string filePath, string friendlyName, string? password )
 	{
 		if ( string.IsNullOrEmpty( filePath ) )
 			throw new ArgumentNullException( nameof( filePath ) );
 
 		await _semaphore.WaitAsync();
+
+		string thumbprint;
 
 		try
 		{
@@ -25,10 +30,10 @@ internal static class CertificateHelper
 
 			var certificate = new X509Certificate2( filePath, password );
 
-			var thumbprint = certificate.Thumbprint;
+			thumbprint = MakeSafeThumbprint( certificate.Thumbprint );
 
 			var found = store.Certificates
-				.Find( X509FindType.FindByThumbprint, thumbprint, true )
+				.Find( X509FindType.FindByThumbprint, thumbprint, false )
 				.FirstOrDefault();
 
 			if ( found is null )
@@ -36,19 +41,14 @@ internal static class CertificateHelper
 				certificate.FriendlyName = friendlyName;
 
 				store.Add( certificate );
-
-				// Search again
-				found = store.Certificates
-					.Find( X509FindType.FindByThumbprint, thumbprint, true )
-					.FirstOrDefault();
 			}
-
-			return (found, store.Name);
 		}
 		finally
 		{
 			_semaphore.Release();
 		}
+
+		return await FindCertificateByThumbprintAsync( thumbprint );
 	}
 	public static async Task UninstallCertificatesByFriendlyNameAsync ( string name )
 	{
@@ -80,6 +80,8 @@ internal static class CertificateHelper
 		if ( string.IsNullOrEmpty( thumbprint ) )
 			throw new ArgumentNullException( nameof( thumbprint ) );
 
+		thumbprint = MakeSafeThumbprint( thumbprint );
+
 		await _semaphore.WaitAsync();
 
 		try
@@ -89,7 +91,7 @@ internal static class CertificateHelper
 			store.Open( OpenFlags.ReadOnly );
 
 			var certificate = store.Certificates
-				.Find( X509FindType.FindByThumbprint, thumbprint, true )
+				.Find( X509FindType.FindByThumbprint, thumbprint, false )
 				.FirstOrDefault();
 
 			if ( certificate is not null )
@@ -101,5 +103,11 @@ internal static class CertificateHelper
 		{
 			_semaphore.Release();
 		}
+	}
+
+	private static string MakeSafeThumbprint ( string thumbprint )
+	{
+		// Strip any non-hexadecimal values and make uppercase
+		return _safeThumbprintRegex.Replace( thumbprint, string.Empty ).ToUpper();
 	}
 }

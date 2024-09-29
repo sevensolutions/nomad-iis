@@ -568,21 +568,25 @@ public sealed class IisTaskHandle : IDisposable
 
 		foreach ( var b in bindings )
 		{
-			(X509Certificate2? Certificate, string? StoreName)? usedCertificate = null;
+			(X509Certificate2 Certificate, string? StoreName)? usedCertificate = null;
 			var sslFlags = SslFlags.None;
 
 			if ( b.Binding.Type == DriverTaskConfigBindingType.Https )
 			{
-				if ( !string.IsNullOrEmpty( b.Binding.CertificateHash ) )
+				var certificateBlock = b.Binding.Certificates.FirstOrDefault();
+				if ( certificateBlock is null )
+					throw new ArgumentException( "Missing certificate configuration for HTTPS binding." );
+
+				if ( !string.IsNullOrEmpty( certificateBlock.Thumbprint ) )
 				{
-					usedCertificate = await CertificateHelper.FindCertificateByThumbprintAsync( b.Binding.CertificateHash );
+					usedCertificate = await CertificateHelper.FindCertificateByThumbprintAsync( certificateBlock.Thumbprint );
 
 					if ( usedCertificate is null )
-						throw new KeyNotFoundException( $"Couldn't find certificate with hash {b.Binding.CertificateHash}." );
+						throw new KeyNotFoundException( $"Couldn't find certificate with hash {certificateBlock.Thumbprint}." );
 				}
-				else if ( !string.IsNullOrEmpty( b.Binding.CertificateFile ) )
+				else if ( !string.IsNullOrEmpty( certificateBlock.File ) )
 				{
-					var certificateFilePath = b.Binding.CertificateFile;
+					var certificateFilePath = certificateBlock.File;
 
 					// If the path is not an absolute path, make it relative to the task-directory.
 					if ( !Path.IsPathRooted( certificateFilePath ) )
@@ -592,9 +596,9 @@ public sealed class IisTaskHandle : IDisposable
 						throw new FileNotFoundException( $"Couldn't find certificate file {certificateFilePath}." );
 
 					usedCertificate = await CertificateHelper.InstallCertificateAsync(
-						certificateFilePath, name, b.Binding.CertificatePassword );
+						certificateFilePath, name, certificateBlock.Password );
 
-					if ( usedCertificate.Value.Certificate is null )
+					if ( usedCertificate is null )
 						throw new Exception( $"Failed to install certificate because it wasn't found after install. Maybe it's not valid anymore?" );
 
 					await SendTaskEventAsync( $"Installed certificate: {usedCertificate.Value.Certificate.Thumbprint}" );
@@ -611,7 +615,7 @@ public sealed class IisTaskHandle : IDisposable
 			// Note: Certificate needs to be specified in this Add() method. Otherwise it doesn't work.
 			var binding = website.Bindings.Add(
 				$"{ipAddress}:{b.Port}:{b.Binding.Hostname}",
-				usedCertificate?.Certificate?.GetCertHash(), usedCertificate?.StoreName, sslFlags );
+				usedCertificate?.Certificate.GetCertHash(), usedCertificate?.StoreName, sslFlags );
 
 			binding.Protocol = b.Binding.Type.ToString().ToLower();
 		}
