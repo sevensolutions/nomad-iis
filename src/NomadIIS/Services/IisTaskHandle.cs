@@ -245,7 +245,7 @@ public sealed class IisTaskHandle : IDisposable
 		try
 		{
 			if ( hadCertificates )
-				CertificateHelper.UninstallCertificatesByFriendlyName( _state.WebsiteName );
+				await CertificateHelper.UninstallCertificatesByFriendlyNameAsync( _state.WebsiteName );
 		}
 		catch ( Exception ex )
 		{
@@ -568,14 +568,14 @@ public sealed class IisTaskHandle : IDisposable
 
 		foreach ( var b in bindings )
 		{
-			(X509Certificate2 Certificate, string? StoreName)? usedCertificate = null;
+			(X509Certificate2? Certificate, string? StoreName)? usedCertificate = null;
 			var sslFlags = SslFlags.None;
 
 			if ( b.Binding.Type == DriverTaskConfigBindingType.Https )
 			{
 				if ( !string.IsNullOrEmpty( b.Binding.CertificateHash ) )
 				{
-					usedCertificate = CertificateHelper.FindCertificateByHashString( b.Binding.CertificateHash );
+					usedCertificate = await CertificateHelper.FindCertificateByThumbprintAsync( b.Binding.CertificateHash );
 
 					if ( usedCertificate is null )
 						throw new KeyNotFoundException( $"Couldn't find certificate with hash {b.Binding.CertificateHash}." );
@@ -591,11 +591,13 @@ public sealed class IisTaskHandle : IDisposable
 					if ( !File.Exists( certificateFilePath ) )
 						throw new FileNotFoundException( $"Couldn't find certificate file {certificateFilePath}." );
 
-					usedCertificate = CertificateHelper.InstallCertificate(
-						certificateFilePath, name, out var installed, b.Binding.CertificatePassword );
+					usedCertificate = await CertificateHelper.InstallCertificateAsync(
+						certificateFilePath, name, b.Binding.CertificatePassword );
 
-					if ( installed )
-						await SendTaskEventAsync( $"Installed certificate: {usedCertificate.Value.Certificate.Thumbprint}" );
+					if ( usedCertificate.Value.Certificate is null )
+						throw new Exception( $"Failed to install certificate because it wasn't found after install. Maybe it's not valid anymore?" );
+
+					await SendTaskEventAsync( $"Installed certificate: {usedCertificate.Value.Certificate.Thumbprint}" );
 				}
 				else
 					throw new ArgumentException( $"No certificate has been specified for the HTTPS binding on port {b.Port}." );
@@ -609,7 +611,7 @@ public sealed class IisTaskHandle : IDisposable
 			// Note: Certificate needs to be specified in this Add() method. Otherwise it doesn't work.
 			var binding = website.Bindings.Add(
 				$"{ipAddress}:{b.Port}:{b.Binding.Hostname}",
-				usedCertificate?.Certificate.GetCertHash(), usedCertificate?.StoreName, sslFlags );
+				usedCertificate?.Certificate?.GetCertHash(), usedCertificate?.StoreName, sslFlags );
 
 			binding.Protocol = b.Binding.Type.ToString().ToLower();
 		}
