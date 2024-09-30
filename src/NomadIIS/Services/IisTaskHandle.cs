@@ -189,7 +189,7 @@ public sealed class IisTaskHandle : IDisposable
 
 		_logger.LogInformation( $"Stopping task {_taskConfig.Id} (Alloc: {_taskConfig.AllocId})..." );
 
-		var hadCertificates = false;
+		HashSet<string>? certificatesToUninstall = null;
 
 		await _owner.LockAsync( serverManager =>
 		{
@@ -211,8 +211,20 @@ public sealed class IisTaskHandle : IDisposable
 
 			if ( website is not null )
 			{
-				// Check if this website had any SSL bindings so we can uninstall the certificate below.
-				hadCertificates = website.Bindings.Any( x => x.CertificateHash != null );
+				try
+				{
+					// Check which certificates can be uninstalled. (where usage-count is 1, only this website)
+					certificatesToUninstall = website.Bindings
+						.Where( x => x.CertificateHash is not null )
+						.GroupBy( x => x.CertificateHash )
+						.Where( x => x.Count() == 1 )
+						.Select( x => Convert.ToHexString( x.Key ) )
+						.ToHashSet();
+				}
+				catch ( Exception ex )
+				{
+					_logger.LogError( ex, "Failed to detect certificates to uninstall." );
+				}
 
 				if ( !_state.TaskOwnsWebsite )
 				{
@@ -244,8 +256,8 @@ public sealed class IisTaskHandle : IDisposable
 
 		try
 		{
-			if ( hadCertificates )
-				await CertificateHelper.UninstallCertificatesAsync( _state.WebsiteName );
+			if ( certificatesToUninstall is not null )
+				await CertificateHelper.UninstallCertificatesAsync( certificatesToUninstall );
 		}
 		catch ( Exception ex )
 		{
@@ -596,7 +608,7 @@ public sealed class IisTaskHandle : IDisposable
 						throw new FileNotFoundException( $"Couldn't find certificate file {certificateFilePath}." );
 
 					usedCertificate = await CertificateHelper.InstallCertificateAsync(
-						certificateFilePath, name, certificateBlock.Password );
+						certificateFilePath, certificateBlock.Password );
 
 					if ( usedCertificate is null )
 						throw new Exception( $"Failed to install certificate because it wasn't found after install. Maybe it's not valid anymore?" );
