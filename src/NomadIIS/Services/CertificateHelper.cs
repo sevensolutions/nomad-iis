@@ -33,7 +33,8 @@ internal static class CertificateHelper
 
 			store.Open( OpenFlags.OpenExistingOnly | OpenFlags.ReadWrite );
 
-			var certificate = new X509Certificate2( filePath, password );
+			var certificate = new X509Certificate2( filePath, password,
+				X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.Exportable );
 
 			thumbprint = MakeSafeThumbprint( certificate.Thumbprint );
 

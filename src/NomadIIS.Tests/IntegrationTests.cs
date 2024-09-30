@@ -231,7 +231,7 @@ public class IntegrationTests : IClassFixture<NomadIISFixture>
 	{
 		var certificateFile = Path.GetTempFileName() + ".pfx";
 
-		var certificateThumbprint = CertificateHelper.GenerateSelfSignedCertificate( "localhost", certificateFile, "super#secure" );
+		var certificateThumbprint = CertificateHelper.GenerateSelfSignedCertificate( "NomadIISTest", certificateFile, "super#secure" );
 
 		var jobHcl = $$"""
 			job "https-job-with-cert-file" {
