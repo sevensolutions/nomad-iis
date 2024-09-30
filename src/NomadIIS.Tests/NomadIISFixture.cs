@@ -53,7 +53,7 @@ public sealed class NomadIISFixture : IAsyncLifetime
 			pluginDir = @"..\..\..\..\NomadIIS\bin\Debug\net8.0";
 
 		var pluginDirectory = Path.GetFullPath( pluginDir );
-		
+
 #if MANAGEMENT_API
 		var configFile = Path.GetFullPath( @"Data\configs\with_api.hcl" );
 #else
@@ -202,6 +202,9 @@ public sealed class NomadIISFixture : IAsyncLifetime
 
 	public Task<JobAllocationResponse[]?> ListJobAllocationsAsync ( string jobId )
 		=> _httpClient.GetFromJsonAsync<JobAllocationResponse[]>( $"job/{jobId}/allocations" );
+
+	public Task<AllocationResponse?> ReadAllocationAsync ( string allocId )
+		=> _httpClient.GetFromJsonAsync<AllocationResponse>( $"allocation/{allocId}" );
 
 	public void AccessIIS ( Action<IisHandle> action )
 	{

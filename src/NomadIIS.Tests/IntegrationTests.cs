@@ -1,5 +1,9 @@
 using Microsoft.Web.Administration;
 using System;
+using System.IO;
+using System.Linq;
+using System.Net.Http;
+using System.Net;
 using Xunit.Abstractions;
 
 namespace NomadIIS.Tests;
@@ -220,6 +224,103 @@ public class IntegrationTests : IClassFixture<NomadIISFixture>
 		await _fixture.StopJobAsync( jobId );
 
 		_output.WriteLine( "Job stopped." );
+	}
+
+	[Fact]
+	public async Task TestHttps ()
+	{
+		var certificateFile = Path.GetTempFileName() + ".pfx";
+
+		var certificateThumbprint = CertificateHelper.GenerateSelfSignedCertificate( "localhost", certificateFile, "super#secure" );
+
+		var jobHcl = $$"""
+			job "https-job-with-cert-file" {
+			  datacenters = ["dc1"]
+			  type = "service"
+
+			  group "app" {
+			    count = 1
+
+			    network {
+			      port "httplabel" {}
+			    }
+
+			    task "app" {
+			      driver = "iis"
+
+			      config {
+			        application {
+			          path = "C:\\inetpub\\wwwroot"
+			        }
+
+			        binding {
+			          type = "https"
+			          port = "httplabel"
+
+			          certificate {
+			            file = "{{certificateFile.Replace( "\\", "\\\\" )}}"
+			            password = "super#secure"
+			          }
+			        }
+			      }
+			    }
+			  }
+			}
+			""";
+
+		_output.WriteLine( "Submitting job..." );
+
+		var jobId = await _fixture.ScheduleJobAsync( jobHcl );
+
+		_output.WriteLine( $"Job Id: {jobId}" );
+
+		var allocations = await _fixture.ListJobAllocationsAsync( jobId );
+
+		if ( allocations is null || allocations.Length == 0 )
+			Assert.Fail( "No job allocations" );
+
+		var poolAndWebsiteName = $"nomad-{allocations[0].Id}-app";
+
+		_output.WriteLine( $"AppPool and Website Name: {poolAndWebsiteName}" );
+
+		_fixture.AccessIIS( iis =>
+		{
+			iis.AppPool( poolAndWebsiteName ).ShouldExist();
+			iis.Website( poolAndWebsiteName ).ShouldExist();
+
+			iis.Website( poolAndWebsiteName ).Binding( 0 ).IsHttps();
+			iis.Website( poolAndWebsiteName ).Binding( 0 ).CertificateThumbprintIs( certificateThumbprint );
+		} );
+
+		//var allocation = await _fixture.ReadAllocationAsync( allocations[0].Id );
+
+		//var appPort = allocation.Resources.Networks[0].DynamicPorts.First( x => x.Label == "httplabel" ).Value;
+
+		//using ( HttpClient client = new HttpClient() )
+		//{
+		//	using ( HttpResponseMessage response = await client.GetAsync( $"https://localhost:{appPort}" ) )
+		//	{
+		//		// Get Certificate Here
+		//		var cert = ServicePointManager.FindServicePoint( new Uri( $"https://localhost:{appPort}" ) ).Certificate;
+		//		//
+		//		using ( HttpContent content = response.Content )
+		//		{
+		//			string result = await content.ReadAsStringAsync();
+		//		}
+		//	}
+		//}
+
+		//_output.WriteLine( "Stopping job..." );
+
+		//await _fixture.StopJobAsync( jobId );
+
+		//_output.WriteLine( "Job stopped." );
+
+		//_fixture.AccessIIS( iis =>
+		//{
+		//	iis.AppPool( poolAndWebsiteName ).ShouldNotExist();
+		//	iis.Website( poolAndWebsiteName ).ShouldNotExist();
+		//} );
 	}
 
 #if MANAGEMENT_API
