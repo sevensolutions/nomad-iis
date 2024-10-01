@@ -177,6 +177,9 @@ public sealed class NomadIISFixture : IAsyncLifetime
 
 				return null;
 			} );
+
+			// Wait a bit to let the task stabilize
+			await Task.Delay( 3000 );
 		}
 
 		return jobId;
@@ -184,16 +187,26 @@ public sealed class NomadIISFixture : IAsyncLifetime
 
 	public async Task StopJobAsync ( string jobId )
 	{
-		await _httpClient.DeleteAsync( $"job/{jobId}" );
+		await _httpClient.DeleteAsync( $"job/{jobId}?purge=true" );
 
-		await TryUntilAsync( async () =>
+		await TryUntilAsync<bool?>( async () =>
 		{
-			var job = await ReadJobAsync( jobId );
+			try
+			{
+				var job = await ReadJobAsync( jobId );
 
-			if ( job is not null && job.Status == JobStatus.Dead )
-				return job;
+				if ( job is not null && job.Status == JobStatus.Dead )
+					return true;
 
-			return null;
+				return null;
+			}
+			catch ( HttpRequestException ex )
+			{
+				if ( ex.StatusCode == System.Net.HttpStatusCode.NotFound )
+					return true;
+
+				return null;
+			}
 		} );
 	}
 

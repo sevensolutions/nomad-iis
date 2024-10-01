@@ -309,17 +309,19 @@ public class IntegrationTests : IClassFixture<NomadIISFixture>
 		//	}
 		//}
 
-		//_output.WriteLine( "Stopping job..." );
+		_output.WriteLine( "Stopping job..." );
 
-		//await _fixture.StopJobAsync( jobId );
+		await _fixture.StopJobAsync( jobId );
 
-		//_output.WriteLine( "Job stopped." );
+		_output.WriteLine( "Job stopped." );
 
-		//_fixture.AccessIIS( iis =>
-		//{
-		//	iis.AppPool( poolAndWebsiteName ).ShouldNotExist();
-		//	iis.Website( poolAndWebsiteName ).ShouldNotExist();
-		//} );
+		_fixture.AccessIIS( iis =>
+		{
+			iis.AppPool( poolAndWebsiteName ).ShouldNotExist();
+			iis.Website( poolAndWebsiteName ).ShouldNotExist();
+		} );
+
+		// TODO: Certificate should have been removed
 	}
 
 #if MANAGEMENT_API
