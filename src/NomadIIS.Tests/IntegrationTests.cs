@@ -1,10 +1,8 @@
 using Microsoft.Web.Administration;
 using System;
 using System.IO;
-using System.Linq;
-using System.Net.Http;
-using System.Net;
 using Xunit.Abstractions;
+using NomadIIS.Services;
 
 namespace NomadIIS.Tests;
 
@@ -231,7 +229,8 @@ public class IntegrationTests : IClassFixture<NomadIISFixture>
 	{
 		var certificateFile = Path.GetTempFileName() + ".pfx";
 
-		var certificateThumbprint = CertificateHelper.GenerateSelfSignedCertificate( "NomadIISTest", certificateFile, "super#secure" );
+		var certificateThumbprint = CertificateHelper.GenerateSelfSignedCertificate(
+			"NomadIISTest", TimeSpan.FromDays( 2 ), certificateFile, "super#secure" );
 
 		var jobHcl = $$"""
 			job "https-job-with-cert-file" {

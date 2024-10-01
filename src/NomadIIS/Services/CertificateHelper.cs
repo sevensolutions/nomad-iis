@@ -7,6 +7,8 @@ using System.Text.RegularExpressions;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
+using System.Net;
+using System.Security.Cryptography;
 
 namespace NomadIIS.Services;
 
@@ -21,7 +23,10 @@ internal static class CertificateHelper
 	public static async Task<(X509Certificate2 Certificate, string? StoreName)?> InstallCertificateAsync ( string filePath, string? password )
 	{
 		if ( string.IsNullOrEmpty( filePath ) )
-			throw new ArgumentNullException( nameof( filePath ) );
+			throw new ArgumentException( nameof( filePath ) );
+
+		var certificate = new X509Certificate2( filePath, password,
+			X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.Exportable );
 
 		await _semaphore.WaitAsync();
 
@@ -32,9 +37,6 @@ internal static class CertificateHelper
 			using var store = new X509Store( StoreName.My, StoreLocation.LocalMachine );
 
 			store.Open( OpenFlags.OpenExistingOnly | OpenFlags.ReadWrite );
-
-			var certificate = new X509Certificate2( filePath, password,
-				X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.Exportable );
 
 			thumbprint = MakeSafeThumbprint( certificate.Thumbprint );
 
@@ -114,6 +116,54 @@ internal static class CertificateHelper
 		{
 			_semaphore.Release();
 		}
+	}
+
+	public static string GenerateSelfSignedCertificate ( string commonName, TimeSpan lifetime, string targetFilePath, string? password )
+	{
+		var certificateName = $"CN={commonName}";
+
+		using var rsa = RSA.Create( 2048 );
+
+		var certRequest = new CertificateRequest( certificateName, rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1 );
+
+		// Specify basic constraints (self-signed, no CA)
+		certRequest.CertificateExtensions.Add( new X509BasicConstraintsExtension( false, false, 0, false ) );
+
+		var serverAuthOid = new Oid( "1.3.6.1.5.5.7.3.1", "Server Authentication" );
+		var clientAuthOid = new Oid( "1.3.6.1.5.5.7.3.2", "Client Authentication" );
+
+		// Create an OidCollection and add the OIDs
+		OidCollection oidCollection = [serverAuthOid, clientAuthOid];
+
+		// Create the X509EnhancedKeyUsageExtension with the OidCollection
+		var ekuExtension = new X509EnhancedKeyUsageExtension( oidCollection, false );
+
+		// Get the ASN.1 encoded data for the extension
+		var asnData = new AsnEncodedData( ekuExtension.Oid, ekuExtension.RawData );
+
+		certRequest.CertificateExtensions.Add( new X509Extension( asnData, false ) );
+
+		certRequest.CertificateExtensions.Add(
+			new X509KeyUsageExtension(
+				X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment | X509KeyUsageFlags.DataEncipherment, true ) );
+
+		var sanBuilder = new SubjectAlternativeNameBuilder();
+		sanBuilder.AddDnsName( "localhost" );
+		sanBuilder.AddDnsName( "127.0.0.1" );
+		sanBuilder.AddIpAddress( IPAddress.Loopback );
+
+		certRequest.CertificateExtensions.Add( sanBuilder.Build() );
+
+		// Generate the certificate
+		var now = DateTimeOffset.Now;
+		var certificate = certRequest.CreateSelfSigned( now, now.Add( lifetime ) );
+
+		// Export to PFX (PKCS #12)
+		var pfxBytes = certificate.Export( X509ContentType.Pfx, password );
+
+		File.WriteAllBytes( targetFilePath, pfxBytes );
+
+		return certificate.Thumbprint;
 	}
 
 	private static string MakeSafeThumbprint ( string thumbprint )

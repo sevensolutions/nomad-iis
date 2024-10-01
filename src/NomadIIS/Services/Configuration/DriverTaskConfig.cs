@@ -101,6 +101,9 @@ public sealed class DriverTaskConfigCertificate
 
 	[ConfigurationField( "password" )]
 	public string? Password { get; set; }
+
+	[ConfigurationField( "use_self_signed" )]
+	public bool UseSelfSigned { get; set; }
 }
 
 public enum DriverTaskConfigBindingType

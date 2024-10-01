@@ -615,6 +615,18 @@ public sealed class IisTaskHandle : IDisposable
 
 					await SendTaskEventAsync( $"Installed certificate: {usedCertificate.Value.Certificate.Thumbprint}" );
 				}
+				else if ( certificateBlock.UseSelfSigned )
+				{
+					var temFile = Path.GetTempFileName() + ".pfx";
+					var randomPassword = Guid.NewGuid().ToString( "N" );
+
+					var selfSignedCertificate = CertificateHelper.GenerateSelfSignedCertificate(
+						b.Binding.Hostname ?? "localhost", TimeSpan.FromDays( 365 ), temFile, randomPassword );
+
+					usedCertificate = await CertificateHelper.InstallCertificateAsync( temFile, randomPassword );
+
+					await SendTaskEventAsync( $"Installed self-signed certificate: {usedCertificate.Value.Certificate.Thumbprint}" );
+				}
 				else
 					throw new ArgumentException( $"No certificate has been specified for the HTTPS binding on port {b.Port}." );
 
