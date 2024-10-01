@@ -14,7 +14,7 @@ sidebar_position: 4
 | placeholder_app_path | string | no | C:\\inetpub\\wwwroot | Specifies the path to an optional placeholder app. The files of this folder will be copied into the allocation directory when the application path, specified in the job spec, is empty. This may be usefull to show some kind of maintenance-page until the real app is pushed using [the management API](../features/management-api.md#push-app). By default the blue default IIS page will be copied and you can set this to `null` to not copy anything. |
 | *procdump* | block list | no | *none* | Defines settings for procdump. See *procdump* schema below for details. Only available when using the nomad_iis.exe including the Management API. |
 
-## `procdump` Block Configuration
+## `procdump` Block
 
 | Option | Type | Required | Default Value | Description |
 |---|---|---|---|---|
