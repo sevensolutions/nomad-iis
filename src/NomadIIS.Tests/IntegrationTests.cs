@@ -3,6 +3,7 @@ using System;
 using System.IO;
 using Xunit.Abstractions;
 using NomadIIS.Services;
+using System.Linq;
 
 namespace NomadIIS.Tests;
 
@@ -225,7 +226,7 @@ public class IntegrationTests : IClassFixture<NomadIISFixture>
 	}
 
 	[Fact]
-	public async Task TestHttps ()
+	public async Task JobWithCertificateFile_WebsiteShouldUseCertificate ()
 	{
 		var certificateFile = Path.GetTempFileName() + ".pfx";
 
@@ -291,23 +292,17 @@ public class IntegrationTests : IClassFixture<NomadIISFixture>
 			iis.Website( poolAndWebsiteName ).Binding( 0 ).CertificateThumbprintIs( certificateThumbprint );
 		} );
 
-		//var allocation = await _fixture.ReadAllocationAsync( allocations[0].Id );
+		var allocation = await _fixture.ReadAllocationAsync( allocations[0].Id );
 
-		//var appPort = allocation.Resources.Networks[0].DynamicPorts.First( x => x.Label == "httplabel" ).Value;
+		Assert.NotNull( allocation );
 
-		//using ( HttpClient client = new HttpClient() )
-		//{
-		//	using ( HttpResponseMessage response = await client.GetAsync( $"https://localhost:{appPort}" ) )
-		//	{
-		//		// Get Certificate Here
-		//		var cert = ServicePointManager.FindServicePoint( new Uri( $"https://localhost:{appPort}" ) ).Certificate;
-		//		//
-		//		using ( HttpContent content = response.Content )
-		//		{
-		//			string result = await content.ReadAsStringAsync();
-		//		}
-		//	}
-		//}
+		var appPort = allocation.Resources.Networks[0].DynamicPorts.First( x => x.Label == "httplabel" ).Value;
+
+		var serverCertificate = _fixture.GetServerCertificate( "localhost", appPort );
+
+		Assert.NotNull( serverCertificate );
+
+		Assert.Equal( "CN=NomadIISTest", serverCertificate.Subject );
 
 		_output.WriteLine( "Stopping job..." );
 

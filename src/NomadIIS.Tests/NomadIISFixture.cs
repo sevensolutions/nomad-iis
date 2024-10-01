@@ -6,6 +6,9 @@ using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Net.Security;
+using System.Net.Sockets;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 
@@ -224,6 +227,22 @@ public sealed class NomadIISFixture : IAsyncLifetime
 		using var handle = new IisHandle();
 
 		action( handle );
+	}
+
+	public X509Certificate? GetServerCertificate ( string hostName, int port )
+	{
+		// Establish a TCP connection to the server
+		using var client = new TcpClient( hostName, port );
+
+		using var sslStream = new SslStream( client.GetStream(), false, ValidateServerCertificate, null );
+
+		// Initiate the SSL handshake
+		sslStream.AuthenticateAsClient( hostName );
+
+		// Get the server's certificate
+		return sslStream?.RemoteCertificate;
+
+		bool ValidateServerCertificate ( object sender, X509Certificate? certificate, X509Chain? chain, SslPolicyErrors sslPolicyErrors ) => true;
 	}
 
 #if MANAGEMENT_API
