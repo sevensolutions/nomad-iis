@@ -18,6 +18,6 @@ client {
 plugin "nomad_iis" {
   config {
     enabled = true,
-	fingerprint_interval = "10s"
+    fingerprint_interval = "10s"
   }
 }

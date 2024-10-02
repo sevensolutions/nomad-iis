@@ -10,7 +10,7 @@
   </a>
 </p>
 
-This repository contains a task driver for [HashiCorp Nomad](https://www.nomadproject.io/) to run web-applications in IIS on Windows machines. Unlike most other Nomad task drivers, this one is written in the C# language using ASP.NET 8.
+A task driver for [HashiCorp Nomad](https://www.nomadproject.io/) to run web-applications in IIS on Windows machines. Unlike most other Nomad task drivers, this one is written in the C# language using ASP.NET 8.
 It uses the *Microsoft.Web.Administration*-API to communicate with IIS.
 Feel free to use it as-is or as a reference implementation for your own C#-based Nomad-plugins.
 
@@ -28,13 +28,14 @@ Feel free to use it as-is or as a reference implementation for your own C#-based
 | Virtual Directories | ✔ | Support for multiple *virtual directories* below an application. |
 | HTTP Bindings | ✔ | |
 | HTTPS Bindings | ✔ | [GH-3](https://github.com/sevensolutions/nomad-iis/issues/3) |
-| Environment Variables | ✔ | [Details](#-environment-variables) |
+| Environment Variables | ✔ | [Details](https://nomad-iis.sevensolutions.cc/docs/features/environment-variables) |
 | Resource Statistics | ✔ | |
 | Logging | ✔ | Experimental UDP logging. See [GH-6](https://github.com/sevensolutions/nomad-iis/issues/6) for details. |
-| Signals with `nomad alloc signal` | ✔ | [Details](#-supported-signals) |
+| Signals | ✔ | [Details](https://nomad-iis.sevensolutions.cc/docs/features/signals) |
 | Exec (Shell Access) | ❌ | I'am playing around a little bit but don't want to give you hope :/. See [GH-15](https://github.com/sevensolutions/nomad-iis/issues/15) for status. |
-| Filesystem Isolation | 🔶 | [Details](#-filesystem-isolation) |
+| Filesystem Isolation | 🔶 | [Details](https://nomad-iis.sevensolutions.cc/docs/features/filesystem-isolation) |
 | Nomad Networking | ❌ | |
+| Management API | ✔ | *Nomad IIS* provides a very powerfull [Management API](https://nomad-iis.sevensolutions.cc/docs/features/management-api) with functionalities like taking a local screenshot or creating a process dump. |
 
 ## 📚 Documentation
 

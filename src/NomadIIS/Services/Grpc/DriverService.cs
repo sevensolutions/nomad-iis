@@ -2,6 +2,7 @@
 using Grpc.Core;
 using Hashicorp.Nomad.Plugins.Drivers.Proto;
 using MessagePack;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using NomadIIS.Services.Configuration;
 using System;
@@ -16,11 +17,13 @@ public sealed class DriverService : Driver.DriverBase
 {
 	private readonly ILogger<DriverService> _logger;
 	private readonly ManagementService _managementService;
+	private readonly IConfiguration _configuration;
 
-	public DriverService ( ILogger<DriverService> logger, ManagementService managementService )
+	public DriverService ( ILogger<DriverService> logger, ManagementService managementService, IConfiguration configuration )
 	{
 		_logger = logger;
 		_managementService = managementService;
+		_configuration = configuration;
 	}
 
 	public override Task<CapabilitiesResponse> Capabilities ( CapabilitiesRequest request, ServerCallContext context )
@@ -60,6 +63,10 @@ public sealed class DriverService : Driver.DriverBase
 
 		try
 		{
+#if MANAGEMENT_API
+			var managementApiPort = _configuration.GetValue( "management-api-port", 0 );
+#endif
+
 			while ( !context.CancellationToken.IsCancellationRequested )
 			{
 				FingerprintResponse.Types.HealthState status = FingerprintResponse.Types.HealthState.Undetected;
@@ -94,7 +101,7 @@ public sealed class DriverService : Driver.DriverBase
 				{
 					status = FingerprintResponse.Types.HealthState.Undetected;
 					healthDescription = "Driver disabled";
-				}				
+				}
 
 				await responseStream.WriteAsync( new FingerprintResponse()
 				{
@@ -105,6 +112,10 @@ public sealed class DriverService : Driver.DriverBase
 						{ $"driver.{PluginInfo.Name}.directory_security_enabled", new Hashicorp.Nomad.Plugins.Shared.Structs.Attribute(){ BoolVal = _managementService.DirectorySecurity } },
 						{ $"driver.{PluginInfo.Name}.udp_logging_enabled", new Hashicorp.Nomad.Plugins.Shared.Structs.Attribute(){ BoolVal = _managementService.UdpLoggerPort is not null } },
 						{ $"driver.{PluginInfo.Name}.target_websites_enabled", new Hashicorp.Nomad.Plugins.Shared.Structs.Attribute(){ BoolVal = _managementService.AllowedTargetWebsites.Length > 0 } },
+#if MANAGEMENT_API
+						{ $"driver.{PluginInfo.Name}.management_api_enabled", new Hashicorp.Nomad.Plugins.Shared.Structs.Attribute(){ BoolVal = managementApiPort > 0 } },
+						{ $"driver.{PluginInfo.Name}.management_api_port", new Hashicorp.Nomad.Plugins.Shared.Structs.Attribute(){ IntVal = managementApiPort } },
+#endif
 					},
 					Health = status,
 					HealthDescription = healthDescription
@@ -125,10 +136,10 @@ public sealed class DriverService : Driver.DriverBase
 		var task = request.Task;
 
 		var handle = _managementService.CreateHandle( task.Id );
-		
+
 		try
 		{
-			var driverState = await handle.RunAsync( _logger, task );
+			var driverState = await handle.RunAsync( task );
 
 			return new StartTaskResponse()
 			{
@@ -170,7 +181,7 @@ public sealed class DriverService : Driver.DriverBase
 
 		if ( handle is not null )
 		{
-			await handle.StopAsync( _logger );
+			await handle.StopAsync();
 
 			handle.Dispose();
 		}
@@ -185,7 +196,7 @@ public sealed class DriverService : Driver.DriverBase
 		var handle = _managementService.TryGetHandle( request.TaskId );
 
 		if ( handle is not null )
-			await handle.SignalAsync( _logger, request.Signal );
+			await handle.SignalAsync( request.Signal );
 
 		return new SignalTaskResponse();
 	}
@@ -198,7 +209,7 @@ public sealed class DriverService : Driver.DriverBase
 
 		if ( handle is not null )
 		{
-			await handle.DestroyAsync( _logger );
+			await handle.DestroyAsync();
 
 			handle.Dispose();
 		}
@@ -262,7 +273,7 @@ public sealed class DriverService : Driver.DriverBase
 		// Note: Looks like request.TaskId is always empty here.
 		var handle = _managementService.CreateHandle( request.Handle.Config.Id );
 
-		handle.RecoverState( _logger, request );
+		handle.RecoverState( request );
 
 		return Task.FromResult( new RecoverTaskResponse() );
 	}
@@ -282,7 +293,7 @@ public sealed class DriverService : Driver.DriverBase
 				if ( handle is null )
 					break;
 
-				var statistics = await handle.GetStatisticsAsync( _logger );
+				var statistics = await handle.GetStatisticsAsync();
 
 				await responseStream.WriteAsync( new TaskStatsResponse()
 				{
@@ -308,7 +319,7 @@ public sealed class DriverService : Driver.DriverBase
 
 		var handle = _managementService.TryGetHandle( request.TaskId );
 
-		var exitCode = handle is not null ? await handle.WaitAsync( _logger ) : 0;
+		var exitCode = handle is not null ? await handle.WaitAsync() : 0;
 
 		return new WaitTaskResponse()
 		{

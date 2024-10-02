@@ -6,6 +6,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+#if MANAGEMENT_API
+using NomadIIS.ManagementApi;
+#endif
 using NomadIIS.Services;
 using NomadIIS.Services.Grpc;
 using Serilog;
@@ -42,14 +45,32 @@ builder.Host.UseSerilog();
 
 //System.Diagnostics.Debugger.Launch();
 
+var grpcPort = builder.Configuration.GetValue( "port", 5003 );
+
+#if MANAGEMENT_API
+var managementApiPort = builder.Configuration.GetValue( "management-api-port", 0 );
+#endif
+
 builder.WebHost.ConfigureKestrel( config =>
 {
-	var port = builder.Configuration.GetValue( "port", 5003 );
-
-	config.Listen( IPAddress.Loopback, port, listenOptions =>
+	config.Listen( IPAddress.Loopback, grpcPort, listenOptions =>
 	{
 		listenOptions.Protocols = HttpProtocols.Http2;
 	} );
+
+#if MANAGEMENT_API
+	if ( managementApiPort > 0 )
+	{
+		// Needed for the /upload API because ZipArchive.Extract() is synchronous.
+		config.AllowSynchronousIO = true;
+
+		config.Listen( IPAddress.Any, managementApiPort, listenOptions =>
+		{
+			listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
+		} );
+	}
+#endif
+
 	//config.ListenUnixSocket("/my-socket2.sock", listenOptions =>
 	//{
 	//    listenOptions.Protocols = HttpProtocols.Http2;
@@ -68,18 +89,64 @@ builder.Services
 	.AddGrpcHealthChecks()
 	.AddCheck( "plugin", () => HealthCheckResult.Healthy( "SERVING" ) );
 
+builder.Services.AddProblemDetails();
+
+#if MANAGEMENT_API
+var mgmtApiKey = builder.Configuration.GetValue<string>( "management-api-key" );
+
+if ( managementApiPort > 0 )
+{
+	builder.Services.AddAuthentication( config =>
+	{
+		config.DefaultAuthenticateScheme = ApiKeyAuthenticationDefaults.AuthenticationScheme;
+		config.DefaultChallengeScheme = ApiKeyAuthenticationDefaults.AuthenticationScheme;
+	} )
+	.AddApiKey( config =>
+	{
+		config.ApiKey = mgmtApiKey;
+	} );
+
+	builder.Services.AddAuthorization();
+
+	builder.Services.AddControllers();
+}
+#endif
+
 var app = builder.Build();
 
+#if MANAGEMENT_API
+if ( managementApiPort > 0 )
+	app.UseAuthentication();
+#endif
+
 app.UseRouting();
+
+#if MANAGEMENT_API
+if ( managementApiPort > 0 )
+	app.UseAuthorization();
+#endif
 
 if ( app.Environment.IsDevelopment() )
 	app.MapGrpcReflectionService();
 
-app.MapGrpcService<ControllerService>();
-app.MapGrpcService<BrokerService>();
-app.MapGrpcService<StdioService>();
-app.MapGrpcService<BaseService>();
-app.MapGrpcService<DriverService>();
+// TODO: Limit them to the gRPC endpoint
+app.MapGrpcService<ControllerService>();//.RequireHost( $"*:{grpcPort}" );
+app.MapGrpcService<BrokerService>();//.RequireHost( $"*:{grpcPort}" );
+app.MapGrpcService<StdioService>();//.RequireHost( $"*:{grpcPort}" );
+app.MapGrpcService<BaseService>();//.RequireHost( $"*:{grpcPort}" );
+app.MapGrpcService<DriverService>();//.RequireHost( $"*:{grpcPort}" );
+
+#if MANAGEMENT_API
+if ( managementApiPort > 0 )
+{
+	var epApi = app
+		.MapControllers()
+		.RequireHost( $"*:{managementApiPort}" );
+
+	if ( !string.IsNullOrEmpty( mgmtApiKey ) )
+		epApi.RequireAuthorization();
+}
+#endif
 
 app.MapGet( "/", () => "This binary is a plugin. These are not meant to be executed directly. Please execute the program that consumes these plugins, which will load any plugins automatically." );
 

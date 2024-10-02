@@ -221,4 +221,74 @@ public class IntegrationTests : IClassFixture<NomadIISFixture>
 
 		_output.WriteLine( "Job stopped." );
 	}
+
+#if MANAGEMENT_API
+	[Fact]
+	public async Task ManagementApi_TakeScreenshot ()
+	{
+		var jobHcl = """
+			job "screenshot-job" {
+			  datacenters = ["dc1"]
+			  type = "service"
+
+			  group "app" {
+			    count = 1
+
+			    network {
+			      port "httplabel" {}
+			    }
+
+			    task "app" {
+			      driver = "iis"
+
+			      config {
+			        application {
+			          path = "C:\\inetpub\\wwwroot"
+			        }
+
+			        binding {
+			          type = "http"
+			          port = "httplabel"
+			        }
+			      }
+			    }
+			  }
+			}
+			""";
+
+		_output.WriteLine( "Submitting job..." );
+
+		var jobId = await _fixture.ScheduleJobAsync( jobHcl );
+
+		_output.WriteLine( $"Job Id: {jobId}" );
+
+		var allocations = await _fixture.ListJobAllocationsAsync( jobId );
+
+		if ( allocations is null || allocations.Length == 0 )
+			Assert.Fail( "No job allocations" );
+
+		var allocId = allocations[0].Id;
+		var poolAndWebsiteName = $"nomad-{allocId}-app";
+
+		_output.WriteLine( $"AppPool and Website Name: {poolAndWebsiteName}" );
+
+		_fixture.AccessIIS( iis =>
+		{
+			iis.AppPool( poolAndWebsiteName ).ShouldExist();
+			iis.Website( poolAndWebsiteName ).ShouldExist();
+		} );
+
+		var screenshotData = await _fixture.TakeScreenshotAsync( allocId, "app" );
+
+		_output.WriteLine( $"Returned screenshot with a size of {screenshotData.Length / 1024}kB." );
+
+		Assert.True( screenshotData.Length > 10_000, "Invalid screenshot received." );
+
+		_output.WriteLine( "Stopping job..." );
+
+		await _fixture.StopJobAsync( jobId );
+
+		_output.WriteLine( "Job stopped." );
+	}
+#endif
 }

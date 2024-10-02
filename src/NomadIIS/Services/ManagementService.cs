@@ -25,6 +25,8 @@ public sealed class ManagementService : IHostedService
 	private int? _udpLoggerPort;
 	private UdpClient? _udpLoggerClient;
 	private Task? _udpLoggerTask;
+	private string? _placeholderAppPath;
+	private DriverConfigProcdump? _procdumpConfig;
 	private CancellationTokenSource _cts = new CancellationTokenSource();
 	private readonly ConcurrentDictionary<string, IisTaskHandle> _handles = new();
 	private readonly SemaphoreSlim _lock = new( 1, 1 );
@@ -45,6 +47,9 @@ public sealed class ManagementService : IHostedService
 	public bool DirectorySecurity => _directorySecurity;
 	public string[] AllowedTargetWebsites => _allowedTargetWebsites;
 	public int? UdpLoggerPort => _udpLoggerPort;
+	public string? PlaceholderAppPath => _placeholderAppPath;
+	public string? ProcdumpBinaryPath => _procdumpConfig?.BinaryPath ?? "C:\\procdump.exe";
+	public bool ProcdumpEulaAccepted => _procdumpConfig?.AcceptEula ?? false;
 
 	public async void Configure ( DriverConfig config )
 	{
@@ -56,6 +61,8 @@ public sealed class ManagementService : IHostedService
 		_fingerprintInterval = config.FingerprintInterval;
 		_directorySecurity = config.DirectorySecurity;
 		_allowedTargetWebsites = config.AllowedTargetWebsites ?? Array.Empty<string>();
+		_placeholderAppPath = config.PlaceholderAppPath;
+		_procdumpConfig = config.Procdumps.Length == 1 ? config.Procdumps[0] : null;
 
 		// Setup UDP logger endpoint
 		if ( config.UdpLoggerPort is not null && config.UdpLoggerPort.Value > 0 && _udpLoggerClient is null )
@@ -86,7 +93,7 @@ public sealed class ManagementService : IHostedService
 		if ( string.IsNullOrWhiteSpace( taskId ) )
 			throw new ArgumentNullException( nameof( taskId ) );
 
-		return _handles.GetOrAdd( taskId, id => new IisTaskHandle( this, id ) );
+		return _handles.GetOrAdd( taskId, id => new IisTaskHandle( this, _logger, id ) );
 	}
 
 	public IisTaskHandle GetHandle ( string taskId )
@@ -105,18 +112,25 @@ public sealed class ManagementService : IHostedService
 			return handle;
 		return null;
 	}
+	public IisTaskHandle? TryGetHandleByAllocIdAndTaskName ( string allocId, string taskName )
+	{
+		var handles = _handles.Values.ToArray();
 
-	internal async Task LockAsync ( Func<ServerManager, Task> action )
+		return handles.SingleOrDefault(
+			x => x.TaskConfig != null && x.TaskConfig.AllocId == allocId && x.TaskConfig.Name == taskName );
+	}
+
+	internal async Task LockAsync ( Func<ServerManager, Task> action, CancellationToken cancellationToken = default )
 	{
 		_ = await LockAsync( async serverManager =>
 		{
 			await action( serverManager );
 			return true;
-		} );
+		}, cancellationToken );
 	}
-	internal async Task<T> LockAsync<T> ( Func<ServerManager, Task<T>> action )
+	internal async Task<T> LockAsync<T> ( Func<ServerManager, Task<T>> action, CancellationToken cancellationToken = default )
 	{
-		await _lock.WaitAsync();
+		await _lock.WaitAsync( cancellationToken );
 
 		var serverManager = new ServerManager();
 
@@ -145,7 +159,7 @@ public sealed class ManagementService : IHostedService
 	internal void Delete ( IisTaskHandle handle )
 		=> _handles.TryRemove( handle.TaskId, out _ );
 
-	private async Task UdpLoggerReceiverTask()
+	private async Task UdpLoggerReceiverTask ()
 	{
 		if ( _udpLoggerClient is null )
 			return;
@@ -160,7 +174,7 @@ public sealed class ManagementService : IHostedService
 					.FirstOrDefault( x => x.UdpLoggerPort == result.RemoteEndPoint.Port );
 
 				if ( handle is not null )
-					await handle.ShipLogsAsync( _logger, result.Buffer );
+					await handle.ShipLogsAsync( result.Buffer );
 			}
 			catch ( Exception ex )
 			{

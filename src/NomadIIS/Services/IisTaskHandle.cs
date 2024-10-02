@@ -1,18 +1,21 @@
-﻿using Hashicorp.Nomad.Plugins.Drivers.Proto;
+﻿#if MANAGEMENT_API
+using CliWrap;
+using CliWrap.Buffered;
+#endif
+using Hashicorp.Nomad.Plugins.Drivers.Proto;
 using MessagePack;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Web.Administration;
 using NomadIIS.Services.Configuration;
-using NomadIIS.Services.Grpc;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.IO.Pipes;
 using System.Linq;
-using System.Net;
 using System.Net.NetworkInformation;
-using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Security.AccessControl;
 using System.Security.Cryptography.X509Certificates;
 using System.Security.Principal;
@@ -25,6 +28,7 @@ namespace NomadIIS.Services;
 public sealed class IisTaskHandle : IDisposable
 {
 	private readonly ManagementService _owner;
+	private readonly ILogger _logger;
 	private readonly CancellationTokenSource _ctsDisposed = new();
 
 	// Note: These fields need to be recovered by RecoverState()!
@@ -35,24 +39,28 @@ public sealed class IisTaskHandle : IDisposable
 	private readonly CpuStats _kernelModeCpuStats = new();
 	private readonly CpuStats _userModeCpuStats = new();
 
+	private bool _appPoolStoppedIntentionally = false;
+
 	private NamedPipeClientStream? _stdoutLogStream;
 
-	internal IisTaskHandle ( ManagementService owner, string taskId )
+	internal IisTaskHandle ( ManagementService owner, ILogger logger, string taskId )
 	{
 		if ( string.IsNullOrWhiteSpace( taskId ) )
 			throw new ArgumentNullException( nameof( taskId ) );
 
 		_owner = owner ?? throw new ArgumentNullException( nameof( owner ) );
+		_logger = logger;
 
 		TaskId = taskId;
 	}
 
 	public string TaskId { get; }
+	public TaskConfig? TaskConfig => _taskConfig;
 	public int? UdpLoggerPort => _state?.UdpLoggerPort;
 
-	public async Task<DriverStateV1> RunAsync ( ILogger<DriverService> logger, TaskConfig task )
+	public async Task<DriverStateV1> RunAsync ( TaskConfig task )
 	{
-		logger.LogInformation( $"Starting task {task.Id} (Alloc: {task.AllocId})..." );
+		_logger.LogInformation( $"Starting task {task.Id} (Alloc: {task.AllocId})..." );
 
 		_state = new DriverStateV1();
 
@@ -99,7 +107,7 @@ public sealed class IisTaskHandle : IDisposable
 				var appPool = FindApplicationPool( serverManager, _state.AppPoolName );
 				if ( appPool is null )
 				{
-					logger.LogInformation( $"Task {task.Id}: Creating AppPool with name {_state.AppPoolName}..." );
+					_logger.LogInformation( $"Task {task.Id}: Creating AppPool with name {_state.AppPoolName}..." );
 
 					appPool = CreateApplicationPool( serverManager, _state.AppPoolName, _taskConfig, config, _state.UdpLoggerPort, _owner.UdpLoggerPort );
 				}
@@ -117,7 +125,7 @@ public sealed class IisTaskHandle : IDisposable
 					_state.WebsiteName = website.Name;
 					_state.TaskOwnsWebsite = false;
 
-					logger.LogInformation( $"Task {task.Id}: Using target website with name {_state.WebsiteName}..." );
+					_logger.LogInformation( $"Task {task.Id}: Using target website with name {_state.WebsiteName}..." );
 				}
 				else
 				{
@@ -128,7 +136,7 @@ public sealed class IisTaskHandle : IDisposable
 
 					if ( website is null )
 					{
-						logger.LogInformation( $"Task {task.Id}: Creating Website with name {_state.WebsiteName}..." );
+						_logger.LogInformation( $"Task {task.Id}: Creating Website with name {_state.WebsiteName}..." );
 
 						website = CreateWebsite( serverManager, _state.WebsiteName, _taskConfig, config, appPool );
 					}
@@ -143,7 +151,7 @@ public sealed class IisTaskHandle : IDisposable
 						throw new InvalidOperationException( $"An application with alias {app.Alias} already exists in website {website.Name}." );
 
 					if ( application is null )
-						CreateApplication( website, appPool, _taskConfig, app );
+						CreateApplication( website, appPool, _taskConfig, app, _owner );
 				}
 
 				_state.ApplicationAliases = config.Applications.Select( x => x.Alias ).ToList();
@@ -153,7 +161,7 @@ public sealed class IisTaskHandle : IDisposable
 		}
 		catch ( Exception ex )
 		{
-			await SendTaskEventAsync( logger, $"Error: {ex.Message}" );
+			await SendTaskEventAsync( $"Error: {ex.Message}" );
 
 			throw;
 		}
@@ -161,25 +169,25 @@ public sealed class IisTaskHandle : IDisposable
 		try
 		{
 			if ( _owner.DirectorySecurity )
-				await SetupDirectoryPermissions( logger, config );
+				await SetupDirectoryPermissions( config );
 
-			await SendTaskEventAsync( logger, $"Application started, Name: {_state.AppPoolName}" );
+			await SendTaskEventAsync( $"Application started, Name: {_state.AppPoolName}" );
 		}
 		catch ( Exception ex )
 		{
-			await SendTaskEventAsync( logger, $"Error: {ex.Message}" );
+			await SendTaskEventAsync( $"Error: {ex.Message}" );
 
 			// Note: We do not rethrow here because the website has already been set-up.
 		}
 
 		return _state;
 	}
-	public async Task StopAsync ( ILogger<DriverService> logger )
+	public async Task StopAsync ()
 	{
 		if ( _state is null || _taskConfig is null || string.IsNullOrEmpty( _state.AppPoolName ) || string.IsNullOrEmpty( _state.WebsiteName ) )
 			throw new InvalidOperationException( "Invalid state." );
 
-		logger.LogInformation( $"Stopping task {_taskConfig.Id} (Alloc: {_taskConfig.AllocId})..." );
+		_logger.LogInformation( $"Stopping task {_taskConfig.Id} (Alloc: {_taskConfig.AllocId})..." );
 
 		await _owner.LockAsync( serverManager =>
 		{
@@ -195,7 +203,7 @@ public sealed class IisTaskHandle : IDisposable
 				}
 				catch ( Exception ex )
 				{
-					logger.LogWarning( ex, $"Failed to stop AppPool {_state.AppPoolName}." );
+					_logger.LogWarning( ex, $"Failed to stop AppPool {_state.AppPoolName}." );
 				}
 			}
 
@@ -214,7 +222,7 @@ public sealed class IisTaskHandle : IDisposable
 						}
 					}
 					else
-						logger.LogWarning( "Invalid state. Missing _applicationAliases." );
+						_logger.LogWarning( "Invalid state. Missing _applicationAliases." );
 				}
 				else
 				{
@@ -229,19 +237,19 @@ public sealed class IisTaskHandle : IDisposable
 			return Task.CompletedTask;
 		} );
 	}
-	public async Task DestroyAsync ( ILogger<DriverService> logger )
+	public async Task DestroyAsync ()
 	{
-		await StopAsync( logger );
+		await StopAsync();
 	}
 
-	public void RecoverState ( ILogger logger, RecoverTaskRequest request )
+	public void RecoverState ( RecoverTaskRequest request )
 	{
 		// Note: request.TaskId is null/empty here.
 		// Also request.Handle.Config.MsgpackDriverConfig is allways empty.
 
 		_taskConfig = request.Handle.Config;
 
-		logger.LogInformation( $"Recovering task {_taskConfig.Id} (Alloc: {_taskConfig.AllocId})..." );
+		_logger.LogInformation( $"Recovering task {_taskConfig.Id} (Alloc: {_taskConfig.AllocId})..." );
 
 		if ( request.Handle.DriverState is not null && !request.Handle.DriverState.IsEmpty )
 		{
@@ -253,10 +261,10 @@ public sealed class IisTaskHandle : IDisposable
 		else
 			throw new InvalidOperationException( "Invalid state." );
 
-		logger.LogInformation( $"Recovered task {_taskConfig.Id} from state: {_state}" );
+		_logger.LogInformation( $"Recovered task {_taskConfig.Id} from state: {_state}" );
 	}
 
-	public async Task SignalAsync ( ILogger<DriverService> logger, string signal )
+	public async Task SignalAsync ( string signal )
 	{
 		if ( string.IsNullOrEmpty( signal ) )
 			return;
@@ -266,35 +274,29 @@ public sealed class IisTaskHandle : IDisposable
 
 		switch ( signal.ToUpperInvariant() )
 		{
+			case "START":
+				await StartAppPoolAsync();
+				break;
+			case "STOP":
+				await StopAppPoolAsync();
+				break;
+
 			case "SIGHUP":
 			case "RECYCLE":
-				await _owner.LockAsync( async serverManager =>
-				{
-					var appPool = GetApplicationPool( serverManager, _state.AppPoolName );
-
-					if ( appPool is not null )
-					{
-						logger.LogInformation( $"Recycle AppPool {_state.AppPoolName}" );
-
-						appPool.Recycle();
-
-						await SendTaskEventAsync( logger, $"ApplicationPool recycled, Name = {_state.AppPoolName}" );
-					}
-				} );
-
+				await RecycleAppPoolAsync();
 				break;
 
 			case "SIGINT":
 			case "SIGKILL":
-				await StopAsync( logger );
+				await StopAsync();
 				break;
 
 			default:
-				logger.LogInformation( $"Unsupported signal {signal} received." );
+				_logger.LogInformation( $"Unsupported signal {signal} received." );
 				break;
 		}
 	}
-	public async Task<int> WaitAsync ( ILogger<DriverService> logger )
+	public async Task<int> WaitAsync ()
 	{
 		var exitCode = 0;
 
@@ -314,9 +316,12 @@ public sealed class IisTaskHandle : IDisposable
 				{
 					var appPool = FindApplicationPool( serverManager, _state.AppPoolName );
 
+					if ( _appPoolStoppedIntentionally )
+						return Task.FromResult( 0 );
+
 					if ( appPool is not null )
 					{
-						logger.LogDebug( $"AppPool {_state.AppPoolName} is in state {appPool.State}" );
+						_logger.LogDebug( $"AppPool {_state.AppPoolName} is in state {appPool.State}" );
 
 						if ( appPool.State == ObjectState.Stopped )
 							return Task.FromResult( -1 );
@@ -338,7 +343,7 @@ public sealed class IisTaskHandle : IDisposable
 		return exitCode;
 	}
 
-	public async Task<TaskResourceUsage> GetStatisticsAsync ( ILogger<DriverService> logger )
+	public async Task<TaskResourceUsage> GetStatisticsAsync ()
 	{
 		if ( _state is null || string.IsNullOrEmpty( _state.AppPoolName ) )
 			throw new InvalidOperationException( "Invalid state." );
@@ -588,15 +593,37 @@ public sealed class IisTaskHandle : IDisposable
 
 	private static Application? FindApplicationByPath ( Site website, string path )
 		=> website.Applications.FirstOrDefault( x => x.Path == path );
-	private static Application CreateApplication ( Site website, ApplicationPool appPool, TaskConfig taskConfig, DriverTaskConfigApplication appConfig )
+	private static Application CreateApplication ( Site website, ApplicationPool appPool, TaskConfig taskConfig, DriverTaskConfigApplication appConfig, ManagementService managementService )
 	{
+		if ( string.IsNullOrEmpty( appConfig.Path ) )
+			throw new ArgumentNullException( $"Missing application path." );
+
 		var alias = $"/{appConfig.Alias}";
 		var physicalPath = appConfig.Path.Replace( '/', '\\' );
 
+		// If the path is not an absolute path, make it relative to the task-directory.
 		if ( !Path.IsPathRooted( physicalPath ) )
 			physicalPath = Path.Combine( taskConfig.AllocDir, taskConfig.Name, physicalPath );
 
-		var application = website.Applications.Add( alias, physicalPath );
+		var diPhysicalPath = new DirectoryInfo( physicalPath );
+
+		// Check if we want to use a placeholder app
+		if ( Directory.Exists( managementService.PlaceholderAppPath ) )
+		{
+			var directoryIsNew = false;
+
+			if ( !diPhysicalPath.Exists )
+			{
+				diPhysicalPath.Create();
+				directoryIsNew = true;
+			}
+
+			// If the directory is new or empty, copy the placeholder app
+			if ( directoryIsNew || !diPhysicalPath.EnumerateFileSystemInfos().Any() )
+				FileSystemHelper.CopyDirectory( managementService.PlaceholderAppPath, diPhysicalPath.FullName );
+		}
+
+		var application = website.Applications.Add( alias, diPhysicalPath.FullName );
 
 		application.ApplicationPoolName = appPool.Name;
 
@@ -637,7 +664,7 @@ public sealed class IisTaskHandle : IDisposable
 		return false;
 	}
 
-	private async Task SendTaskEventAsync ( ILogger logger, string message )
+	private async Task SendTaskEventAsync ( string message )
 	{
 		if ( _taskConfig is null )
 			return;
@@ -655,29 +682,29 @@ public sealed class IisTaskHandle : IDisposable
 		}
 		catch ( Exception ex )
 		{
-			logger.LogError( ex, "Failed to send task event." );
+			_logger?.LogError( ex, "Failed to send task event." );
 		}
 	}
 
-	private async Task SetupDirectoryPermissions ( ILogger logger, DriverTaskConfig config )
+	private async Task SetupDirectoryPermissions ( DriverTaskConfig config )
 	{
 		try
 		{
 			// GH-43: It may happen that this throws an IdentityNotMappedException sometimes.
 			// I think setting up the AppPoolIdentity takes some time.
 			// So if we're too early, we try again in 2 seconds.
-			SetupDirectoryPermissionsCore( logger, config );
+			SetupDirectoryPermissionsCore( config );
 		}
 		catch ( IdentityNotMappedException ex )
 		{
-			logger.LogDebug( ex, "Failed to setup directory permissions for allocation {allocation}. Retrying in 2 seconds...", _taskConfig?.AllocId );
+			_logger.LogDebug( ex, "Failed to setup directory permissions for allocation {allocation}. Retrying in 2 seconds...", _taskConfig?.AllocId );
 
 			await Task.Delay( 2000 );
 
-			SetupDirectoryPermissionsCore( logger, config );
+			SetupDirectoryPermissionsCore( config );
 		}
 	}
-	private void SetupDirectoryPermissionsCore ( ILogger logger, DriverTaskConfig config )
+	private void SetupDirectoryPermissionsCore ( DriverTaskConfig config )
 	{
 		// https://developer.hashicorp.com/nomad/docs/concepts/filesystem
 		// https://learn.microsoft.com/en-us/troubleshoot/developer/webapps/iis/www-authentication-authorization/default-permissions-user-rights
@@ -691,19 +718,19 @@ public sealed class IisTaskHandle : IDisposable
 
 		var allocDir = new DirectoryInfo( _taskConfig!.AllocDir );
 
-		var builtinUsersSid = TryGetSid( WellKnownSidType.BuiltinUsersSid, logger );
-		var authenticatedUserSid = TryGetSid( WellKnownSidType.AuthenticatedUserSid, logger );
+		var builtinUsersSid = TryGetSid( WellKnownSidType.BuiltinUsersSid );
+		var authenticatedUserSid = TryGetSid( WellKnownSidType.AuthenticatedUserSid );
 
-		SetupDirectory( [appPoolIdentity], @"alloc", null, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, logger );
-		SetupDirectory( [appPoolIdentity], @"alloc\data", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, logger );
-		SetupDirectory( [appPoolIdentity], @"alloc\logs", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, logger );
-		SetupDirectory( [appPoolIdentity], @"alloc\tmp", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, logger );
-		SetupDirectory( null, $@"{_taskConfig.Name}\private", null, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, logger );
-		SetupDirectory( identities, $@"{_taskConfig.Name}\local", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, logger );
-		SetupDirectory( [appPoolIdentity], $@"{_taskConfig.Name}\secrets", FileSystemRights.Read, InheritanceFlags.ObjectInherit, PropagationFlags.InheritOnly, logger );
-		SetupDirectory( [appPoolIdentity], $@"{_taskConfig.Name}\tmp", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, logger );
+		SetupDirectory( [appPoolIdentity], @"alloc", null, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
+		SetupDirectory( [appPoolIdentity], @"alloc\data", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
+		SetupDirectory( [appPoolIdentity], @"alloc\logs", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
+		SetupDirectory( [appPoolIdentity], @"alloc\tmp", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
+		SetupDirectory( null, $@"{_taskConfig.Name}\private", null, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
+		SetupDirectory( identities, $@"{_taskConfig.Name}\local", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
+		SetupDirectory( [appPoolIdentity], $@"{_taskConfig.Name}\secrets", FileSystemRights.Read, InheritanceFlags.ObjectInherit, PropagationFlags.InheritOnly );
+		SetupDirectory( [appPoolIdentity], $@"{_taskConfig.Name}\tmp", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
 
-		void SetupDirectory ( string[]? identities, string subDirectory, FileSystemRights? fileSystemRights, InheritanceFlags inheritanceFlags, PropagationFlags propagationFlags, ILogger logger )
+		void SetupDirectory ( string[]? identities, string subDirectory, FileSystemRights? fileSystemRights, InheritanceFlags inheritanceFlags, PropagationFlags propagationFlags )
 		{
 			var directory = allocDir;
 
@@ -747,7 +774,7 @@ public sealed class IisTaskHandle : IDisposable
 #pragma warning restore CA1416 // Plattformkompatibilität überprüfen
 	}
 
-	private SecurityIdentifier? TryGetSid ( WellKnownSidType sidType, ILogger logger )
+	private SecurityIdentifier? TryGetSid ( WellKnownSidType sidType )
 	{
 #pragma warning disable CA1416 // Plattformkompatibilität überprüfen
 		try
@@ -756,7 +783,7 @@ public sealed class IisTaskHandle : IDisposable
 		}
 		catch ( Exception ex )
 		{
-			logger.LogWarning( ex, $"Failed to get SID {sidType}." );
+			_logger.LogWarning( ex, $"Failed to get SID {sidType}." );
 
 			return null;
 		}
@@ -782,7 +809,7 @@ public sealed class IisTaskHandle : IDisposable
 
 
 
-	internal async Task ShipLogsAsync ( ILogger logger, byte[] data )
+	internal async Task ShipLogsAsync ( byte[] data )
 	{
 		if ( _taskConfig?.StdoutPath is null )
 			return;
@@ -832,6 +859,267 @@ public sealed class IisTaskHandle : IDisposable
 
 		return 0;
 	}
+
+	public async Task StartAppPoolAsync ()
+	{
+		if ( _state is null || string.IsNullOrEmpty( _state.AppPoolName ) )
+			throw new InvalidOperationException( "Invalid state." );
+
+		await _owner.LockAsync( async serverManager =>
+		{
+			var appPool = GetApplicationPool( serverManager, _state.AppPoolName );
+
+			try
+			{
+				if ( appPool.State == ObjectState.Stopped )
+					appPool.Start();
+			}
+			catch ( COMException )
+			{
+				// Sometimes, restarting the pool too fast doesn't work.
+				// So we wait a bit and try again.
+				await Task.Delay( 2000 );
+				if ( appPool.State == ObjectState.Stopped )
+					appPool.Start();
+			}
+
+			_appPoolStoppedIntentionally = false;
+
+			return Task.CompletedTask;
+		} );
+
+		await SendTaskEventAsync( $"ApplicationPool started, Name = {_state.AppPoolName}" );
+	}
+	public async Task StopAppPoolAsync ()
+	{
+		if ( _state is null || string.IsNullOrEmpty( _state.AppPoolName ) )
+			throw new InvalidOperationException( "Invalid state." );
+
+		await _owner.LockAsync( serverManager =>
+		{
+			var appPool = GetApplicationPool( serverManager, _state.AppPoolName );
+
+			_appPoolStoppedIntentionally = true;
+			if ( appPool.State == ObjectState.Started )
+				appPool.Stop();
+
+			return Task.CompletedTask;
+		} );
+
+		await SendTaskEventAsync( $"ApplicationPool stopped, Name = {_state.AppPoolName}" );
+	}
+	public async Task RecycleAppPoolAsync ()
+	{
+		if ( _state is null || string.IsNullOrEmpty( _state.AppPoolName ) )
+			throw new InvalidOperationException( "Invalid state." );
+
+		await _owner.LockAsync( serverManager =>
+		{
+			var appPool = GetApplicationPool( serverManager, _state.AppPoolName );
+
+			appPool.Recycle();
+
+			return Task.CompletedTask;
+		} );
+
+		await SendTaskEventAsync( $"ApplicationPool recycled, Name = {_state.AppPoolName}" );
+	}
+
+	#region Management API Methods
+#if MANAGEMENT_API
+	public async Task<NomadIIS.ManagementApi.ApiModel.TaskStatusResponse> GetStatusAsync ()
+	{
+		if ( _state is null || _taskConfig is null || string.IsNullOrEmpty( _state.AppPoolName ) )
+			throw new InvalidOperationException( "Invalid state." );
+
+		return await _owner.LockAsync( serverManager =>
+		{
+			var appPool = GetApplicationPool( serverManager, _state.AppPoolName );
+
+			var isWorkerProcessRunning = appPool.WorkerProcesses.Any(
+				x => x.State == WorkerProcessState.Starting || x.State == WorkerProcessState.Running );
+
+			return Task.FromResult( new NomadIIS.ManagementApi.ApiModel.TaskStatusResponse()
+			{
+				AllocId = _taskConfig.AllocId,
+				TaskName = _taskConfig.Name,
+				ApplicationPool = new NomadIIS.ManagementApi.ApiModel.ApplicationPool()
+				{
+					Status = (NomadIIS.ManagementApi.ApiModel.ApplicationPoolStatus)(int)appPool.State,
+					IsWorkerProcessRunning = isWorkerProcessRunning
+				}
+			} );
+		} );
+	}
+
+	public async Task DownloadFileAsync ( HttpResponse response, string path )
+	{
+		if ( _state is null || _taskConfig is null || string.IsNullOrEmpty( _state.AppPoolName ) )
+			throw new InvalidOperationException( "Invalid state." );
+
+		path = FileSystemHelper.SanitizeRelativePath( path );
+
+		var physicalPath = Path.Combine( _taskConfig.AllocDir, _taskConfig.Name, path );
+
+		if ( File.Exists( physicalPath ) )
+		{
+			response.Headers.ContentType = "application/octet-stream";
+			response.Headers.ContentDisposition = $"attachment; filename=\"{Path.GetFileName( physicalPath )}\"";
+			response.StatusCode = StatusCodes.Status200OK;
+
+			await response.StartAsync();
+
+			using var fs = File.OpenRead( physicalPath );
+			await fs.CopyToAsync( response.Body );
+		}
+		else
+		{
+			response.Headers.ContentType = "application/zip";
+			response.Headers.ContentDisposition = $"attachment; filename=\"{Path.GetFileName( physicalPath )}.zip\"";
+			response.StatusCode = StatusCodes.Status200OK;
+
+			await response.StartAsync();
+
+			ZipFile.CreateFromDirectory( physicalPath, response.Body );
+		}
+	}
+	public async Task UploadFileAsync ( Stream stream, bool isZip, string path, bool hot, bool cleanFolder )
+	{
+		if ( stream is null )
+			throw new ArgumentNullException( nameof( stream ) );
+
+		if ( _state is null || _taskConfig is null || string.IsNullOrEmpty( _state.AppPoolName ) )
+			throw new InvalidOperationException( "Invalid state." );
+
+		path = FileSystemHelper.SanitizeRelativePath( path );
+
+		try
+		{
+			if ( !hot )
+			{
+				await StopAppPoolAsync();
+				await Task.Delay( 500 );
+			}
+
+			var physicalPath = Path.Combine( _taskConfig.AllocDir, _taskConfig.Name, path );
+
+			if ( cleanFolder )
+				FileSystemHelper.CleanFolder( physicalPath );
+
+			if ( isZip )
+			{
+				using var archive = new ZipArchive( stream );
+				archive.ExtractToDirectory( physicalPath );
+			}
+			else
+			{
+				using var fs = File.OpenWrite( physicalPath );
+				await stream.CopyToAsync( fs );
+			}
+		}
+		finally
+		{
+			if ( !hot )
+				await StartAppPoolAsync();
+		}
+	}
+	public Task DeleteFileAsync ( string path )
+	{
+		if ( _state is null || _taskConfig is null || string.IsNullOrEmpty( _state.AppPoolName ) )
+			throw new InvalidOperationException( "Invalid state." );
+
+		path = FileSystemHelper.SanitizeRelativePath( path );
+
+		string physicalPath;
+
+		if ( path.EndsWith( "/*" ) || path.EndsWith( "/*.*" ) )
+		{
+			if ( path.EndsWith( "/*" ) )
+				path = path[..^2];
+			else
+				path = path[..^4];
+
+			physicalPath = Path.Combine( _taskConfig.AllocDir, _taskConfig.Name, path );
+			FileSystemHelper.CleanFolder( physicalPath );
+			return Task.CompletedTask;
+		}
+
+		physicalPath = Path.Combine( _taskConfig.AllocDir, _taskConfig.Name, path );
+
+		if ( File.Exists( physicalPath ) )
+			File.Delete( physicalPath );
+		else
+			Directory.Delete( physicalPath, true );
+
+		return Task.CompletedTask;
+	}
+
+	public async Task<byte[]?> TakeScreenshotAsync ( string path = "/", CancellationToken cancellationToken = default )
+	{
+		if ( _state is null || string.IsNullOrEmpty( _state.AppPoolName ) )
+			throw new InvalidOperationException( "Invalid state." );
+
+		if ( string.IsNullOrEmpty( path ) || !path.StartsWith( '/' ) )
+			path = $"/{path}";
+
+		var port = await _owner.LockAsync( serverManager =>
+		{
+			var site = serverManager.Sites.First( x => x.Name == _state.WebsiteName );
+
+			var httpBinding = site.Bindings.FirstOrDefault( x => x.Protocol == "http" )?.EndPoint;
+
+			return Task.FromResult( httpBinding?.Port );
+		}, cancellationToken );
+
+		if ( port is null )
+			return null;
+
+		return await PlaywrightHelper.TakeScreenshotAsync( $"http://localhost:{port}{path}", cancellationToken );
+	}
+
+	public async Task TakeProcessDump ( FileInfo targetFile, CancellationToken cancellationToken = default )
+	{
+		if ( _state is null || string.IsNullOrEmpty( _state.AppPoolName ) )
+			throw new InvalidOperationException( "Invalid state." );
+
+		if ( string.IsNullOrEmpty( _owner.ProcdumpBinaryPath ) )
+			throw new NotSupportedException( $"Missing procdump_binary_path in driver configuration." );
+		if ( !File.Exists( _owner.ProcdumpBinaryPath ) )
+			throw new NotSupportedException( $"{_owner.ProcdumpBinaryPath} is not available." );
+
+		if ( !_owner.ProcdumpEulaAccepted )
+			throw new InvalidOperationException( "Procdump EULA has not been accepted." );
+
+		var w3wpPids = await _owner.LockAsync( serverManager =>
+		{
+			var appPool = GetApplicationPool( serverManager, _state.AppPoolName );
+
+			return Task.FromResult( appPool.WorkerProcesses.Select( x => x.ProcessId ).ToArray() );
+		}, cancellationToken );
+
+		if ( w3wpPids is null || w3wpPids.Length == 0 )
+			throw new InvalidOperationException( "No w3wp process running." );
+
+		var pid = w3wpPids[0];
+
+		var procdump = Cli.Wrap( _owner.ProcdumpBinaryPath )
+			.WithArguments( x => x
+				.Add( "-accepteula" )
+				.Add( "-ma" )
+				.Add( pid )
+				.Add( targetFile.FullName ) )
+			.WithValidation( CommandResultValidation.None );
+
+		cancellationToken.ThrowIfCancellationRequested();
+
+		var result = await procdump.ExecuteBufferedAsync( cancellationToken );
+
+		if ( !targetFile.Exists || targetFile.Length == 0 )
+			throw new Exception( result.StandardOutput + Environment.NewLine + result.StandardError );
+	}
+
+#endif
+	#endregion
 
 	private class CpuStats
 	{

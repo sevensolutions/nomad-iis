@@ -15,9 +15,10 @@ jobs:
     strategy:
       matrix:
         profile:
-          - name: "default"
-            publishProfile: "Release.pubxml"
+          - publishProfile: "Release.pubxml"
             artifactName: "nomad_iis"
+          - publishProfile: "ReleaseWithMgmtApi.pubxml"
+            artifactName: "nomad_iis_mgmt_api"
 
     steps:
     - name: Checkout

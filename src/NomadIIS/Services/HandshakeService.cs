@@ -31,7 +31,7 @@ public sealed class HandshakeService : IHostedService
 	private void OnServerStarted ()
 	{
 		var addressFeature = _server.Features.GetRequiredFeature<IServerAddressesFeature>();
-		var address = addressFeature.Addresses.First();
+		var address = addressFeature.Addresses.First( x => x.Contains( "127.0.0.1" ) );
 
 		string connection = "";
 		if ( address.StartsWith( "http://" ) )
