@@ -115,12 +115,19 @@ jobs:
         name: nomad_iis
         path: artifacts
 
+    - name: Setup tmate session
+      uses: mxschmitt/action-tmate@v3
+      with:
+        detached: true
+
     # TODO: -p:DefineConstants="MANAGEMENT_API"
     - name: Run tests
-      # TODO: I think we don't need this. We're already admin.
       run: |
-        $script = 'dotnet test src\NomadIIS.Tests\NomadIIS.Tests.csproj -e TEST_PLUGIN_DIRECTORY=artifacts'
-        $script | Out-File test.ps1
-        .\test.ps1 -RunAsAdmin
+        dotnet test src\NomadIIS.Tests\NomadIIS.Tests.csproj -e TEST_PLUGIN_DIRECTORY=artifacts
+      # TODO: I think we don't need this. We're already admin.
+      # run: |
+      #   $script = 'dotnet test src\NomadIIS.Tests\NomadIIS.Tests.csproj -e TEST_PLUGIN_DIRECTORY=artifacts'
+      #   $script | Out-File test.ps1
+      #   .\test.ps1 -RunAsAdmin
 
 # cat ./src/NomadIIS/PluginInfo.cs | grep -oP 'public static readonly string Version = "([0-9]+\.[0-9]+\.[0-9])";'
