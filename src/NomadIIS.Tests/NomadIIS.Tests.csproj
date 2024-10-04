@@ -9,7 +9,8 @@
     <IsTestProject>true</IsTestProject>
   </PropertyGroup>
 
-	<PropertyGroup Condition="'$(Configuration)' == 'Debug' And '$(CI_PIPELINE)' == ''">
+	<!-- Note: This is just a default for development and is not enabled when running in CI. -->
+	<PropertyGroup Condition="'$(Configuration)' == 'Debug' And '$(RUNNING_IN_CI)' == ''">
 		<DefineConstants>MANAGEMENT_API;$(DefineConstants)</DefineConstants>
 	</PropertyGroup>
 

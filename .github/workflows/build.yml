@@ -53,6 +53,12 @@ jobs:
     runs-on: windows-latest
     needs: ["build"]
 
+    strategy:
+      matrix:
+        profile:
+          - artifactName: "nomad_iis"
+          - artifactName: "nomad_iis_mgmt_api"
+
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -112,7 +118,7 @@ jobs:
     # Download nomad_iis.exe
     - uses: actions/download-artifact@master
       with:
-        name: nomad_iis
+        name: ${{ matrix.profile.artifactName }}
         path: artifacts
 
     # - name: Setup tmate session
@@ -123,8 +129,9 @@ jobs:
     # TODO: -p:DefineConstants="MANAGEMENT_API"
     - name: Run tests
       env:
-        CI_PIPELINE: true
+        RUNNING_IN_CI: true
         TEST_PLUGIN_DIRECTORY: ..\..\..\..\..\artifacts # Relative to bin\Debug\net8.0
+        MANAGEMENT_API: ${{ matrix.profile.artifactName == 'nomad_iis_mgmt_api' && 'true' || '' }}
       run: |
         dotnet test src\NomadIIS.Tests\NomadIIS.Tests.csproj
       #  Get-Content -Path "src\NomadIIS.Tests\bin\Debug\net8.0\debug.test.txt"
