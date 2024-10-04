@@ -123,7 +123,7 @@ jobs:
     # TODO: -p:DefineConstants="MANAGEMENT_API"
     - name: Run tests
       env:
-        TEST_PLUGIN_DIRECTORY: artifacts
+        TEST_PLUGIN_DIRECTORY: ..\..\..\..\..\artifacts # Relative to bin\Debug\net8.0
       run: |
         dotnet test src\NomadIIS.Tests\NomadIIS.Tests.csproj
         Get-Content -Path "src\NomadIIS.Tests\bin\Debug\net8.0\debug.test.txt"
