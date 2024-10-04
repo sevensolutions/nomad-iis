@@ -35,4 +35,3 @@ jobs:
       with:
         files: ./nomad_iis_mgmt_api
         dest: nomad_iis_mgmt_api.zip
-    
