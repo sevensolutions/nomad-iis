@@ -126,6 +126,7 @@ jobs:
         TEST_PLUGIN_DIRECTORY: artifacts
       run: |
         dotnet test src\NomadIIS.Tests\NomadIIS.Tests.csproj
+        Get-Content -Path "src\NomadIIS.Tests\bin\Debug\net8.0\debug.test.txt"
       # TODO: I think we don't need this. We're already admin.
       # run: |
       #   $script = 'dotnet test src\NomadIIS.Tests\NomadIIS.Tests.csproj -e TEST_PLUGIN_DIRECTORY=artifacts'

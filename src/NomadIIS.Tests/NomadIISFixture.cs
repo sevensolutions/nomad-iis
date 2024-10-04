@@ -66,9 +66,11 @@ public sealed class NomadIISFixture : IAsyncLifetime
 		var configFile = Path.GetFullPath( @"Data\configs\default.hcl" );
 #endif
 
-		_messageSink.OnMessage( new DiagnosticMessage( "Data Directory: {0}", dataDirectory ) );
-		_messageSink.OnMessage( new DiagnosticMessage( "Plugin Directory: {0}", pluginDirectory ) );
-		_messageSink.OnMessage( new DiagnosticMessage( "Config File: {0}", configFile ) );
+		File.AppendAllLines( "debug.test.txt", [
+			$"Data Directory: {dataDirectory}",
+			$"Plugin Directory: {pluginDirectory}",
+			$"Config File: {configFile}"
+		] );
 
 		_nomadThread = new Thread( async () =>
 		{
