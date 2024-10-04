@@ -122,8 +122,10 @@ jobs:
 
     # TODO: -p:DefineConstants="MANAGEMENT_API"
     - name: Run tests
+      env:
+        TEST_PLUGIN_DIRECTORY: artifacts
       run: |
-        dotnet test src\NomadIIS.Tests\NomadIIS.Tests.csproj -e TEST_PLUGIN_DIRECTORY=artifacts
+        dotnet test src\NomadIIS.Tests\NomadIIS.Tests.csproj
       # TODO: I think we don't need this. We're already admin.
       # run: |
       #   $script = 'dotnet test src\NomadIIS.Tests\NomadIIS.Tests.csproj -e TEST_PLUGIN_DIRECTORY=artifacts'
