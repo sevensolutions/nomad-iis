@@ -19,7 +19,7 @@ jobs:
     - uses: actions/download-artifact@master
       with:
         name: version
-        path: version
+        path: version # Note: This downloads into a folder "version"
         github-token: ${{ github.token }}
         run-id: ${{ github.event.inputs.runId }}
     - uses: actions/download-artifact@master
@@ -38,7 +38,7 @@ jobs:
     # Read version
     - name: read version
       run: |
-        version=`cat ./version`
+        version=`cat ./version/version`
         echo 'Version: ${version}'
         echo "VERSION=${version}" >> $GITHUB_ENV
 
