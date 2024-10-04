@@ -1,0 +1,38 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      runId:
+        description: "The id of the workflow run to create the release from"
+        required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    # Download artifacts
+    - uses: actions/download-artifact@master
+      with:
+        name: nomad_iis
+        path: nomad_iis
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        run-id: ${{ github.event.inputs.runId }}
+    - uses: actions/download-artifact@master
+      with:
+        name: nomad_iis_mgmt_api
+        path: nomad_iis_mgmt_api
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        run-id: ${{ github.event.inputs.runId }}
+
+    # Zip the artifacts
+    - uses: vimtor/action-zip@v1.2
+      with:
+        files: ./nomad_iis
+        dest: nomad_iis.zip
+    - uses: vimtor/action-zip@v1.2
+      with:
+        files: ./nomad_iis_mgmt_api
+        dest: nomad_iis_mgmt_api.zip
+    
