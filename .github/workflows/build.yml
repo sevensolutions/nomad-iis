@@ -131,14 +131,13 @@ jobs:
       env:
         RUNNING_IN_CI: true
         TEST_PLUGIN_DIRECTORY: ..\..\..\..\..\artifacts # Relative to bin\Debug\net8.0
-        MANAGEMENT_API: ${{ matrix.profile.artifactName == 'nomad_iis_mgmt_api' && 'true' || '' }}
+        #MANAGEMENT_API: ${{ matrix.profile.artifactName == 'nomad_iis_mgmt_api' && 'true' || '' }}
       run: |
-        dotnet test src\NomadIIS.Tests\NomadIIS.Tests.csproj
+        $args = ''
+        if ('${{ matrix.profile.artifactName }}' -eq 'nomad_iis_mgmt_api') {
+          $args = '-p:DefineConstants="MANAGEMENT_API"'
+        }
+        dotnet test src\NomadIIS.Tests\NomadIIS.Tests.csproj ${args}
       #  Get-Content -Path "src\NomadIIS.Tests\bin\Debug\net8.0\debug.test.txt"
-      # TODO: I think we don't need this. We're already admin.
-      # run: |
-      #   $script = 'dotnet test src\NomadIIS.Tests\NomadIIS.Tests.csproj -e TEST_PLUGIN_DIRECTORY=artifacts'
-      #   $script | Out-File test.ps1
-      #   .\test.ps1 -RunAsAdmin
 
 # cat ./src/NomadIIS/PluginInfo.cs | grep -oP 'public static readonly string Version = "([0-9]+\.[0-9]+\.[0-9])";'
