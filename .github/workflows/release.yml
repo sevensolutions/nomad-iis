@@ -38,9 +38,9 @@ jobs:
     # Read version
     - name: read version
       run: |
-        $version = Get-Content .\version -Raw
-        Write-Host 'Version: ${version}'
-        echo "VERSION=${version}" >> $env:GITHUB_ENV
+        version=`cat ./version`
+        echo 'Version: ${version}'
+        echo "VERSION=${version}" >> $GITHUB_ENV
 
     # Zip the artifacts
     - uses: vimtor/action-zip@v1.2
