@@ -18,6 +18,12 @@ jobs:
     # Download artifacts
     - uses: actions/download-artifact@master
       with:
+        name: version
+        path: version
+        github-token: ${{ github.token }}
+        run-id: ${{ github.event.inputs.runId }}
+    - uses: actions/download-artifact@master
+      with:
         name: nomad_iis
         path: nomad_iis
         github-token: ${{ github.token }}
@@ -28,6 +34,13 @@ jobs:
         path: nomad_iis_mgmt_api
         github-token: ${{ github.token }}
         run-id: ${{ github.event.inputs.runId }}
+
+    # Read version
+    - name: read version
+      run: |
+        $version = Get-Content .\version -Raw
+        Write-Host 'Version: ${version}'
+        echo "VERSION=${version}" >> $env:GITHUB_ENV
 
     # Zip the artifacts
     - uses: vimtor/action-zip@v1.2
@@ -43,8 +56,8 @@ jobs:
     - name: create release
       uses: softprops/action-gh-release@v2
       with:
-        name: vTODO
-        tag_name: vTODO
+        name: v${{ env.VERSION }}
+        tag_name: v${{ env.VERSION }}
         draft: true
         files: |
           nomad_iis.zip
