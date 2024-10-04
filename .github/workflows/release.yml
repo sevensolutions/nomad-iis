@@ -28,11 +28,11 @@ jobs:
 
     # Zip the artifacts
     - uses: vimtor/action-zip@v1.2
-        with:
-          files: ./nomad_iis
-          dest: nomad_iis.zip
+      with:
+        files: ./nomad_iis
+        dest: nomad_iis.zip
     - uses: vimtor/action-zip@v1.2
-        with:
-          files: ./nomad_iis_mgmt_api
-          dest: nomad_iis_mgmt_api.zip
+      with:
+        files: ./nomad_iis_mgmt_api
+        dest: nomad_iis_mgmt_api.zip
     
