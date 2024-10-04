@@ -8,11 +8,15 @@ using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text;
 using System.Threading;
+using Xunit.Abstractions;
+using Xunit.Sdk;
 
 namespace NomadIIS.Tests;
 
 public sealed class NomadIISFixture : IAsyncLifetime
 {
+	private readonly IMessageSink _messageSink;
+
 	private readonly HttpClient _httpClient;
 #if MANAGEMENT_API
 	private readonly HttpClient _apiHttpClient;
@@ -20,8 +24,10 @@ public sealed class NomadIISFixture : IAsyncLifetime
 	private CancellationTokenSource _ctsNomad = new CancellationTokenSource();
 	private Thread? _nomadThread;
 
-	public NomadIISFixture ()
+	public NomadIISFixture ( IMessageSink messageSink )
 	{
+		_messageSink = messageSink;
+
 		_httpClient = new HttpClient()
 		{
 			BaseAddress = new Uri( "http://localhost:4646/v1/" ),
@@ -53,12 +59,16 @@ public sealed class NomadIISFixture : IAsyncLifetime
 			pluginDir = @"..\..\..\..\NomadIIS\bin\Debug\net8.0";
 
 		var pluginDirectory = Path.GetFullPath( pluginDir );
-		
+
 #if MANAGEMENT_API
 		var configFile = Path.GetFullPath( @"Data\configs\with_api.hcl" );
 #else
 		var configFile = Path.GetFullPath( @"Data\configs\default.hcl" );
 #endif
+
+		_messageSink.OnMessage( new DiagnosticMessage( "Data Directory: {0}", dataDirectory ) );
+		_messageSink.OnMessage( new DiagnosticMessage( "Plugin Directory: {0}", pluginDirectory ) );
+		_messageSink.OnMessage( new DiagnosticMessage( "Config File: {0}", configFile ) );
 
 		_nomadThread = new Thread( async () =>
 		{
@@ -85,7 +95,7 @@ public sealed class NomadIISFixture : IAsyncLifetime
 			}
 			catch ( Exception ex )
 			{
-				Debug.WriteLine( ex.Message );
+				_messageSink.OnMessage( new DiagnosticMessage( ex.Message ) );
 			}
 		} );
 
