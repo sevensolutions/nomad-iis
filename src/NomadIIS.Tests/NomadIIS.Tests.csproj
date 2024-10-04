@@ -9,7 +9,7 @@
     <IsTestProject>true</IsTestProject>
   </PropertyGroup>
 
-	<PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+	<PropertyGroup Condition="'$(Configuration)' == 'Debug' And '$(CI_PIPELINE)' == ''">
 		<DefineConstants>MANAGEMENT_API;$(DefineConstants)</DefineConstants>
 	</PropertyGroup>
 

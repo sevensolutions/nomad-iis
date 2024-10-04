@@ -115,18 +115,19 @@ jobs:
         name: nomad_iis
         path: artifacts
 
-    - name: Setup tmate session
-      uses: mxschmitt/action-tmate@v3
-      with:
-        detached: true
+    # - name: Setup tmate session
+    #   uses: mxschmitt/action-tmate@v3
+    #   with:
+    #     detached: true
 
     # TODO: -p:DefineConstants="MANAGEMENT_API"
     - name: Run tests
       env:
+        CI_PIPELINE: true
         TEST_PLUGIN_DIRECTORY: ..\..\..\..\..\artifacts # Relative to bin\Debug\net8.0
       run: |
         dotnet test src\NomadIIS.Tests\NomadIIS.Tests.csproj
-        Get-Content -Path "src\NomadIIS.Tests\bin\Debug\net8.0\debug.test.txt"
+      #  Get-Content -Path "src\NomadIIS.Tests\bin\Debug\net8.0\debug.test.txt"
       # TODO: I think we don't need this. We're already admin.
       # run: |
       #   $script = 'dotnet test src\NomadIIS.Tests\NomadIIS.Tests.csproj -e TEST_PLUGIN_DIRECTORY=artifacts'
