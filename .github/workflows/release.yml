@@ -43,6 +43,6 @@ jobs:
         name: vTODO
         tag_name: vTODO
         draft: true
-        files:
-          - nomad_iis.zip
-          - nomad_iis_mgmt_api.zip
+        files: |
+          nomad_iis.zip
+          nomad_iis_mgmt_api.zip
