@@ -14,7 +14,7 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  release:
     runs-on: ubuntu-latest
 
     steps:
@@ -46,7 +46,7 @@ jobs:
         echo "Version in Build: ${version}"
         echo "VERSION=${version}" >> $GITHUB_ENV
 
-        if [ "${{ github.event.inputs.version }}" -neq "${version}" ]
+        if [ "${{ github.event.inputs.version }}" != "${version}" ]
         then
           echo "The specified release version doesn't match the version in the build. Please update PluginInfo.cs first."
           exit 1
