@@ -32,6 +32,20 @@ jobs:
       with:
         dotnet-version: 8.0.x
 
+    # Extract and publish version
+    - name: extract version
+      run: |
+        Get-Content "./src/NomadIIS/PluginInfo.cs" | Select-String 'public static readonly string Version = "([0-9]+\.[0-9]+\.[0-9])";' | ForEach-Object {
+          $version = $_.Matches[0].Groups[1].Value
+        }
+        $version | Out-File -Path version -NoNewline
+    - name: Upload version
+      if: ${{ matrix.profile.artifactName == 'nomad_iis' }} # We only need to do this once
+      uses: actions/upload-artifact@v4
+      with:
+        name: version
+        path: ./version
+
     # Publish the application
     - name: Publish the application
       run: dotnet publish "./src/NomadIIS/NomadIIS.csproj" /p:PublishProfile="./src/NomadIIS/Properties/PublishProfiles/${{ matrix.profile.publishProfile }}"
