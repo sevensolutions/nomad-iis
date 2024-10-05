@@ -18,7 +18,7 @@ sidebar_position: 5
 | permit_iusr | bool | no | true | Specifies whether you want to permit the [IUSR-account](https://learn.microsoft.com/en-us/iis/get-started/planning-for-security/understanding-built-in-user-and-group-accounts-in-iis#understanding-the-new-iusr-account) on the *local* directory. When you disable this, you may need to tweak your *web.config* a bit. Read [this](./faq.md#iusr-account) for details. |
 | *binding* | block list | yes | *none* | Defines one or two port bindings. See *binding* schema below for details. |
 
-## `application` Block Configuration
+## `application` Block
 
 | Option | Type | Required | Default Value | Description |
 |---|---|---|---|---|
@@ -27,23 +27,36 @@ sidebar_position: 5
 | enable_preload | bool | no | *IIS default* | Specifies whether the application should be pre-loaded. |
 | *virtual_directory* | block list | no | *none* | Defines optional virtual directories below this application. See *virtual_directory* schema below for details. |
 
-## `virtual_directory` Block Configuration
+## `virtual_directory` Block
 
 | Option | Type | Required | Default Value | Description |
 |---|---|---|---|---|
 | alias | string | yes | *none* | Defines the alias of the virtual directory |
 | path | string | yes | *none* | Defines the path of the virtual directory |
 
-## `binding` Block Configuration
+## `binding` Block
 
 | Option | Type | Required | Default Value | Description |
 |---|---|---|---|---|
 | type | string | yes | *none* | Defines the protocol of the port binding. Allowed values are *http* or *https*. |
-| port | string | yes | *none* | Defines the port label of a `network` block configuration or a static port like "80". Static ports can only be used when *hostname* is also set. Otherwise use a nomad *network*-stanza to specify the port. |
+| port | string | yes | *none* | Defines the port label of a `network` block or a static port like "80". Static ports can only be used when *hostname* is also set. Otherwise use a nomad *network*-stanza to specify the port. |
 | hostname | string | no | *IIS default* | Only listens to the specified hostname |
 | require_sni | bool | no | *IIS default* | Defines whether SNI (Server Name Indication) is required |
 | ip_address | string | no | *IIS default* | Specifies the IP-Address of the interface to listen on |
-| certificate_hash | string | no | *none* | Specifies the hash of the certificate to use when using type=https |
+| *certificate* | block list | no | *none* | Specifies the certificate to use when using type=https. See *certificate* schema below for details. |
+
+## `certificate` Block
+
+:::tip
+Also refer to this [advanced documentation](../tips-and-tricks/working-with-certificates.md).
+:::
+
+| Option | Type | Required | Default Value | Description |
+|---|---|---|---|---|
+| thumbprint | string | no | *none* | Specifies the thumbprint (hash) of a local and pre-installed certificate. Make sure the certificate is accessible to IIS by installing it to the *My Certificates* store on Local Machine. |
+| file | string | no | *none* | Specifies the path to a local certificate file. The file must be of type *.pfx*. |
+| password | string | no | *none* | Specifies the password for the given certificate file. |
+| use_self_signed | bool | no | false | Set this to true if you want to use a self-signed certificate with a validity of one year. Important: This is not intended for production usage and should only be used for short lived tasks like UI- or Integration tests. |
 
 ## Example
 

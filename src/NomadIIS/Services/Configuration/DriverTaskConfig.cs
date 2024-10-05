@@ -87,8 +87,23 @@ public sealed class DriverTaskConfigBinding
 	[ConfigurationField( "ip_address" )]
 	public string? IPAddress { get; set; }
 
-	[ConfigurationField( "certificate_hash" )]
-	public string? CertificateHash { get; set; }
+	[ConfigurationCollectionField( "certificates", "certificate", 0, 1 )]
+	public DriverTaskConfigCertificate[] Certificates { get; set; } = default!;
+}
+
+public sealed class DriverTaskConfigCertificate
+{
+	[ConfigurationField( "thumbprint" )]
+	public string? Thumbprint { get; set; }
+
+	[ConfigurationField( "file" )]
+	public string? File { get; set; }
+
+	[ConfigurationField( "password" )]
+	public string? Password { get; set; }
+
+	[ConfigurationField( "use_self_signed" )]
+	public bool UseSelfSigned { get; set; }
 }
 
 public enum DriverTaskConfigBindingType

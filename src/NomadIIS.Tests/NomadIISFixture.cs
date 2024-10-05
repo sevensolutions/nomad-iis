@@ -6,6 +6,9 @@ using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Net.Security;
+using System.Net.Sockets;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 
@@ -53,7 +56,7 @@ public sealed class NomadIISFixture : IAsyncLifetime
 			pluginDir = @"..\..\..\..\NomadIIS\bin\Debug\net8.0";
 
 		var pluginDirectory = Path.GetFullPath( pluginDir );
-		
+
 #if MANAGEMENT_API
 		var configFile = Path.GetFullPath( @"Data\configs\with_api.hcl" );
 #else
@@ -177,6 +180,9 @@ public sealed class NomadIISFixture : IAsyncLifetime
 
 				return null;
 			} );
+
+			// Wait a bit to let the task stabilize
+			await Task.Delay( 3000 );
 		}
 
 		return jobId;
@@ -184,16 +190,26 @@ public sealed class NomadIISFixture : IAsyncLifetime
 
 	public async Task StopJobAsync ( string jobId )
 	{
-		await _httpClient.DeleteAsync( $"job/{jobId}" );
+		await _httpClient.DeleteAsync( $"job/{jobId}?purge=true" );
 
-		await TryUntilAsync( async () =>
+		await TryUntilAsync<bool?>( async () =>
 		{
-			var job = await ReadJobAsync( jobId );
+			try
+			{
+				var job = await ReadJobAsync( jobId );
 
-			if ( job is not null && job.Status == JobStatus.Dead )
-				return job;
+				if ( job is not null && job.Status == JobStatus.Dead )
+					return true;
 
-			return null;
+				return null;
+			}
+			catch ( HttpRequestException ex )
+			{
+				if ( ex.StatusCode == System.Net.HttpStatusCode.NotFound )
+					return true;
+
+				return null;
+			}
 		} );
 	}
 
@@ -203,11 +219,30 @@ public sealed class NomadIISFixture : IAsyncLifetime
 	public Task<JobAllocationResponse[]?> ListJobAllocationsAsync ( string jobId )
 		=> _httpClient.GetFromJsonAsync<JobAllocationResponse[]>( $"job/{jobId}/allocations" );
 
+	public Task<AllocationResponse?> ReadAllocationAsync ( string allocId )
+		=> _httpClient.GetFromJsonAsync<AllocationResponse>( $"allocation/{allocId}" );
+
 	public void AccessIIS ( Action<IisHandle> action )
 	{
 		using var handle = new IisHandle();
 
 		action( handle );
+	}
+
+	public X509Certificate? GetServerCertificate ( string hostName, int port )
+	{
+		// Establish a TCP connection to the server
+		using var client = new TcpClient( hostName, port );
+
+		using var sslStream = new SslStream( client.GetStream(), false, ValidateServerCertificate, null );
+
+		// Initiate the SSL handshake
+		sslStream.AuthenticateAsClient( hostName );
+
+		// Get the server's certificate
+		return sslStream?.RemoteCertificate;
+
+		bool ValidateServerCertificate ( object sender, X509Certificate? certificate, X509Chain? chain, SslPolicyErrors sslPolicyErrors ) => true;
 	}
 
 #if MANAGEMENT_API

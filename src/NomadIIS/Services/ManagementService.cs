@@ -120,31 +120,35 @@ public sealed class ManagementService : IHostedService
 			x => x.TaskConfig != null && x.TaskConfig.AllocId == allocId && x.TaskConfig.Name == taskName );
 	}
 
-	internal async Task LockAsync ( Func<ServerManager, Task> action, CancellationToken cancellationToken = default )
+	internal async Task LockAsync ( Func<IManagementLockHandle, Task> action, CancellationToken cancellationToken = default )
 	{
-		_ = await LockAsync( async serverManager =>
+		_ = await LockAsync( async lockHandle =>
 		{
-			await action( serverManager );
+			await action( lockHandle );
 			return true;
 		}, cancellationToken );
 	}
-	internal async Task<T> LockAsync<T> ( Func<ServerManager, Task<T>> action, CancellationToken cancellationToken = default )
+	internal async Task<T> LockAsync<T> ( Func<IManagementLockHandle, Task<T>> action, CancellationToken cancellationToken = default )
 	{
 		await _lock.WaitAsync( cancellationToken );
 
 		var serverManager = new ServerManager();
 
+		var handle = new ManagementLockHandle( _logger, serverManager );
+
 		try
 		{
-			var result = await action( serverManager );
+			var result = await action( handle );
 
 			serverManager.CommitChanges();
 
 			return result;
 		}
-		catch ( UnauthorizedAccessException ex )
+		catch ( Exception ex )
 		{
 			_logger.LogError( ex, ex.Message );
+
+			await handle.RollbackAsync();
 
 			throw;
 		}
@@ -188,4 +192,54 @@ public sealed class ManagementService : IHostedService
 
 	public IAsyncEnumerable<DriverTaskEvent> ReadAllEventsAsync ( CancellationToken cancellationToken )
 		=> _eventsChannel.Reader.ReadAllAsync( cancellationToken );
+
+	private class ManagementLockHandle : IManagementLockHandle
+	{
+		private readonly ILogger _logger;
+		private List<(Func<Task> Action, Func<Task> RollbackAction)>? _txActions;
+
+		public ManagementLockHandle ( ILogger logger, ServerManager serverManager )
+		{
+			_logger = logger;
+
+			ServerManager = serverManager;
+		}
+
+		public ServerManager ServerManager { get; }
+
+		public async Task JoinTransactionAsync ( Func<Task> action, Func<Task> rollbackAction )
+		{
+			if ( _txActions is null )
+				_txActions = new List<(Func<Task> Action, Func<Task> RollbackAction)>();
+
+			_txActions.Add( (action, rollbackAction) );
+
+			await action();
+		}
+
+		public async Task RollbackAsync ()
+		{
+			if ( _txActions is not null )
+			{
+				foreach ( var action in _txActions )
+				{
+					try
+					{
+						await action.RollbackAction();
+					}
+					catch ( Exception ex )
+					{
+						_logger.LogError( ex, "Failed to rollback." );
+					}
+				}
+			}
+		}
+	}
+}
+
+public interface IManagementLockHandle
+{
+	ServerManager ServerManager { get; }
+
+	Task JoinTransactionAsync ( Func<Task> action, Func<Task> rollbackAction );
 }

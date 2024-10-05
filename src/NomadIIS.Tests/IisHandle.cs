@@ -119,6 +119,9 @@ public sealed class IisWebsiteHandle
 			Assert.Fail( $"Website with name \"{_name}\" exists but shouldn't." );
 	}
 
+	public IisWebsiteBindingHandle Binding ( int index )
+		=> new IisWebsiteBindingHandle( GetWebsite().Bindings[index] );
+
 	private Site GetWebsite ()
 	{
 		var website = FindWebsite();
@@ -131,4 +134,31 @@ public sealed class IisWebsiteHandle
 
 	private Site? FindWebsite ()
 		=> _owner.ServerManager.Sites.FirstOrDefault( x => x.Name == _name );
+}
+
+public sealed class IisWebsiteBindingHandle
+{
+	private readonly Binding _binding;
+
+	public IisWebsiteBindingHandle ( Binding binding )
+	{
+		_binding = binding;
+	}
+
+	public void IsHttps ()
+	{
+		if ( _binding.Protocol is null || _binding.Protocol != "https" )
+			Assert.Fail( "Binding is not https but should be." );
+	}
+
+	public void CertificateThumbprintIs ( string certificateThumbprint )
+	{
+		if ( _binding.CertificateHash is null || _binding.CertificateHash.Length == 0 )
+			Assert.Fail( "The binding has no certificate set." );
+
+		var tp = Convert.ToHexString( _binding.CertificateHash );
+
+		if ( !string.Equals( tp, certificateThumbprint, StringComparison.InvariantCultureIgnoreCase ) )
+			Assert.Fail( $"Certificate hash should be {certificateThumbprint}, but is {tp}." );
+	}
 }
