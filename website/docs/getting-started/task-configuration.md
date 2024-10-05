@@ -47,6 +47,10 @@ sidebar_position: 5
 
 ## `certificate` Block
 
+:::tip
+Also refer to this [advanced documentation](../tips-and-tricks/working-with-certificates.md).
+:::
+
 | Option | Type | Required | Default Value | Description |
 |---|---|---|---|---|
 | thumbprint | string | no | *none* | Specifies the thumbprint (hash) of a local and pre-installed certificate. Make sure the certificate is accessible to IIS by installing it to the *My Certificates* store on Local Machine. |
