@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using System.Text.RegularExpressions;
 using System.Collections.Generic;
 using System.IO;
-using System.Text.Json;
 using System.Net;
 using System.Security.Cryptography;
 
@@ -14,7 +13,7 @@ namespace NomadIIS.Services;
 
 internal static class CertificateHelper
 {
-	private const string NomadCertificateFriendlyName = "Installed by Nomad IIS";
+	private const string NomadCertificateFriendlyNamePrefix = "[MBN]"; // MBN = Managed by Nomad
 
 	private static readonly Regex _safeThumbprintRegex = new Regex( @"[^\da-fA-F]" );
 
@@ -46,7 +45,10 @@ internal static class CertificateHelper
 
 			if ( found is null )
 			{
-				certificate.FriendlyName = NomadCertificateFriendlyName;
+				if ( !string.IsNullOrEmpty( certificate.FriendlyName ) )
+					certificate.FriendlyName = $"{NomadCertificateFriendlyNamePrefix} {certificate.FriendlyName}";
+				else
+					certificate.FriendlyName = $"{NomadCertificateFriendlyNamePrefix} {GetCommonName( certificate ) ?? "Unknown"}";
 
 				store.Add( certificate );
 			}
@@ -76,7 +78,7 @@ internal static class CertificateHelper
 				// Make sure we only uninstall the ones we installed by ourself.
 				var certificates = store.Certificates
 					.Find( X509FindType.FindByThumbprint, MakeSafeThumbprint( thumbprint ), false )
-					.Where( x => x.FriendlyName == NomadCertificateFriendlyName );
+					.Where( x => x.FriendlyName is not null && x.FriendlyName.StartsWith( NomadCertificateFriendlyNamePrefix ) );
 
 				foreach ( var certificate in certificates )
 					store.Remove( certificate );
@@ -170,5 +172,21 @@ internal static class CertificateHelper
 	{
 		// Strip any non-hexadecimal values and make uppercase
 		return _safeThumbprintRegex.Replace( thumbprint, string.Empty ).ToUpper();
+	}
+
+	private static string? GetCommonName ( X509Certificate2 certificate )
+	{
+		if ( certificate.Subject is null )
+			return null;
+
+		var fields = certificate.Subject.Split( ',', StringSplitOptions.RemoveEmptyEntries );
+
+		foreach ( var field in fields )
+		{
+			if ( field.Trim().StartsWith( "CN=", StringComparison.OrdinalIgnoreCase ) )
+				return field[3..].Trim();
+		}
+
+		return null;
 	}
 }
