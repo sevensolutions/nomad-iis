@@ -48,7 +48,7 @@ sidebar_position: 5
 ## `certificate` Block
 
 :::tip
-Also refer to this [advanced documentation](../tips-and-tricks/working-with-certificates.md).
+Also refer to this [advanced documentation](../features/https.md).
 :::
 
 | Option | Type | Required | Default Value | Description |

@@ -1,4 +1,8 @@
-# Working with Certificates
+---
+sidebar_position: 3
+---
+
+# 🔐 HTTPS and Certificates
 
 *Nomad IIS* supports the use of TLS Certificates for HTTPS. Currently, you have the following options:
 
