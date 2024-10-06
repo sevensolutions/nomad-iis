@@ -71,7 +71,7 @@ job "static-sample-app" {
           
           # highlight-start
           certificate {
-            file = "${NOMAD_SECRETS_DIR}/mycertificate.pfx"
+            pfx_file = "${NOMAD_SECRETS_DIR}/mycertificate.pfx"
             password = "super#secret"
           }
           # highlight-end

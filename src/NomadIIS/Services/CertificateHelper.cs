@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Security.Cryptography;
+using System.Text;
 
 namespace NomadIIS.Services;
 
@@ -19,13 +20,19 @@ internal static class CertificateHelper
 
 	private static readonly SemaphoreSlim _semaphore = new SemaphoreSlim( 1, 1 );
 
-	public static async Task<(X509Certificate2 Certificate, string? StoreName)?> InstallCertificateAsync ( string filePath, string? password )
+	public static async Task<(X509Certificate2 Certificate, string? StoreName)?> InstallPfxCertificateAsync ( string filePath, string? password )
 	{
 		if ( string.IsNullOrEmpty( filePath ) )
 			throw new ArgumentException( nameof( filePath ) );
 
-		var certificate = new X509Certificate2( filePath, password,
-			X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.Exportable );
+		return await InstallPfxCertificateAsync( await File.ReadAllBytesAsync( filePath ), password );
+	}
+	private static async Task<(X509Certificate2 Certificate, string? StoreName)?> InstallPfxCertificateAsync ( byte[] pfxBytes, string? password )
+	{
+		if ( pfxBytes is null )
+			throw new ArgumentException( nameof( pfxBytes ) );
+
+		var certificate = LoadFromPfxFile( pfxBytes, password );
 
 		await _semaphore.WaitAsync();
 
@@ -60,6 +67,22 @@ internal static class CertificateHelper
 
 		return await FindCertificateByThumbprintAsync( thumbprint );
 	}
+	public static async Task<(X509Certificate2 Certificate, string? StoreName)?> InstallPemCertificateAsync ( string certificateFilePath, string keyFilePath )
+	{
+		if ( string.IsNullOrEmpty( certificateFilePath ) )
+			throw new ArgumentException( nameof( certificateFilePath ) );
+		if ( string.IsNullOrEmpty( keyFilePath ) )
+			throw new ArgumentException( nameof( keyFilePath ) );
+
+		var certificate = LoadFromPemFiles( certificateFilePath, keyFilePath );
+
+		// Note: Directly importing the certificate read from pem doesn't work,
+		// because we also need to import the Private Key.
+		var pfxBytes = certificate.Export( X509ContentType.Pfx );
+
+		return await InstallPfxCertificateAsync( pfxBytes, null );
+	}
+
 	public static async Task UninstallCertificatesAsync ( HashSet<string> thumbprints )
 	{
 		if ( thumbprints is null )
@@ -88,6 +111,74 @@ internal static class CertificateHelper
 		{
 			_semaphore.Release();
 		}
+	}
+
+	public static X509Certificate2 LoadFromPfxFile ( byte[] pfxBytes, string? password )
+	{
+		if ( pfxBytes is null )
+			throw new ArgumentException( nameof( pfxBytes ) );
+
+		var certificate = new X509Certificate2( pfxBytes, password,
+			X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.Exportable );
+
+		return certificate;
+	}
+	public static X509Certificate2 LoadFromPemFiles ( string certFilePath, string keyFilePath )
+	{
+		if ( string.IsNullOrEmpty( certFilePath ) )
+			throw new ArgumentException( nameof( certFilePath ) );
+		if ( string.IsNullOrEmpty( keyFilePath ) )
+			throw new ArgumentException( nameof( keyFilePath ) );
+
+		var certPem = File.ReadAllText( certFilePath );
+		var certificate = LoadCertificateFromPem( certPem );
+
+		var keyPem = File.ReadAllText( keyFilePath );
+		var privateKey = LoadPrivateKeyFromPem( keyPem );
+
+		// Combine the certificate and the private key into X509Certificate2
+		certificate = certificate.CopyWithPrivateKey( privateKey );
+
+		return certificate;
+	}
+	private static X509Certificate2 LoadCertificateFromPem ( string pemContent )
+	{
+		var certBase64 = ExtractBase64Content( pemContent, "CERTIFICATE" );
+		var certBytes = Convert.FromBase64String( certBase64 );
+
+		return new X509Certificate2( certBytes, (string?)null,
+			X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.Exportable );
+	}
+	private static RSA LoadPrivateKeyFromPem ( string pemContent )
+	{
+		var keyBase64 = ExtractBase64Content( pemContent, "PRIVATE KEY" );
+		var keyBytes = Convert.FromBase64String( keyBase64 );
+
+		var rsa = RSA.Create();
+
+		rsa.ImportPkcs8PrivateKey( keyBytes, out _ );
+
+		return rsa;
+	}
+	private static string ExtractBase64Content ( string pemContent, string section )
+	{
+		StringBuilder result = new StringBuilder();
+		using var reader = new StringReader( pemContent );
+
+		bool isReadingContent = false;
+		string? line;
+
+		while ( ( line = reader.ReadLine() ) != null )
+		{
+			if ( line.Contains( $"BEGIN {section}" ) )
+				isReadingContent = true;
+			else if ( line.Contains( $"END {section}" ) )
+				isReadingContent = false;
+			else if ( isReadingContent )
+				result.Append( line );
+		}
+
+		return result.ToString();
 	}
 
 	public static async Task<(X509Certificate2 Certificate, string? StoreName)?> FindCertificateByThumbprintAsync ( string thumbprint )

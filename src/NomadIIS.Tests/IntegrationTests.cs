@@ -258,7 +258,7 @@ public class IntegrationTests : IClassFixture<NomadIISFixture>
 			          port = "httplabel"
 
 			          certificate {
-			            file = "{{certificateFile.Replace( "\\", "\\\\" )}}"
+			            pfx_file = "{{certificateFile.Replace( "\\", "\\\\" )}}"
 			            password = "super#secure"
 			          }
 			        }

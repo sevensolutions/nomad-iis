@@ -74,7 +74,7 @@ public sealed class IisTaskHandle : IDisposable
 			_state.AppPoolName = BuildAppPoolOrWebsiteName( task );
 
 			config = MessagePackHelper.Deserialize<DriverTaskConfig>( task.MsgpackDriverConfig );
-			
+
 			ValidateAndCoerceTaskConfiguration( config );
 
 			await _owner.LockAsync( async handle =>
@@ -216,7 +216,7 @@ public sealed class IisTaskHandle : IDisposable
 		await StopAndCleanupAsync();
 	}
 
-	private async Task StopAndCleanupAsync()
+	private async Task StopAndCleanupAsync ()
 	{
 		if ( _state is null || _taskConfig is null )
 			throw new InvalidOperationException( "Invalid state." );
@@ -631,9 +631,9 @@ public sealed class IisTaskHandle : IDisposable
 					// If committing the IIS changes will fail, it will also rollback the certificate installation.
 					await handle.JoinTransactionAsync( async () =>
 					{
-						if ( !string.IsNullOrEmpty( certificateBlock.File ) )
+						if ( !string.IsNullOrEmpty( certificateBlock.PfxFile ) )
 						{
-							var certificateFilePath = certificateBlock.File;
+							var certificateFilePath = certificateBlock.PfxFile;
 
 							// If the path is not an absolute path, make it relative to the task-directory.
 							if ( !Path.IsPathRooted( certificateFilePath ) )
@@ -642,8 +642,30 @@ public sealed class IisTaskHandle : IDisposable
 							if ( !File.Exists( certificateFilePath ) )
 								throw new FileNotFoundException( $"Couldn't find certificate file {certificateFilePath}." );
 
-							usedCertificate = await CertificateHelper.InstallCertificateAsync(
+							usedCertificate = await CertificateHelper.InstallPfxCertificateAsync(
 								certificateFilePath, certificateBlock.Password );
+
+							if ( usedCertificate is null )
+								throw new Exception( $"Failed to install certificate because it wasn't found after install. Maybe it's not valid anymore?" );
+
+							await SendTaskEventAsync( $"Installed certificate: {usedCertificate.Value.Certificate.Thumbprint}" );
+						}
+						else if ( !string.IsNullOrEmpty( certificateBlock.CertFile ) || !string.IsNullOrEmpty( certificateBlock.KeyFile ) )
+						{
+							if ( string.IsNullOrEmpty( certificateBlock.CertFile ) || string.IsNullOrEmpty( certificateBlock.KeyFile ) )
+								throw new ArgumentException( $"When using pem encoded certificates, cert_file and key_file must be specified in combination." );
+
+							var certificateFilePath = certificateBlock.CertFile;
+							var keyFilePath = certificateBlock.KeyFile;
+
+							// If the path is not an absolute path, make it relative to the task-directory.
+							if ( !Path.IsPathRooted( certificateFilePath ) )
+								certificateFilePath = Path.Combine( taskConfig.AllocDir, taskConfig.Name, certificateFilePath );
+							if ( !Path.IsPathRooted( keyFilePath ) )
+								keyFilePath = Path.Combine( taskConfig.AllocDir, taskConfig.Name, keyFilePath );
+
+							usedCertificate = await CertificateHelper.InstallPemCertificateAsync(
+								certificateFilePath, keyFilePath );
 
 							if ( usedCertificate is null )
 								throw new Exception( $"Failed to install certificate because it wasn't found after install. Maybe it's not valid anymore?" );
@@ -658,7 +680,7 @@ public sealed class IisTaskHandle : IDisposable
 							var selfSignedCertificate = CertificateHelper.GenerateSelfSignedCertificate(
 								b.Binding.Hostname ?? "localhost", TimeSpan.FromDays( 365 ), temFile, randomPassword );
 
-							usedCertificate = await CertificateHelper.InstallCertificateAsync( temFile, randomPassword );
+							usedCertificate = await CertificateHelper.InstallPfxCertificateAsync( temFile, randomPassword );
 
 							await SendTaskEventAsync( $"Installed self-signed certificate: {usedCertificate.Value.Certificate.Thumbprint}" );
 						}

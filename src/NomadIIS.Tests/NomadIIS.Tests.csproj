@@ -34,11 +34,17 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Remove="data\certificates\cert1.key.pem" />
+    <None Remove="data\certificates\cert1.pem" />
     <None Remove="Data\nomad_api_config.hcl" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\NomadIIS\NomadIIS.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Data\certificates\" />
   </ItemGroup>
 
 </Project>

@@ -96,11 +96,15 @@ public sealed class DriverTaskConfigCertificate
 	[ConfigurationField( "thumbprint" )]
 	public string? Thumbprint { get; set; }
 
-	[ConfigurationField( "file" )]
-	public string? File { get; set; }
-
+	[ConfigurationField( "pfx_file" )]
+	public string? PfxFile { get; set; }
 	[ConfigurationField( "password" )]
 	public string? Password { get; set; }
+
+	[ConfigurationField( "cert_file" )]
+	public string? CertFile { get; set; }
+	[ConfigurationField( "key_file" )]
+	public string? KeyFile { get; set; }
 
 	[ConfigurationField( "use_self_signed" )]
 	public bool UseSelfSigned { get; set; }

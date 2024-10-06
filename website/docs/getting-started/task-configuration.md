@@ -54,8 +54,10 @@ Also refer to this [advanced documentation](../tips-and-tricks/working-with-cert
 | Option | Type | Required | Default Value | Description |
 |---|---|---|---|---|
 | thumbprint | string | no | *none* | Specifies the thumbprint (hash) of a local and pre-installed certificate. Make sure the certificate is accessible to IIS by installing it to the *My Certificates* store on Local Machine. |
-| file | string | no | *none* | Specifies the path to a local certificate file. The file must be of type *.pfx*. |
-| password | string | no | *none* | Specifies the password for the given certificate file. |
+| pfx_file | string | no | *none* | Specifies the path to a local certificate file. The file must be of type *.pfx*. |
+| password | string | no | *none* | Specifies the password for the given pfx-certificate file. |
+| cert_file | string | no | *none* | Specifies the path to a local certificate file in base64-encoded pem format. When using this option you also need to specify `key_file`. |
+| key_file | string | no | *none* | Specifies the path to a local private key file in base64-encoded pkcs8 format. When using this option you also need to specify `cert_file`. |
 | use_self_signed | bool | no | false | Set this to true if you want to use a self-signed certificate with a validity of one year. Important: This is not intended for production usage and should only be used for short lived tasks like UI- or Integration tests. |
 
 ## Example
