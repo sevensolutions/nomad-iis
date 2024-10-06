@@ -5,8 +5,10 @@ job "static-sample-app" {
   group "app" {
     count = 1
 
-    # You may want to set this to true
-    # prevent_reschedule_on_lost = true
+    # See: https://nomad-iis.sevensolutions.cc/docs/tips-and-tricks/in-place-update
+    # disconnect {
+    #  lost_after = "1m"
+    # }
   
     network {
       port "httplabel" {}
