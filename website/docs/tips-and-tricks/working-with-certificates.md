@@ -1,6 +1,6 @@
 # Working with Certificates
 
-*Nomad IIS* supports the use of TLS Certificates for HTTPS. Currently, you have 3 options:
+*Nomad IIS* supports the use of TLS Certificates for HTTPS. Currently, you have the following options:
 
 ## Options
 
@@ -83,8 +83,77 @@ job "static-sample-app" {
 ```
 
 :::tip
-It's up to you where you get the certificate file from. It can be included with the app files, downloaded as a separate [artifact](https://developer.hashicorp.com/nomad/docs/job-specification/artifact), or [rendered via template from vault](https://developer.hashicorp.com/nomad/docs/job-specification/template#vault-integration).
+It's up to you where you get the certificate file from. It can be included with the app files, downloaded as a separate [artifact](https://developer.hashicorp.com/nomad/docs/job-specification/artifact). If you want to [render a certificate via template from vault](https://developer.hashicorp.com/nomad/docs/job-specification/template#vault-integration), see the next option.
 :::
+
+### Use Vault PKI to Issue a Certificate
+
+It is also possible to use [HashiCorp Vault](https://www.vaultproject.io/) to issue a certificate on-demand.
+The idea is that we render the certificate using a [template stanza](https://developer.hashicorp.com/nomad/docs/job-specification/template).
+
+:::caution
+It is important to render both, the public and the private key, in the same template.
+Otherwise we would get two different certificates issued.  
+It is also important to specify `private_key_format` as `pkcs8`.
+:::
+
+```hcl
+job "static-sample-app" {
+  # highlight-start
+  vault {
+    role         = "pkitest"
+    policies     = ["pkitest"]
+    change_mode  = "noop"
+    env          = false
+    disable_file = true
+  }
+  # highlight-end
+
+  group "app" {
+    network {
+      port "httplabel" {}
+    }
+
+    task "app" {
+      driver = "iis"
+
+      # highlight-start
+      template {
+        data = <<EOH
+{{- with pkiCert "pki/test/issue/Test" "common_name=localhost" "private_key_format=pkcs8" -}}
+{{ .Cert }}
+{{ if .Key }}
+{{ .Key }}
+{{ end }}
+{{ end }}
+EOH
+        destination = "${NOMAD_SECRETS_DIR}/certificate.pem"
+        change_mode = "restart"
+      }
+      # highlight-end
+
+      config {
+        application {
+          path = "..."
+        }
+    
+        binding {
+          # highlight-next-line
+          type = "https"
+          port = "httplabel"
+          
+          # highlight-start
+          certificate {
+            cert_file = "${NOMAD_SECRETS_DIR}/certificate.pem"
+            key_file = "${NOMAD_SECRETS_DIR}/certificate.pem"
+          }
+          # highlight-end
+        }
+      }
+    }
+  }
+}
+```
 
 ### Self Signed Certificate
 
