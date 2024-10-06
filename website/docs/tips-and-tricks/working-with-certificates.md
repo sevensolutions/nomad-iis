@@ -157,7 +157,7 @@ EOH
 
 ### Self Signed Certificate
 
-For quick testing, it may be helpfull to use a self-signed certificate.
+For quick testing, it may be helpful to use a self-signed certificate.
 *Nomad IIS* can provision one on-demand as shown in the following example.
 These certificates will have a lifetime of one year.
 

@@ -61,6 +61,10 @@ public sealed class DriverService : Driver.DriverBase
 		if ( File.Exists( inetMgr ) )
 			iisVersion = FileVersionInfo.GetVersionInfo( inetMgr ).ProductVersion;
 
+		// Check for availability of some common modules
+		var aspnetCoreAvailable = File.Exists( Environment.ExpandEnvironmentVariables( @"%ProgramFiles%\IIS\Asp.Net Core Module\V2\aspnetcorev2.dll" ) );
+		var rewriteModuleAvailable = File.Exists( Environment.ExpandEnvironmentVariables( @"%SystemRoot%\System32\inetsrv\rewrite.dll" ) );
+
 		try
 		{
 #if MANAGEMENT_API
@@ -109,6 +113,8 @@ public sealed class DriverService : Driver.DriverBase
 					{
 						{ $"driver.{PluginInfo.Name}.version", new Hashicorp.Nomad.Plugins.Shared.Structs.Attribute(){ StringVal = PluginInfo.Version } },
 						{ $"driver.{PluginInfo.Name}.iis_version", new Hashicorp.Nomad.Plugins.Shared.Structs.Attribute(){ StringVal = iisVersion } },
+						{ $"driver.{PluginInfo.Name}.iis_aspnet_core_available", new Hashicorp.Nomad.Plugins.Shared.Structs.Attribute(){ BoolVal = aspnetCoreAvailable } },
+						{ $"driver.{PluginInfo.Name}.iis_rewrite_module_available", new Hashicorp.Nomad.Plugins.Shared.Structs.Attribute(){ BoolVal = rewriteModuleAvailable } },
 						{ $"driver.{PluginInfo.Name}.directory_security_enabled", new Hashicorp.Nomad.Plugins.Shared.Structs.Attribute(){ BoolVal = _managementService.DirectorySecurity } },
 						{ $"driver.{PluginInfo.Name}.udp_logging_enabled", new Hashicorp.Nomad.Plugins.Shared.Structs.Attribute(){ BoolVal = _managementService.UdpLoggerPort is not null } },
 						{ $"driver.{PluginInfo.Name}.target_websites_enabled", new Hashicorp.Nomad.Plugins.Shared.Structs.Attribute(){ BoolVal = _managementService.AllowedTargetWebsites.Length > 0 } },
