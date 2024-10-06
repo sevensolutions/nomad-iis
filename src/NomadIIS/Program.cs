@@ -91,6 +91,8 @@ builder.Services.AddProblemDetails();
 
 #if MANAGEMENT_API
 var mgmtApiKey = builder.Configuration.GetValue<string>( "management-api-key" );
+var mgmtApiJwtSecret = builder.Configuration.GetValue<string>( "management-api-jwt-secret" );
+var needsAuthorization = !string.IsNullOrEmpty( mgmtApiKey ) || !string.IsNullOrEmpty( mgmtApiJwtSecret );
 
 if ( managementApiPort > 0 )
 {
@@ -102,6 +104,7 @@ if ( managementApiPort > 0 )
 	.AddApiKey( config =>
 	{
 		config.ApiKey = mgmtApiKey;
+		config.ApiJwtSecret = mgmtApiJwtSecret;
 	} );
 
 	builder.Services.AddAuthorization();
@@ -141,7 +144,7 @@ if ( managementApiPort > 0 )
 		.MapControllers()
 		.RequireHost( $"*:{managementApiPort}" );
 
-	if ( !string.IsNullOrEmpty( mgmtApiKey ) )
+	if ( needsAuthorization )
 		epApi.RequireAuthorization();
 }
 #endif

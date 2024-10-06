@@ -28,6 +28,9 @@ public sealed class ManagementApiController : Controller
 		if ( taskHandle is null )
 			return NotFound();
 
+		if ( !taskHandle.IsAuthorized( HttpContext ) )
+			return Forbid();
+
 		var status = await taskHandle.GetStatusAsync();
 
 		return Ok( status );
@@ -41,6 +44,9 @@ public sealed class ManagementApiController : Controller
 		if ( taskHandle is null )
 			return NotFound();
 
+		if ( !taskHandle.IsAuthorized( HttpContext ) )
+			return Forbid();
+
 		await taskHandle.StartAppPoolAsync();
 
 		return Ok();
@@ -53,6 +59,9 @@ public sealed class ManagementApiController : Controller
 		if ( taskHandle is null )
 			return NotFound();
 
+		if ( !taskHandle.IsAuthorized( HttpContext ) )
+			return Forbid();
+
 		await taskHandle.StopAppPoolAsync();
 
 		return Ok();
@@ -64,6 +73,9 @@ public sealed class ManagementApiController : Controller
 
 		if ( taskHandle is null )
 			return NotFound();
+
+		if ( !taskHandle.IsAuthorized( HttpContext ) )
+			return Forbid();
 
 		await taskHandle.RecycleAppPoolAsync();
 
@@ -78,6 +90,9 @@ public sealed class ManagementApiController : Controller
 		if ( taskHandle is null )
 			return NotFound();
 
+		if ( !taskHandle.IsAuthorized( HttpContext ) )
+			return Forbid();
+
 		path = HttpUtility.UrlDecode( path );
 
 		await taskHandle.DownloadFileAsync( HttpContext.Response, path );
@@ -91,6 +106,9 @@ public sealed class ManagementApiController : Controller
 
 		if ( taskHandle is null )
 			return NotFound();
+
+		if ( !taskHandle.IsAuthorized( HttpContext ) )
+			return Forbid();
 
 		path = HttpUtility.UrlDecode( path );
 
@@ -108,6 +126,9 @@ public sealed class ManagementApiController : Controller
 		if ( taskHandle is null )
 			return NotFound();
 
+		if ( !taskHandle.IsAuthorized( HttpContext ) )
+			return Forbid();
+
 		path = HttpUtility.UrlDecode( path );
 
 		var isZip = HttpContext.Request.ContentType == "application/zip";
@@ -123,6 +144,9 @@ public sealed class ManagementApiController : Controller
 
 		if ( taskHandle is null )
 			return NotFound();
+
+		if ( !taskHandle.IsAuthorized( HttpContext ) )
+			return Forbid();
 
 		path = HttpUtility.UrlDecode( path );
 
@@ -140,6 +164,9 @@ public sealed class ManagementApiController : Controller
 		if ( taskHandle is null )
 			return NotFound();
 
+		if ( !taskHandle.IsAuthorized( HttpContext ) )
+			return Forbid();
+
 		var screenshot = await taskHandle.TakeScreenshotAsync( path, cancellationToken );
 
 		if ( screenshot is null )
@@ -155,6 +182,9 @@ public sealed class ManagementApiController : Controller
 
 		if ( taskHandle is null )
 			return NotFound();
+
+		if ( !taskHandle.IsAuthorized( HttpContext ) )
+			return Forbid();
 
 		var dumpFile = new FileInfo( Path.GetTempFileName() + ".dmp" );
 
