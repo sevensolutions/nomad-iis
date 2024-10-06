@@ -27,7 +27,7 @@ Feel free to use it as-is or as a reference implementation for your own C#-based
 | Multiple Applications | ✔ | Support for multiple sub-applications below the website. |
 | Virtual Directories | ✔ | Support for multiple *virtual directories* below an application. |
 | HTTP Bindings | ✔ | |
-| HTTPS Bindings | ✔ | [GH-3](https://github.com/sevensolutions/nomad-iis/issues/3) |
+| HTTPS Bindings | ✔ | [Details](https://nomad-iis.sevensolutions.cc/docs/tips-and-tricks/working-with-certificates) |
 | Environment Variables | ✔ | [Details](https://nomad-iis.sevensolutions.cc/docs/features/environment-variables) |
 | Resource Statistics | ✔ | |
 | Logging | ✔ | Experimental UDP logging. See [GH-6](https://github.com/sevensolutions/nomad-iis/issues/6) for details. |
