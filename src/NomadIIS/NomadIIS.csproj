@@ -19,7 +19,7 @@
 		<PackageReference Include="Grpc.AspNetCore" Version="2.66.0" />
 		<PackageReference Include="Grpc.AspNetCore.HealthChecks" Version="2.66.0" />
 		<PackageReference Include="Grpc.AspNetCore.Server.Reflection" Version="2.66.0" />
-		<PackageReference Include="MessagePack" Version="2.5.172" />
+		<PackageReference Include="MessagePack" Version="2.5.187" />
 		<PackageReference Include="Microsoft.Web.Administration" Version="11.1.0" />
 		<PackageReference Include="Serilog.AspNetCore" Version="8.0.3" />
 		<PackageReference Include="System.Management" Version="8.0.0" />
