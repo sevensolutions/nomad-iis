@@ -67,7 +67,7 @@ Note: To debug the driver itself, you need to attach the debugger to the nomad_i
 
 ## 🎁 How to build Release version
 
-Run the *Release.pubxml* publish profile from Visual Studio. This will create a single binary exe called *nomad_iis.exe*.
+Run the *Release.pubxml* or *ReleaseWithMgmtApi.pubxml* publish profile from Visual Studio. This will create a single binary exe called *nomad_iis.exe*.
 
 ## 🚧 TODOs and Known Issues
 
@@ -75,6 +75,9 @@ Check the [Open Issues here](https://github.com/sevensolutions/nomad-iis/issues)
 
 ## ☕ Support
 
-You want to support me?
+I put a lot of ❤️ and effort into this project and i want to make it *the best* IIS driver for Nomad.
+Every contribution helps me to improve it, fix bugs and develop new features.
+Please also dont forget to ★ the repo.
+Thank You!
 
 <a href="https://www.buymeacoffee.com/sevensolutions" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
