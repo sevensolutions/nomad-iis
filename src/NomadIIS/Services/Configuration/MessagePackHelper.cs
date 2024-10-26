@@ -129,7 +129,7 @@ public sealed class MessagePackHelper
 				return longValue;
 		}
 
-		if ( rawValue is bool bValue && targetType == typeof( bool ) )
+		if ( rawValue is bool bValue && ( targetType == typeof( bool ) || targetType == typeof( bool? ) ) )
 			return bValue;
 
 		if ( rawValue is IEnumerable rawEnumerableValue )

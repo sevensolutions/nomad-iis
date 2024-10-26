@@ -47,7 +47,13 @@ namespace NomadIIS.ManagementApi
 
 			if ( !string.IsNullOrEmpty( Options.ApiKey ) && headerValue == Options.ApiKey )
 			{
-				var principal = new ClaimsPrincipal( new ClaimsIdentity( Scheme.Name ) );
+				var claimsIdentity = new ClaimsIdentity( Scheme.Name );
+
+				// Api-Key auth doesn't support custom claims, so we permit everything.
+				claimsIdentity.AddClaim( new Claim( "job", "*" ) );
+				claimsIdentity.AddClaim( new Claim( "allocId", "*" ) );
+
+				var principal = new ClaimsPrincipal( claimsIdentity );
 
 				var ticket = new AuthenticationTicket( principal, Scheme.Name );
 
