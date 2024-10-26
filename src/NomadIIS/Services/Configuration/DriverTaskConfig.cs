@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Web.Administration;
+using System;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 
@@ -25,10 +26,25 @@ public sealed class DriverTaskConfig
 	public TimeSpan? IdleTimeout { get; set; }
 
 	[ConfigurationField( "disable_overlapped_recycle" )]
-	public bool DisabledOverlappedRecycle { get; set; }
+	public bool? DisabledOverlappedRecycle { get; set; }
 
 	[ConfigurationField( "periodic_restart" )]
 	public TimeSpan? PeriodicRestart { get; set; }
+
+	[ConfigurationField( "enable_32bit_app_on_win64" )]
+	public bool? Enable32BitAppOnWin64 { get; set; }
+
+	[ConfigurationField( "service_unavailable_response" )]
+	public LoadBalancerCapabilities? ServiceUnavailableResponse { get; set; }
+
+	[ConfigurationField( "queue_length" )]
+	public long? QueueLength { get; set; }
+
+	[ConfigurationField( "start_time_limit" )]
+	public TimeSpan? StartTimeLimit { get; set; }
+
+	[ConfigurationField( "shutdown_time_limit" )]
+	public TimeSpan? ShutdownTimeLimit { get; set; }
 
 	[ConfigurationField( "enable_udp_logging" )]
 	public bool EnableUdpLogging { get; set; }

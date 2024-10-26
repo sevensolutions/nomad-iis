@@ -535,10 +535,25 @@ public sealed class IisTaskHandle : IDisposable
 		if ( config.IdleTimeout is not null )
 			appPool.ProcessModel.IdleTimeout = config.IdleTimeout.Value;
 
-		appPool.Recycling.DisallowOverlappingRotation = config.DisabledOverlappedRecycle;
+		if ( config.DisabledOverlappedRecycle is not null )
+			appPool.Recycling.DisallowOverlappingRotation = config.DisabledOverlappedRecycle.Value;
+
+		if ( config.Enable32BitAppOnWin64 is not null )
+			appPool.Enable32BitAppOnWin64 = config.Enable32BitAppOnWin64.Value;
 
 		if ( config.PeriodicRestart is not null )
 			appPool.Recycling.PeriodicRestart.Time = config.PeriodicRestart.Value;
+
+		if ( config.ServiceUnavailableResponse is not null )
+			appPool.Failure.LoadBalancerCapabilities = config.ServiceUnavailableResponse.Value;
+
+		if ( config.QueueLength is not null )
+			appPool.QueueLength = config.QueueLength.Value;
+
+		if ( config.StartTimeLimit is not null )
+			appPool.ProcessModel.StartupTimeLimit = config.StartTimeLimit.Value;
+		if ( config.ShutdownTimeLimit is not null )
+			appPool.ProcessModel.ShutdownTimeLimit = config.ShutdownTimeLimit.Value;
 
 		var envVarsCollection = appPool.GetCollection( "environmentVariables" );
 

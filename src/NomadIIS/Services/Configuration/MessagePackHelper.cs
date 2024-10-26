@@ -100,12 +100,34 @@ public sealed class MessagePackHelper
 			}
 		}
 
-		if ( rawValue is byte byteValue && ( targetType == typeof( int ) || targetType == typeof( int? ) ) )
-			return (int)byteValue;
-		if ( rawValue is ushort ushortValue && ( targetType == typeof( int ) || targetType == typeof( int? ) ) )
-			return (int)ushortValue;
-		if ( rawValue is int intValue && ( targetType == typeof( int ) || targetType == typeof( int? ) ) )
-			return intValue;
+		if ( rawValue is byte byteValue )
+		{
+			if ( ( targetType == typeof( int ) || targetType == typeof( int? ) ) )
+				return (int)byteValue;
+			else if ( ( targetType == typeof( long ) || targetType == typeof( long? ) ) )
+				return (long)byteValue;
+		}
+		if ( rawValue is ushort ushortValue )
+		{
+			if ( ( targetType == typeof( int ) || targetType == typeof( int? ) ) )
+				return (int)ushortValue;
+			else if ( ( targetType == typeof( long ) || targetType == typeof( long? ) ) )
+				return (long)ushortValue;
+		}
+		if ( rawValue is int intValue )
+		{
+			if ( ( targetType == typeof( int ) || targetType == typeof( int? ) ) )
+				return intValue;
+			else if ( ( targetType == typeof( long ) || targetType == typeof( long? ) ) )
+				return (long)intValue;
+		}
+		if ( rawValue is long longValue )
+		{
+			if ( ( targetType == typeof( int ) || targetType == typeof( int? ) ) )
+				return (int)longValue;
+			else if ( ( targetType == typeof( long ) || targetType == typeof( long? ) ) )
+				return longValue;
+		}
 
 		if ( rawValue is bool bValue && targetType == typeof( bool ) )
 			return bValue;

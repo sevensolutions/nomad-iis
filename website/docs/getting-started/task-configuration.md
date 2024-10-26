@@ -9,11 +9,16 @@ sidebar_position: 5
 | *application* | block list | yes | *none* | Defines one more applications. See *application* schema below for details. |
 | target_website | string | no | *none* | Specifies an existing target website. In this case the driver will not create a new website but instead use the existing one where it provisions the virtual applications only. Please read the details [here](../features/existing-website.md). |
 | managed_pipeline_mode | string | no | *IIS default* | Valid options are *Integrated* or *Classic* |
+| enable_32bit_app_on_win64 | bool | no | *IIS default* | When true, enables a 32-bit application to run on a computer that runs a 64-bit version of Windows. |
 | managed_runtime_version | string | no | *IIS default* | Valid options are *v4.0*, *v2.0*, *None* |
 | start_mode | string | no | *IIS default* | Valid options are *OnDemand* or *AlwaysRunning* |
 | idle_timeout | string | no | *IIS default* | The AppPool idle timeout in the form *HH:mm:ss* or *[00w][00d][00h][00m][00s]* |
 | disable_overlapped_recycle | bool | no | *IIS default* | Defines whether two AppPools are allowed to run while recycling |
 | periodic_restart | string | no | *IIS default* | The AppPool periodic restart interval in the form *HH:mm:ss* or *[00w][00d][00h][00m][00s]* |
+| service_unavailable_response | string | no | *IIS default* | If this is set to `HttpLevel` and the app pool isn't running, HTTP.sys will return a 503 http-error. On the other hand if this is set to `TcpLevel` and the app pool isn't running, HTTP.sys will simply drop the connection. This may be useful when using external load balancers. |
+| queue_length | number | no | *IIS default* | Indicates to HTTP.sys how many requests to queue for an application pool before rejecting future requests. |
+| start_time_limit | string | no | *IIS default* | Specifies the time in the form *[00w][00d][00h][00m][00s]* that IIS waits for an application pool to start. If the application pool does not startup within the startupTimeLimit, the worker process is terminated and the rapid-fail protection count is incremented. |
+| shutdown_time_limit | string | no | *IIS default* | Specifies the time in the form *[00w][00d][00h][00m][00s]* that the W3SVC service waits after it initiated a recycle. If the worker process does not shut down within the shutdownTimeLimit, it will be terminated by the W3SVC service. |
 | enable_udp_logging | bool | no | false | Enables a UDP log-sink your application can log to. Please read the details [here](../features/udp-logging.md). |
 | permit_iusr | bool | no | true | Specifies whether you want to permit the [IUSR-account](https://learn.microsoft.com/en-us/iis/get-started/planning-for-security/understanding-built-in-user-and-group-accounts-in-iis#understanding-the-new-iusr-account) on the *local* directory. When you disable this, you may need to tweak your *web.config* a bit. Read [this](./faq.md#iusr-account) for details. |
 | *binding* | block list | yes | *none* | Defines one or two port bindings. See *binding* schema below for details. |
