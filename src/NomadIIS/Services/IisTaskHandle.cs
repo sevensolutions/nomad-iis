@@ -542,7 +542,7 @@ public sealed class IisTaskHandle : IDisposable
 
 		var envVarsCollection = appPool.GetCollection( "environmentVariables" );
 
-		foreach ( var env in taskConfig.Env )
+		foreach ( var env in GetTaskConfigEnvironmentVariables( taskConfig ) )
 			AddEnvironmentVariable( envVarsCollection, env.Key, env.Value );
 
 		if ( udpLocalPort is not null && udpRemotePort is not null )
@@ -565,6 +565,31 @@ public sealed class IisTaskHandle : IDisposable
 				envVarsCollection.Add( envVarElement );
 			}
 		}
+	}
+
+	private static IEnumerable<KeyValuePair<string, string>> GetTaskConfigEnvironmentVariables ( TaskConfig taskConfig )
+	{
+		var processVariables = Environment
+			.GetEnvironmentVariables( EnvironmentVariableTarget.Process )
+			.Keys.Cast<string>().ToHashSet();
+
+		var userVariables = new Dictionary<string, string>();
+
+		foreach ( var nomadEnv in taskConfig.Env )
+		{
+			if ( !string.IsNullOrEmpty( nomadEnv.Key ) && !processVariables.Contains( nomadEnv.Key ) )
+				userVariables[nomadEnv.Key] = nomadEnv.Value;
+		}
+
+		// Overwrite the temp directory variables to use nomad's own tmp directory acc. to: https://developer.hashicorp.com/nomad/docs/concepts/filesystem
+		var tempPath = Path.GetFullPath( Path.Combine( taskConfig.AllocDir, taskConfig.Name, "tmp" ) );
+		if ( !Directory.Exists( tempPath ) )
+			Directory.CreateDirectory( tempPath );
+
+		userVariables["TMP"] = tempPath;
+		userVariables["TEMP"] = tempPath;
+
+		return userVariables.ToArray();
 	}
 
 	private static Site? FindWebsiteByName ( ServerManager serverManager, string name )
