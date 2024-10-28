@@ -28,8 +28,8 @@
 
 	<ItemGroup Condition="$(DefineConstants.Contains('MANAGEMENT_API'))">
 		<PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.1.2" />
-		<PackageReference Include="Microsoft.Playwright" Version="1.47.0" />
-		<PackageReference Include="CliWrap" Version="3.6.6" />
+		<PackageReference Include="Microsoft.Playwright" Version="1.48.0" />
+		<PackageReference Include="CliWrap" Version="3.6.7" />
 	</ItemGroup>
 
 	<ItemGroup>
