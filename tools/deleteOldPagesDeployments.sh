@@ -15,7 +15,8 @@ for i in $(seq 0 $(($(jq '.result | length' <<< "$jsonData") - 1))); do
   aliasCount=$(jq -r ".result[$i].aliases | length" <<< "$jsonData")
   branchName=$(jq -r ".result[$i].deployment_trigger.metadata.branch" <<< "$jsonData")
   
-  if [ "${environment}" == "preview" ] && [[ "${branchName}" == feature/* ]] && [ $aliasCount == 0 ]
+  #if [ "${environment}" == "preview" ] && [[ "${branchName}" == feature/* ]] && [ $aliasCount == 0 ]
+  if [ $aliasCount == 0 ]
   then
   	# Print the extracted information
 	echo ""
