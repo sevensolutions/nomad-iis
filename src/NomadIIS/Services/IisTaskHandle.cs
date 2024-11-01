@@ -21,6 +21,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Security.Principal;
 using System.Text;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 
 namespace NomadIIS.Services;
@@ -39,7 +40,15 @@ public sealed class IisTaskHandle : IDisposable
 	private readonly CpuStats _kernelModeCpuStats = new();
 	private readonly CpuStats _userModeCpuStats = new();
 
+	private readonly Channel<UsageStatistics> _statsChannel = Channel.CreateBounded<UsageStatistics>( new BoundedChannelOptions( 1 )
+	{
+		FullMode = BoundedChannelFullMode.DropOldest
+	} );
+
+	// TODO: Maybe i'll re-use this later
+#pragma warning disable CS0414 // Dem Feld "IisTaskHandle._appPoolStoppedIntentionally" wurde ein Wert zugewiesen, der aber nie verwendet wird.
 	private bool _appPoolStoppedIntentionally = false;
+#pragma warning restore CS0414 // Dem Feld "IisTaskHandle._appPoolStoppedIntentionally" wurde ein Wert zugewiesen, der aber nie verwendet wird.
 
 	private NamedPipeClientStream? _stdoutLogStream;
 
@@ -57,6 +66,7 @@ public sealed class IisTaskHandle : IDisposable
 	public string TaskId { get; }
 	public TaskConfig? TaskConfig => _taskConfig;
 	public int? UdpLoggerPort => _state?.UdpLoggerPort;
+	public string? AppPoolName => _state?.AppPoolName;
 
 	public async Task<DriverStateV1> RunAsync ( TaskConfig task )
 	{
@@ -353,92 +363,47 @@ public sealed class IisTaskHandle : IDisposable
 	}
 	public async Task<int> WaitAsync ()
 	{
-		var exitCode = 0;
+		var tcs = new TaskCompletionSource();
 
-		try
-		{
-			while ( !_ctsDisposed.IsCancellationRequested )
-			{
-				await Task.Delay( 3000, _ctsDisposed.Token );
+		// TODO: Right now, i have no idea how to monitor the app pool state without producing a memory leak.
 
-				if ( _state is null )
-				{
-					exitCode = -1;
-					break;
-				}
+		_ctsDisposed.Token.Register( () => tcs.SetResult() );
 
-				exitCode = await _owner.LockAsync( handle =>
-				{
-					var appPool = FindApplicationPool( handle.ServerManager, _state.AppPoolName );
+		await tcs.Task;
 
-					if ( _appPoolStoppedIntentionally )
-						return Task.FromResult( 0 );
-
-					if ( appPool is not null )
-					{
-						_logger.LogDebug( $"AppPool {_state.AppPoolName} is in state {appPool.State}" );
-
-						if ( appPool.State == ObjectState.Stopped )
-							return Task.FromResult( -1 );
-					}
-					else
-						return Task.FromResult( -1 );
-
-					return Task.FromResult( 0 );
-				} );
-
-				if ( exitCode != 0 )
-					break;
-			}
-		}
-		catch ( OperationCanceledException )
-		{
-		}
-
-		return exitCode;
+		return 0;
 	}
+
+	internal ValueTask PublishStatsAsync ( UsageStatistics statistics )
+		=> _statsChannel.Writer.WriteAsync( statistics, _ctsDisposed.Token );
 
 	public async Task<TaskResourceUsage> GetStatisticsAsync ()
 	{
 		if ( _state is null || string.IsNullOrEmpty( _state.AppPoolName ) )
 			throw new InvalidOperationException( "Invalid state." );
 
-		return await _owner.LockAsync( handle =>
+		var stats = await _statsChannel.Reader.ReadAsync( _ctsDisposed.Token );
+
+		var cpuShares = _taskConfig?.Resources.AllocatedResources.Cpu.CpuShares ?? 0L;
+
+		var totalCpu = _totalCpuStats.Percent( stats.KernelModeTime + stats.UserModeTime );
+
+		return new TaskResourceUsage()
 		{
-			var appPool = GetApplicationPool( handle.ServerManager, _state.AppPoolName );
-
-			var w3wpPids = appPool.WorkerProcesses.Select( x => x.ProcessId ).ToArray();
-
-			if ( w3wpPids.Length > 0 )
+			Cpu = new CPUUsage()
 			{
-				var stats = WmiHelper.QueryWmiStatistics( w3wpPids );
-
-				var cpuShares = _taskConfig?.Resources.AllocatedResources.Cpu.CpuShares ?? 0L;
-
-				var totalCpu = _totalCpuStats.Percent( stats.KernelModeTime + stats.UserModeTime );
-
-				return Task.FromResult( new TaskResourceUsage()
-				{
-					Cpu = new CPUUsage()
-					{
-						Percent = totalCpu,
-						SystemMode = _kernelModeCpuStats.Percent( stats.KernelModeTime ),
-						UserMode = _userModeCpuStats.Percent( stats.UserModeTime ),
-						TotalTicks = ( cpuShares / 100d ) * totalCpu, // _totalCpuStats.TicksConsumed( totalCpu ),
-						MeasuredFields = { CPUUsage.Types.Fields.Percent, CPUUsage.Types.Fields.SystemMode, CPUUsage.Types.Fields.UserMode, CPUUsage.Types.Fields.TotalTicks }
-					},
-					Memory = new MemoryUsage()
-					{
-						Rss = stats.WorkingSetPrivate,
-						MeasuredFields = { MemoryUsage.Types.Fields.Rss }
-					}
-				} );
-			}
-			else
+				Percent = totalCpu,
+				SystemMode = _kernelModeCpuStats.Percent( stats.KernelModeTime ),
+				UserMode = _userModeCpuStats.Percent( stats.UserModeTime ),
+				TotalTicks = ( cpuShares / 100d ) * totalCpu, // _totalCpuStats.TicksConsumed( totalCpu ),
+				MeasuredFields = { CPUUsage.Types.Fields.Percent, CPUUsage.Types.Fields.SystemMode, CPUUsage.Types.Fields.UserMode, CPUUsage.Types.Fields.TotalTicks }
+			},
+			Memory = new MemoryUsage()
 			{
-				return Task.FromResult( new TaskResourceUsage() );
+				Rss = stats.WorkingSetPrivate,
+				MeasuredFields = { MemoryUsage.Types.Fields.Rss }
 			}
-		} );
+		};
 	}
 
 	public Task<InspectTaskResponse> InspectAsync ()

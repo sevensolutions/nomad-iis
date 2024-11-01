@@ -12,6 +12,9 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using System.Linq;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Security.Principal;
 
 namespace NomadIIS.Services;
 
@@ -30,6 +33,8 @@ public sealed class ManagementService : IHostedService
 	private CancellationTokenSource _cts = new CancellationTokenSource();
 	private readonly ConcurrentDictionary<string, IisTaskHandle> _handles = new();
 	private readonly SemaphoreSlim _lock = new( 1, 1 );
+	private ServerManager _serverManager = new ServerManager();
+	private Thread? _jobStatisticsThread;
 	private readonly Channel<DriverTaskEvent> _eventsChannel = Channel.CreateUnbounded<DriverTaskEvent>( new UnboundedChannelOptions()
 	{
 		SingleWriter = false,
@@ -78,14 +83,20 @@ public sealed class ManagementService : IHostedService
 	}
 
 	public Task StartAsync ( CancellationToken cancellationToken )
-		=> Task.CompletedTask;
+	{
+		_jobStatisticsThread = new Thread( JobStatisticsLoop );
+		_jobStatisticsThread.Start();
 
+		return Task.CompletedTask;
+	}
 	public async Task StopAsync ( CancellationToken cancellationToken )
 	{
 		_cts.Cancel();
 
 		if ( _udpLoggerTask is not null )
 			await _udpLoggerTask;
+
+		_serverManager.Dispose();
 	}
 
 	public IisTaskHandle CreateHandle ( string taskId )
@@ -128,19 +139,20 @@ public sealed class ManagementService : IHostedService
 			return true;
 		}, cancellationToken );
 	}
+
 	internal async Task<T> LockAsync<T> ( Func<IManagementLockHandle, Task<T>> action, CancellationToken cancellationToken = default )
 	{
 		await _lock.WaitAsync( cancellationToken );
 
-		var serverManager = new ServerManager();
-
-		var handle = new ManagementLockHandle( _logger, serverManager );
+		ManagementLockHandle? handle = null;
 
 		try
 		{
+			handle = new ManagementLockHandle( _logger, _serverManager );
+
 			var result = await action( handle );
 
-			serverManager.CommitChanges();
+			_serverManager.CommitChanges();
 
 			return result;
 		}
@@ -148,14 +160,13 @@ public sealed class ManagementService : IHostedService
 		{
 			_logger.LogError( ex, ex.Message );
 
-			await handle.RollbackAsync();
+			if ( handle is not null )
+				await handle.RollbackAsync();
 
 			throw;
 		}
 		finally
 		{
-			serverManager.Dispose();
-
 			_lock.Release();
 		}
 	}
@@ -235,6 +246,110 @@ public sealed class ManagementService : IHostedService
 			}
 		}
 	}
+
+	private async void JobStatisticsLoop ()
+	{
+		// Add some initial delay
+		await Task.Delay( 5000 );
+
+		while ( !_cts.IsCancellationRequested )
+		{
+			try
+			{
+				var jobHandles = _handles.Values.ToArray();
+
+				// Note: We try to find the worker processes directly by it's username which maps to the app pool name.
+				// This is better than using the IIS Management API because it's not using COM objects.
+				var w3wpProcessIds = Process.GetProcessesByName( "w3wp" )
+					.Where( x => !x.HasExited )
+					.GroupBy( x => GetProcessUser( x ) ?? string.Empty )
+					.Where( x => !string.IsNullOrEmpty( x.Key ) )
+					.Select( x => new { Name = x.Key, Processes = x.OrderBy( x => x.Id ).ToArray() } )
+					.ToDictionary( x => x.Name, StringComparer.InvariantCultureIgnoreCase );
+
+				if ( w3wpProcessIds.Count > 0 )
+				{
+					var processIds = w3wpProcessIds.SelectMany( x => x.Value.Processes ).Select( x => x.Id ).OrderBy( x => x ).ToArray();
+
+					var dMemory = WmiHelper.QueryPrivateWorkingSet( processIds );
+					var dCpu = WmiHelper.QueryCpuUsage( processIds );
+
+					foreach ( var jobHandle in jobHandles )
+					{
+						if ( jobHandle.AppPoolName is not null && w3wpProcessIds.TryGetValue( $"IIS AppPool\\{jobHandle.AppPoolName}", out var appPool ) && appPool.Processes.Length > 0 )
+						{
+							var workingSetPrivate = 0UL;
+							(ulong KernelModeTime, ulong UserModeTime) cpuUsage = (0UL, 0UL);
+
+							foreach ( var process in appPool.Processes )
+							{
+								if ( dMemory.TryGetValue( process.Id, out var v ) )
+									workingSetPrivate += v;
+
+								if ( dCpu.TryGetValue( process.Id, out var cpu ) )
+									cpuUsage = (cpuUsage.KernelModeTime + cpu.KernelModeTime, cpuUsage.UserModeTime + cpu.UserModeTime);
+							}
+
+							await jobHandle.PublishStatsAsync(
+								new UsageStatistics( cpuUsage.KernelModeTime, cpuUsage.UserModeTime, workingSetPrivate ) );
+						}
+					}
+				}
+			}
+			catch ( OperationCanceledException )
+			{
+			}
+			catch ( Exception ex )
+			{
+				_logger.LogWarning( ex, $"Failed to collect job statistics." );
+			}
+			finally
+			{
+				// Sadly we need to GC.Collect here because the WMI stuff uses a lot of COM objects.
+				GC.Collect();
+				GC.WaitForPendingFinalizers();
+
+				try
+				{
+					if ( !_cts.IsCancellationRequested )
+						await Task.Delay( 3000, _cts.Token );
+				}
+				catch ( OperationCanceledException )
+				{
+				}
+			}
+		}
+	}
+
+	private static string? GetProcessUser ( Process process )
+	{
+		var processHandle = IntPtr.Zero;
+
+		try
+		{
+			// We cannot simply use process.Token, because we need to impersonate
+			OpenProcessToken( process.Handle, 8, out processHandle );
+
+			using var wi = new WindowsIdentity( processHandle );
+
+			return wi.Name;
+		}
+		catch
+		{
+			return null;
+		}
+		finally
+		{
+			if ( processHandle != IntPtr.Zero )
+				CloseHandle( processHandle );
+		}
+	}
+
+	[DllImport( "advapi32.dll", SetLastError = true )]
+	private static extern bool OpenProcessToken ( IntPtr ProcessHandle, uint DesiredAccess, out IntPtr TokenHandle );
+	[DllImport( "kernel32.dll", SetLastError = true )]
+	[return: MarshalAs( UnmanagedType.Bool )]
+	private static extern bool CloseHandle ( IntPtr hObject );
 }
 
 public interface IManagementLockHandle
@@ -243,3 +358,5 @@ public interface IManagementLockHandle
 
 	Task JoinTransactionAsync ( Func<Task> action, Func<Task> rollbackAction );
 }
+
+internal record struct UsageStatistics ( ulong KernelModeTime, ulong UserModeTime, ulong WorkingSetPrivate );
