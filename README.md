@@ -80,4 +80,4 @@ Every contribution helps me to improve it, fix bugs and develop new features.
 Please also dont forget to ★ the repo.
 Thank You!
 
-<a href="https://www.buymeacoffee.com/sevensolutions" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
+[![](https://img.shields.io/static/v1?label=Sponsor&color=blue&message=%E2%9D%A4&logo=GitHub)](https://github.com/sponsors/sevensolutions)
