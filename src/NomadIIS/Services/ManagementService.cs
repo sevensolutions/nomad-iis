@@ -35,6 +35,7 @@ public sealed class ManagementService : IHostedService
 	private readonly SemaphoreSlim _lock = new( 1, 1 );
 	private ServerManager _serverManager = new ServerManager();
 	private Thread? _jobStatisticsThread;
+	private WmiHelper _wmiHelper = new WmiHelper();
 	private readonly Channel<DriverTaskEvent> _eventsChannel = Channel.CreateUnbounded<DriverTaskEvent>( new UnboundedChannelOptions()
 	{
 		SingleWriter = false,
@@ -96,6 +97,7 @@ public sealed class ManagementService : IHostedService
 		if ( _udpLoggerTask is not null )
 			await _udpLoggerTask;
 
+		_wmiHelper.Dispose();
 		_serverManager.Dispose();
 	}
 
@@ -260,39 +262,20 @@ public sealed class ManagementService : IHostedService
 
 				// Note: We try to find the worker processes directly by it's username which maps to the app pool name.
 				// This is better than using the IIS Management API because it's not using COM objects.
-				var w3wpProcessIds = Process.GetProcessesByName( "w3wp" )
+				var w3wpProcessToAppPoolNameMapping = Process.GetProcessesByName( "w3wp" )
 					.Where( x => !x.HasExited )
-					.GroupBy( x => GetProcessUser( x ) ?? string.Empty )
-					.Where( x => !string.IsNullOrEmpty( x.Key ) )
-					.Select( x => new { Name = x.Key, Processes = x.OrderBy( x => x.Id ).ToArray() } )
-					.ToDictionary( x => x.Name, StringComparer.InvariantCultureIgnoreCase );
+					.Select( x => new { Username = GetProcessUser( x ) ?? string.Empty, Process = x } )
+					.Where( x => !string.IsNullOrEmpty( x.Username ) )
+					.ToDictionary( x => x.Process.Id, x => x.Username );
 
-				if ( w3wpProcessIds.Count > 0 )
+				if ( w3wpProcessToAppPoolNameMapping.Count > 0 )
 				{
-					var processIds = w3wpProcessIds.SelectMany( x => x.Value.Processes ).Select( x => x.Id ).OrderBy( x => x ).ToArray();
-
-					var dMemory = WmiHelper.QueryPrivateWorkingSet( processIds );
-					var dCpu = WmiHelper.QueryCpuUsage( processIds );
+					var stats = _wmiHelper.QueryWorkerProcesses( w3wpProcessToAppPoolNameMapping );
 
 					foreach ( var jobHandle in jobHandles )
 					{
-						if ( jobHandle.AppPoolName is not null && w3wpProcessIds.TryGetValue( $"IIS AppPool\\{jobHandle.AppPoolName}", out var appPool ) && appPool.Processes.Length > 0 )
-						{
-							var workingSetPrivate = 0UL;
-							(ulong KernelModeTime, ulong UserModeTime) cpuUsage = (0UL, 0UL);
-
-							foreach ( var process in appPool.Processes )
-							{
-								if ( dMemory.TryGetValue( process.Id, out var v ) )
-									workingSetPrivate += v;
-
-								if ( dCpu.TryGetValue( process.Id, out var cpu ) )
-									cpuUsage = (cpuUsage.KernelModeTime + cpu.KernelModeTime, cpuUsage.UserModeTime + cpu.UserModeTime);
-							}
-
-							await jobHandle.PublishStatsAsync(
-								new UsageStatistics( cpuUsage.KernelModeTime, cpuUsage.UserModeTime, workingSetPrivate ) );
-						}
+						if ( jobHandle.AppPoolName is not null && stats.TryGetValue( $"IIS AppPool\\{jobHandle.AppPoolName}", out var jobStats ) )
+							await jobHandle.PublishStatsAsync( jobStats );
 					}
 				}
 			}
