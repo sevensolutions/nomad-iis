@@ -268,15 +268,20 @@ public sealed class ManagementService : IHostedService
 					.Where( x => !string.IsNullOrEmpty( x.Username ) )
 					.ToDictionary( x => x.Process.Id, x => x.Username );
 
-				if ( w3wpProcessToAppPoolNameMapping.Count > 0 )
-				{
-					var stats = _wmiHelper.QueryWorkerProcesses( w3wpProcessToAppPoolNameMapping );
+				Dictionary<string, UsageStatistics>? stats = null;
 
-					foreach ( var jobHandle in jobHandles )
+				if ( w3wpProcessToAppPoolNameMapping.Count > 0 )
+					stats = _wmiHelper.QueryWorkerProcesses( w3wpProcessToAppPoolNameMapping );
+
+				foreach ( var jobHandle in jobHandles )
+				{
+					if ( jobHandle.AppPoolName is not null && stats is not null &&
+						stats.TryGetValue( $"IIS AppPool\\{jobHandle.AppPoolName}", out var jobStats ) )
 					{
-						if ( jobHandle.AppPoolName is not null && stats.TryGetValue( $"IIS AppPool\\{jobHandle.AppPoolName}", out var jobStats ) )
-							await jobHandle.PublishStatsAsync( jobStats );
+						await jobHandle.PublishStatsAsync( jobStats );
 					}
+					else
+						await jobHandle.PublishStatsAsync( new UsageStatistics() );
 				}
 			}
 			catch ( OperationCanceledException )
