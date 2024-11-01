@@ -121,6 +121,10 @@ const config: Config = {
               label: 'GitHub',
               href: githubRepo,
             },
+						{
+							label: 'Sponsor',
+							href: "https://github.com/sponsors/sevensolutions"
+						}
           ],
         },
       ],
