@@ -52,18 +52,18 @@ jobs:
         fi
 
     # Zip the artifacts
-    - uses: vimtor/action-zip@v1.2
+    - uses: ./.github/actions/action-zip
       with:
         files: ./nomad_iis
         dest: nomad_iis.zip
-    - uses: vimtor/action-zip@v1.2
+    - uses: ./.github/actions/action-zip
       with:
         files: ./nomad_iis_mgmt_api
         dest: nomad_iis_mgmt_api.zip
 
     # Create the Release
     - name: create release
-      uses: softprops/action-gh-release@v2
+      uses: ./.github/actions/action-gh-release
       with:
         name: v${{ github.event.inputs.version }}
         tag_name: v${{ github.event.inputs.version }}
