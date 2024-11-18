@@ -19,15 +19,15 @@
 		<PackageReference Include="Grpc.AspNetCore" Version="2.66.0" />
 		<PackageReference Include="Grpc.AspNetCore.HealthChecks" Version="2.66.0" />
 		<PackageReference Include="Grpc.AspNetCore.Server.Reflection" Version="2.66.0" />
-		<PackageReference Include="MessagePack" Version="2.5.187" />
+		<PackageReference Include="MessagePack" Version="2.5.192" />
 		<PackageReference Include="Microsoft.Web.Administration" Version="11.1.0" />
 		<PackageReference Include="Serilog.AspNetCore" Version="8.0.3" />
-		<PackageReference Include="System.Management" Version="8.0.0" />
-		<PackageReference Include="System.Threading.Channels" Version="8.0.0" />
+		<PackageReference Include="System.Management" Version="9.0.0" />
+		<PackageReference Include="System.Threading.Channels" Version="9.0.0" />
 	</ItemGroup>
 
 	<ItemGroup Condition="$(DefineConstants.Contains('MANAGEMENT_API'))">
-		<PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.2.0" />
+		<PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.2.1" />
 		<PackageReference Include="Microsoft.Playwright" Version="1.48.0" />
 		<PackageReference Include="CliWrap" Version="3.6.7" />
 	</ItemGroup>
