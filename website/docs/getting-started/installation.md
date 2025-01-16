@@ -6,7 +6,7 @@ sidebar_position: 2
 
 :::tip
 I suggest to use [*HashiCorp Packer*](https://www.packer.io/) for automating the provisioning of client nodes if you need to maintain a lot of nodes.
-I'll provide an example as soon as i have time.
+You can find an example for Proxmox [here](https://github.com/sevensolutions/nomad-iis/tree/main/packer/nomad-client-windows) here which can be used as a starting-point.
 :::
 
 ## Requirements
