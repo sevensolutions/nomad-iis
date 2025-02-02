@@ -32,6 +32,34 @@ plugin "nomad_iis" {
 It is highly recommended to provide an API-Key to secure the API. Specify the key using the `--management-api-key`-argument as shown above.
 In this case, every API-call needs to provide this key as `X-Api-Key` header.
 
+## Task Status
+
+### Getting the current Task and Application Pool Status
+
+```
+GET /api/v1/allocs/{allocId}/{taskName}/status
+```
+
+This will return a JSON-object in the following format:
+
+```json
+{
+  "allocId": "<allocId>",
+  "taskName": "<taskName>",
+  "applicationPool": {
+    "status": "Started",
+    "isWorkerProcessRunning": true
+  }
+}
+```
+
+`applicationPool.status` values are:
+  - Starting
+  - Started
+  - Stopping
+  - Stopped
+  - Unknown
+
 ## Filesystem Access
 
 ### Download a File or Folder
