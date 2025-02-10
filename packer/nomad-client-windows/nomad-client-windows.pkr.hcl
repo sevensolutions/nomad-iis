@@ -132,8 +132,8 @@ source "proxmox-iso" "nomad-client-windows" {
         device = "sata4"
         iso_storage_pool = "local"
         cd_files = [
-            "files/setup/Autounattend.xml",
-            "files/setup/bootstrap.ps1"
+            "rendered/setup/Autounattend.xml",
+            "rendered/setup/bootstrap.ps1"
         ]
     }
     additional_iso_files {
@@ -157,7 +157,7 @@ build {
     sources = ["source.proxmox-iso.nomad-client-windows"]
     
     provisioner "powershell" {
-        script = "./files/scripts/post-setup.ps1"
+        script = "./rendered/scripts/post-setup.ps1"
     }
 
     provisioner "windows-restart" {
@@ -165,39 +165,39 @@ build {
     }
 
     provisioner "powershell" {
-        script = "./files/scripts/install-iis.ps1"
+        script = "./rendered/scripts/install-iis.ps1"
     }
 
     # https://developer.hashicorp.com/packer/docs/provisioners/file#directory-uploads
     provisioner "file" {
-        source = "files/consul"
+        source = "rendered/consul"
         destination = "C:\\"
     }
     provisioner "file" {
-        source = "files/nomad"
+        source = "rendered/nomad"
         destination = "C:\\"
     }
 
     provisioner "file" {
-        source = "files/cloud-init/install-services.ps1"
+        source = "rendered/cloud-init/install-services.ps1"
         destination = "C:\\install-services.ps1"
     }
 
     provisioner "powershell" {
-        script = "./files/scripts/install-apps.ps1"
+        script = "./rendered/scripts/install-apps.ps1"
     }
 
     provisioner "powershell" {
-        script = "./files/scripts/setup-firewall.ps1"
+        script = "./rendered/scripts/setup-firewall.ps1"
     }
 
     provisioner "file" {
-        source      = "./files/cloud-init/cloud-init.ps1"
+        source      = "./rendered/cloud-init/cloud-init.ps1"
         destination = "C:\\Windows\\System32\\cloud-init.ps1"
     }
 
     provisioner "powershell" {
-        script = "./files/scripts/cleanup.ps1"
+        script = "./rendered/scripts/cleanup.ps1"
     }
 
     provisioner "powershell" {
@@ -207,7 +207,7 @@ build {
     }
 
     provisioner "file" {
-        source      = "./files/sysprep/unattend.xml"
+        source      = "./rendered/sysprep/unattend.xml"
         destination = "C:\\Windows\\System32\\Sysprep\\unattend.xml"
     }
 

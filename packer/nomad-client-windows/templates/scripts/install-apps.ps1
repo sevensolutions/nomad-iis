@@ -1,4 +1,4 @@
-$consulVersion = "1.20.2"
+$consulVersion = "{{ .Env.CONSUL_VERSION }}"
 $consulDownloadUrl = "https://releases.hashicorp.com/consul/${consulVersion}/consul_${consulVersion}_windows_amd64.zip"
 $consulZipFileLocation = "consul_${consulVersion}_windows_amd64.zip"
 
@@ -13,7 +13,7 @@ Remove-Item $consulZipFileLocation | Out-Null
 
 
 
-$nomadVersion = "1.9.4"
+$nomadVersion = "{{ .Env.NOMAD_VERSION }}"
 $nomadDownloadUrl = "https://releases.hashicorp.com/nomad/${nomadVersion}/nomad_${nomadVersion}_windows_amd64.zip"
 $nomadZipFileLocation = "nomad_${nomadVersion}_windows_amd64.zip"
 
@@ -27,7 +27,7 @@ Expand-Archive $nomadZipFileLocation -DestinationPath C:\nomad -Force
 Remove-Item $nomadZipFileLocation | Out-Null
 
 
-$nomadIisVersion = "0.13.0"
+$nomadIisVersion = "{{ .Env.NOMAD_IIS_VERSION }}"
 $nomadIisDownloadUrl = "https://github.com/sevensolutions/nomad-iis/releases/download/v${nomadIisVersion}/nomad_iis.zip"
 $nomadIisZipFileLocation = "nomad_iis.zip"
 

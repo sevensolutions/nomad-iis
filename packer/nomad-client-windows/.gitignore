@@ -1,2 +1,5 @@
-./tools/
+tools/
+rendered/**
+
+.env
 .proxmox.pkrvars.hcl
