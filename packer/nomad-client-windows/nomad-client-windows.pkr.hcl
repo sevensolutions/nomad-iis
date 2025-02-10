@@ -183,6 +183,11 @@ build {
         destination = "C:\\install-services.ps1"
     }
 
+    provisioner "file" {
+        source = "certificates"
+        destination = "C:\\"
+    }
+
     provisioner "powershell" {
         script = "./rendered/scripts/install-apps.ps1"
     }

@@ -3,3 +3,7 @@ rendered/**
 
 .env
 .proxmox.pkrvars.hcl
+
+.crt
+.pem
+.key

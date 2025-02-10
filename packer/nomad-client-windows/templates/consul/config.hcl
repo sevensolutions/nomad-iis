@@ -2,35 +2,33 @@
 
 server = false
 
-datacenter = "dc1"
+datacenter = "{{ .Env.CONSUL_DATACENTER }}"
 
 data_dir = "C:\\consul\\data"
 
 client_addr = "0.0.0.0"
 
 bind_addr = "0.0.0.0"
-#advertise_addr = "10.0.30.x"
 
 ports {
   dns = 53
 }
 
-encrypt = "+A34+uLaeEZHiVVOTNLqcWJRGNHOfoMKt3ztPGFIZdE="
+encrypt = "{{ .Env.CONSUL_ENCRYPTION_KEY }}"
 
-retry_join = ["10.0.30.110", "10.0.30.111", "10.0.30.112"] # Our consul server
+retry_join = [{{ .Env.CONSUL_SERVER_IPS}}] # Our consul server
 
 acl {
   tokens {
-    default = "68e865f7-6f82-047d-7840-48f18c680a0c"
-    #agent  = "5443db30-758e-e620-f43d-946de85f0a3b"
+    default = "{{ .Env.CONSUL_TOKEN }}"
   }
 }
 
 tls {
   defaults {
-    ca_file = "C:\\consul\\agent-certs\\ca.crt"
-    cert_file = "C:\\consul\\agent-certs\\agent.crt"
-    key_file = "C:\\consul\\agent-certs\\agent.key"
+    ca_file = "C:\\certificates\\consul\\ca.crt"
+    cert_file = "C:\\certificates\\consul\\agent.crt"
+    key_file = "C:\\certificates\\consul\\agent.key"
 
     #verify_incoming = true
     #verify_outgoing = true

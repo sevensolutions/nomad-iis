@@ -34,9 +34,13 @@ proxmox_token_secret = "..."
 proxmox_insecure_skip_tls_verify = true
 ```
 
+Copy `sample.env` to `.env` and adjust the file to your needs.
+
+Copy your consul and nomad certificate files to `./certificates/consul`, `./certificates/nomad`.
+The files should be named `ca.crt`, `agent.crt` and `agent.key`.
+
 Review the following files and adjust them to your needs:
 
-- variables.pkrvars.hcl
 - nomad-client-windows.pkr.hcl
 - build.sh
 
