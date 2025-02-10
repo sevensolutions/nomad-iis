@@ -168,29 +168,6 @@ build {
         script = "./files/scripts/install-iis.ps1"
     }
 
-    # provisioner "windows-restart" {
-    #     restart_timeout = "15m"
-    # }
-
-    /*
-    provisioner "windows-update" {
-        search_criteria = "IsInstalled=0"
-        update_limit = 10
-    }
-
-    provisioner "windows-restart" {
-        restart_timeout = "15m"
-    }
-
-    provisioner "windows-update" {
-        search_criteria = "IsInstalled=0"
-        update_limit = 10
-    }
-
-    provisioner "windows-restart" {
-        restart_timeout = "15m"
-    }*/
-
     # https://developer.hashicorp.com/packer/docs/provisioners/file#directory-uploads
     provisioner "file" {
         source = "files/consul"

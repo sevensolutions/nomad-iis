@@ -4,9 +4,6 @@
 # http://msdn.microsoft.com/en-us/library/windows/desktop/aa370750(v=vs.85).aspx
 # http://blogs.msdn.com/b/powershell/archive/2009/04/03/setting-network-location-to-private.aspx
 
-#Write-Host "Copy unattend.xml to C:\Windows\Panther\Unattend\"
-#New-Item C:\Windows\Panther\Unattend -Type Directory
-
 # Get network connections
 $networkListManager = [Activator]::CreateInstance([Type]::GetTypeFromCLSID([Guid]'{DCB00C01-570F-4A9B-8D69-199FDBA5723B}'))
 $connections = $networkListManager.GetNetworkConnections()
@@ -54,30 +51,9 @@ function Enable-Virtio {
     }
 }
 
-# Write-Host "Installing SPICE"
-# # Search and Install virtio-win-guest-tools.exe
-
-# # Get all file system drives
-# $drives = Get-PSDrive -PSProvider 'FileSystem'
-
-# # Loop through each drive to find and run the MSI installer
-# foreach ($drive in $drives) {
-#     $scriptFile = Join-Path $drive.Root 'virtio-win-guest-tools.exe'
-
-#     # Check if the MSI file exists on the current drive
-#     if (Test-Path $scriptFile) {
-#         # Run the MSI installer with the specified arguments
-#         Start-Process msiexec -Wait -ArgumentList '/i', $scriptFile, '/log', 'C:\Windows\Temp\qemu-drivers.log', '/qn', '/passive', '/norestart', 'ADDLOCAL=ALL' -ErrorAction SilentlyContinue
-#     }
-# }
 If (Get-service -Name QEMU-GA -ErrorAction SilentlyContinue) {
     Write-Host "Starting QEMU Guest Agent"
     Start-Service -Name QEMU-GA -ErrorAction SilentlyContinue
-}
-
-If (Get-service -Name spice-agent -ErrorAction SilentlyContinue) {
-    Write-Host "Starting SPICE"
-    Start-Service -Name spice-agent -ErrorAction SilentlyContinue
 }
 
 function Enable-WinRM {
