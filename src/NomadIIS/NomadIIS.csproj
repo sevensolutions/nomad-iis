@@ -1,14 +1,14 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
 	<PropertyGroup>
-		<TargetFramework>net8.0</TargetFramework>
+		<TargetFramework>net9.0</TargetFramework>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>disable</ImplicitUsings>
 		<AssemblyName>nomad_iis</AssemblyName>
 		<IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
 		<Product>Windows IIS Driver for HashiCorp Nomad</Product>
 		<ProductName>Windows IIS Driver for HashiCorp Nomad</ProductName>
-		<Copyright>(C) Copyright 2024, Daniel Peinhopf</Copyright>
+		<Copyright>(C) Copyright 2025, Daniel Peinhopf</Copyright>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)' == 'Debug'">
