@@ -1,9 +1,11 @@
 ﻿#if MANAGEMENT_API
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using NomadIIS.ManagementApi.ApiModel;
 using NomadIIS.Services;
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
@@ -205,6 +207,28 @@ public sealed class ManagementApiController : Controller
 			if ( dumpFile.Exists )
 				dumpFile.Delete();
 		}
+	}
+
+	[HttpGet( "v1/debug" )]
+	public DebugInformation GetDebugInformation ()
+	{
+		var handles = _managementService.GetHandlesSnapshot();
+
+		return new DebugInformation()
+		{
+			IisHandleCount = handles.Length,
+			IisHandles = handles.Select( x => new DebugIisHandle()
+			{
+				TaskId = x.TaskId,
+				AppPoolName = x.AppPoolName,
+				AllocId = x.TaskConfig?.AllocId,
+				Namespace = x.TaskConfig?.Namespace,
+				JobId = x.TaskConfig?.JobId,
+				JobName = x.TaskConfig?.JobName,
+				TaskName = x.TaskConfig?.Name,
+				TaskGroupName = x.TaskConfig?.TaskGroupName
+			} ).ToArray()
+		};
 	}
 }
 #endif

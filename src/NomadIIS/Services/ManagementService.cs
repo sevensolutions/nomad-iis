@@ -133,6 +133,14 @@ public sealed class ManagementService : IHostedService
 			x => x.TaskConfig != null && x.TaskConfig.AllocId == allocId && x.TaskConfig.Name == taskName );
 	}
 
+	/// <summary>
+	/// Returns a current snapshot of the IIS handles without any locking.
+	/// Do not modify any of these handles.
+	/// </summary>
+	/// <returns></returns>
+	internal IisTaskHandle[] GetHandlesSnapshot ()
+		=> _handles.Values.ToArray();
+
 	internal async Task LockAsync ( Func<IManagementLockHandle, Task> action, CancellationToken cancellationToken = default )
 	{
 		_ = await LockAsync( async lockHandle =>
