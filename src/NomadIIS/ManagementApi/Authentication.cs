@@ -50,6 +50,7 @@ namespace NomadIIS.ManagementApi
 				var claimsIdentity = new ClaimsIdentity( Scheme.Name );
 
 				// Api-Key auth doesn't support custom claims, so we permit everything.
+				claimsIdentity.AddClaim( new Claim( "namespace", "*" ) );
 				claimsIdentity.AddClaim( new Claim( "job", "*" ) );
 				claimsIdentity.AddClaim( new Claim( "allocId", "*" ) );
 

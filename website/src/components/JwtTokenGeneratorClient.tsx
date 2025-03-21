@@ -1,13 +1,22 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import MDXContent from '@theme/MDXContent';
 import CodeBlock from '@theme/CodeBlock';
 
 export default function JwtTokenGeneratorClient() {
 	const [secret, setSecret] = useState<string>("VETkEPWkaVTxWf7J4Mm20KJWOx2cK4S7VvoP3ybjh6fr9P9PXvyhlY8HV2Jgxm2O");
-	const [token, setToken] = useState<string>();
+	const [token, setToken] = useState<string>("");
+	const [namespace, setNamespace] = useState<string>("");
+	const [jobId, setJobId] = useState<string>();
+	const [allocId, setAllocId] = useState<string>();
+	const [filesystemAccess, setFilesystemAccess] = useState<boolean>(true);
+	const [appPoolLifecycle, setAppPoolLifecycle] = useState<boolean>(true);
+	const [screenshots, setScreenshots] = useState<boolean>(true);
+	const [processDumps, setProcessDumps] = useState<boolean>(true);
+
 
 	return (
 		<div style={{ display: "flex", flexDirection: "column", gap: "0.5em" }}>
+			<h3>Configure the Plugin</h3>
 
 			<MDXContent>
 				JWT Tokens provide a more flexible way of securing the Management API.<br />
@@ -17,7 +26,7 @@ export default function JwtTokenGeneratorClient() {
 
 			<div style={{ display: "flex", gap: "0.5em" }}>
 				<label>JWT Secret:</label>
-				<input type="text" value={secret} onChange={ev => setSecret(ev.target.value)} style={{ flex: 1 }}></input>
+				<input type="text" value={secret} onChange={ev => { setSecret(ev.target.value); generateToken(); }} style={{ flex: 1 }}></input>
 			</div>
 
 			<MDXContent>
@@ -39,15 +48,74 @@ export default function JwtTokenGeneratorClient() {
 				}
 			</CodeBlock>
 
-			<button onClick={generateToken}>Generate</button>
+			<h3>Generate a JWT Token</h3>
 
+			<div style={{ display: "flex", gap: "1em" }}>
+				<div style={{ flex: 1 }}>
+					<h4>Limit to Job</h4>
+
+					<div style={{ display: "flex", gap: "0.5em" }}>
+						<label>Namespace:</label>
+						<input type="text" value={namespace} onChange={ev => { setNamespace(ev.target.value); generateToken(); }} style={{ flex: 1 }}></input>
+					</div>
+					<div style={{ display: "flex", gap: "0.5em" }}>
+						<label>Job Id:</label>
+						<input type="text" value={jobId} onChange={ev => { setJobId(ev.target.value); generateToken(); }} style={{ flex: 1 }}></input>
+					</div>
+					<div style={{ display: "flex", gap: "0.5em" }}>
+						<label>Alloc Id:</label>
+						<input type="text" value={allocId} onChange={ev => { setAllocId(ev.target.value); generateToken(); }} style={{ flex: 1 }}></input>
+					</div>
+				</div>
+				<div style={{ flex: 1 }}>
+					<h4>Limit Capabilities</h4>
+					
+					<div style={{ display: "flex", gap: "0.5em" }}>
+						<input id="cbCapability1" type="checkbox" checked={filesystemAccess} onChange={ev => { setFilesystemAccess(ev.target.checked); generateToken(); }}></input>
+						<label htmlFor="cbCapability1">Filesystem Access</label>
+					</div>
+					<div style={{ display: "flex", gap: "0.5em" }}>
+						<input id="cbCapability2" type="checkbox" checked={appPoolLifecycle} onChange={ev => { setAppPoolLifecycle(ev.target.checked); generateToken(); }}></input>
+						<label htmlFor="cbCapability2">Application Pool Lifecycle Management</label>
+					</div>
+					<div style={{ display: "flex", gap: "0.5em" }}>
+						<input id="cbCapability3" type="checkbox" checked={screenshots} onChange={ev => { setScreenshots(ev.target.checked); generateToken(); }}></input>
+						<label htmlFor="cbCapability3">Screenshots</label>
+					</div>
+					<div style={{ display: "flex", gap: "0.5em" }}>
+						<input id="cbCapability4" type="checkbox" checked={processDumps} onChange={ev => { setProcessDumps(ev.target.checked); generateToken(); }}></input>
+						<label htmlFor="cbCapability4">Process Dumps</label>
+					</div>
+				</div>
+			</div>
+
+			<span>Your Token:</span>
 			<span>{token}</span>
 		</div>
 	);
 
 	async function generateToken() {
 		try {
-			var claims = { a: 1 };
+			var claims: any = {
+				capabilities: []
+			};
+
+			if (namespace)
+				claims.namespace = namespace;
+			if (jobId)
+				claims.jobId = jobId;
+			if (allocId)
+				claims.allocId = allocId;
+
+			if (filesystemAccess)
+				claims.capabilities.push("filesystemAccess");
+			if (appPoolLifecycle)
+				claims.capabilities.push("appPoolLifecycle");
+			if (screenshots)
+				claims.capabilities.push("screenshots");
+			if (processDumps)
+				claims.capabilities.push("procDump");
+
 			const t = await createToken(claims, secret);
 
 			setToken(t);
