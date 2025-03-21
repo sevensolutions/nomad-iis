@@ -1,0 +1,10 @@
+.jwtTokenGenerator_row {
+	display: flex;
+	gap: 0.5em;
+	padding-bottom: 0.2em;
+}
+
+.label {
+	display: flex;
+	width: 7em;
+}

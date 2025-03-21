@@ -1,18 +1,22 @@
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect } from "react";
 import MDXContent from '@theme/MDXContent';
 import CodeBlock from '@theme/CodeBlock';
+import './JwtTokenGeneratorClient.styles.css';
 
 export default function JwtTokenGeneratorClient() {
-	const [secret, setSecret] = useState<string>("VETkEPWkaVTxWf7J4Mm20KJWOx2cK4S7VvoP3ybjh6fr9P9PXvyhlY8HV2Jgxm2O");
+	const [secret, setSecret] = useState<string>(generateRandomString(32));
 	const [token, setToken] = useState<string>("");
-	const [namespace, setNamespace] = useState<string>("");
-	const [jobId, setJobId] = useState<string>();
-	const [allocId, setAllocId] = useState<string>();
+	const [namespace, setNamespace] = useState<string>("*");
+	const [jobId, setJobId] = useState<string>("*");
+	const [allocId, setAllocId] = useState<string>("*");
 	const [filesystemAccess, setFilesystemAccess] = useState<boolean>(true);
 	const [appPoolLifecycle, setAppPoolLifecycle] = useState<boolean>(true);
 	const [screenshots, setScreenshots] = useState<boolean>(true);
 	const [processDumps, setProcessDumps] = useState<boolean>(true);
 
+	useEffect(() => {
+		generateToken();
+	});
 
 	return (
 		<div style={{ display: "flex", flexDirection: "column", gap: "0.5em" }}>
@@ -26,7 +30,8 @@ export default function JwtTokenGeneratorClient() {
 
 			<div style={{ display: "flex", gap: "0.5em" }}>
 				<label>JWT Secret:</label>
-				<input type="text" value={secret} onChange={ev => { setSecret(ev.target.value); generateToken(); }} style={{ flex: 1 }}></input>
+				<input type="text" value={secret} onChange={ev => setSecret(ev.target.value)} style={{ flex: 1 }}></input>
+				<button onClick={regenerateSecret}>Regenerate</button>
 			</div>
 
 			<MDXContent>
@@ -35,10 +40,10 @@ export default function JwtTokenGeneratorClient() {
 
 			<CodeBlock language="hcl">
 				{
-					`plugin "nomad_iis" {
+`plugin "nomad_iis" {
   args = [
     "--management-api-port=5004",
-		# highlight-next-line
+    # highlight-next-line
     "--management-api-jwt-secret=${secret}"
   ]
   config {
@@ -54,45 +59,70 @@ export default function JwtTokenGeneratorClient() {
 				<div style={{ flex: 1 }}>
 					<h4>Limit to Job</h4>
 
-					<div style={{ display: "flex", gap: "0.5em" }}>
-						<label>Namespace:</label>
-						<input type="text" value={namespace} onChange={ev => { setNamespace(ev.target.value); generateToken(); }} style={{ flex: 1 }}></input>
+					<div className="jwtTokenGenerator_row">
+						<label className="label">Namespace:</label>
+						<input className="control" type="text" value={namespace} onChange={ev => setNamespace(ev.target.value)} style={{ flex: 1 }}></input>
 					</div>
-					<div style={{ display: "flex", gap: "0.5em" }}>
-						<label>Job Id:</label>
-						<input type="text" value={jobId} onChange={ev => { setJobId(ev.target.value); generateToken(); }} style={{ flex: 1 }}></input>
+					<div className="jwtTokenGenerator_row">
+						<label className="label">Job Id:</label>
+						<input className="control" type="text" value={jobId} onChange={ev => setJobId(ev.target.value)} style={{ flex: 1 }}></input>
 					</div>
-					<div style={{ display: "flex", gap: "0.5em" }}>
-						<label>Alloc Id:</label>
-						<input type="text" value={allocId} onChange={ev => { setAllocId(ev.target.value); generateToken(); }} style={{ flex: 1 }}></input>
+					<div className="jwtTokenGenerator_row">
+						<label className="label">Alloc Id:</label>
+						<input className="control" type="text" value={allocId} onChange={ev => setAllocId(ev.target.value)} style={{ flex: 1 }}></input>
+					</div>
+					<div className="jwtTokenGenerator_row">
+						<span className="label"></span>
+						<span className="control">Use <i>*</i> to allow all.</span>
 					</div>
 				</div>
 				<div style={{ flex: 1 }}>
-					<h4>Limit Capabilities</h4>
+					<h4>Allowed Capabilities</h4>
 					
-					<div style={{ display: "flex", gap: "0.5em" }}>
-						<input id="cbCapability1" type="checkbox" checked={filesystemAccess} onChange={ev => { setFilesystemAccess(ev.target.checked); generateToken(); }}></input>
+					<div className="jwtTokenGenerator_row">
+						<input id="cbCapability1" type="checkbox" checked={filesystemAccess} onChange={ev => setFilesystemAccess(ev.target.checked)}></input>
 						<label htmlFor="cbCapability1">Filesystem Access</label>
 					</div>
-					<div style={{ display: "flex", gap: "0.5em" }}>
-						<input id="cbCapability2" type="checkbox" checked={appPoolLifecycle} onChange={ev => { setAppPoolLifecycle(ev.target.checked); generateToken(); }}></input>
+					<div className="jwtTokenGenerator_row">
+						<input id="cbCapability2" type="checkbox" checked={appPoolLifecycle} onChange={ev => setAppPoolLifecycle(ev.target.checked)}></input>
 						<label htmlFor="cbCapability2">Application Pool Lifecycle Management</label>
 					</div>
-					<div style={{ display: "flex", gap: "0.5em" }}>
-						<input id="cbCapability3" type="checkbox" checked={screenshots} onChange={ev => { setScreenshots(ev.target.checked); generateToken(); }}></input>
+					<div className="jwtTokenGenerator_row">
+						<input id="cbCapability3" type="checkbox" checked={screenshots} onChange={ev => setScreenshots(ev.target.checked)}></input>
 						<label htmlFor="cbCapability3">Screenshots</label>
 					</div>
-					<div style={{ display: "flex", gap: "0.5em" }}>
-						<input id="cbCapability4" type="checkbox" checked={processDumps} onChange={ev => { setProcessDumps(ev.target.checked); generateToken(); }}></input>
+					<div className="jwtTokenGenerator_row">
+						<input id="cbCapability4" type="checkbox" checked={processDumps} onChange={ev => setProcessDumps(ev.target.checked)}></input>
 						<label htmlFor="cbCapability4">Process Dumps</label>
 					</div>
 				</div>
 			</div>
 
-			<span>Your Token:</span>
-			<span>{token}</span>
+			<h4>Your Token:</h4>
+			<CodeBlock>{token}</CodeBlock>
+
+			<p>
+				You can now use this token in the following API-requests by providing it via the `Authorization` header in the form `Bearer &lt;token&gt;`.
+			</p>
 		</div>
 	);
+
+	function regenerateSecret() {
+		setSecret(generateRandomString(32));
+	}
+
+	function generateRandomString(length) {
+		const characters ='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+
+		let result = '';
+		const charactersLength = characters.length;
+		
+		for ( let i = 0; i < length; i++ ) {
+			result += characters.charAt(Math.floor(Math.random() * charactersLength));
+		}
+
+		return result;
+	}
 
 	async function generateToken() {
 		try {
@@ -115,6 +145,8 @@ export default function JwtTokenGeneratorClient() {
 				claims.capabilities.push("screenshots");
 			if (processDumps)
 				claims.capabilities.push("procDump");
+
+			console.log(claims);
 
 			const t = await createToken(claims, secret);
 
