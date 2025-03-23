@@ -35,6 +35,7 @@ public sealed class IisTaskHandle : IDisposable
 	// Note: These fields need to be recovered by RecoverState()!
 	private TaskConfig? _taskConfig;
 	private DriverStateV1? _state;
+	private bool _isRecovered;
 
 	private readonly CpuStats _totalCpuStats = new();
 	private readonly CpuStats _kernelModeCpuStats = new();
@@ -67,6 +68,7 @@ public sealed class IisTaskHandle : IDisposable
 	public TaskConfig? TaskConfig => _taskConfig;
 	public int? UdpLoggerPort => _state?.UdpLoggerPort;
 	public string? AppPoolName => _state?.AppPoolName;
+	public bool IsRecovered => _isRecovered;
 
 	public async Task<DriverStateV1> RunAsync ( TaskConfig task )
 	{
@@ -325,6 +327,8 @@ public sealed class IisTaskHandle : IDisposable
 		}
 		else
 			throw new InvalidOperationException( "Invalid state." );
+
+		_isRecovered = true;
 
 		_logger.LogInformation( $"Recovered task {_taskConfig.Id} from state: {_state}" );
 	}

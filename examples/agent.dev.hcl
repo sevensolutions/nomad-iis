@@ -3,9 +3,6 @@
 
 log_level = "TRACE"
 
-# Example JWT Token:
-# eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InN0YXRpYyJ9.eyJpc3MiOiJOb21hZElJUyIsImF1ZCI6Ik1hbmFnZW1lbnRBcGkiLCJzdWIiOiIxMjM0NTY3ODkwIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjk5OTk5OTk5OTksImpvYiI6WyIqIl0sImFsbG9jSWQiOlsiKiJdfQ.8MZL54z4pBw9pFk3jP4Yqy7kuKLgjeEXdaEdWI6GmgM
-
 plugin "nomad_iis" {
   args = [
     "--management-api-port=5004",

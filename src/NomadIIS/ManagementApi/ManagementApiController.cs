@@ -229,7 +229,8 @@ public sealed class ManagementApiController : Controller
 				JobId = x.TaskConfig?.JobId,
 				JobName = x.TaskConfig?.JobName,
 				TaskName = x.TaskConfig?.Name,
-				TaskGroupName = x.TaskConfig?.TaskGroupName
+				TaskGroupName = x.TaskConfig?.TaskGroupName,
+				IsRecovered = x.IsRecovered
 			} ).ToArray()
 		} );
 	}

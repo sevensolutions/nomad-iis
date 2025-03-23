@@ -56,5 +56,7 @@ public sealed class DebugIisHandle
 	public string? TaskName { get; set; }
 	[JsonPropertyName( "taskGroupName" )]
 	public string? TaskGroupName { get; set; }
+	[JsonPropertyName( "isRecovered" )]
+	public bool IsRecovered { get; set; }
 }
 #endif
