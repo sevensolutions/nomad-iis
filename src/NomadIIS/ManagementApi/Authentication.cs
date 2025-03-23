@@ -40,19 +40,22 @@ namespace NomadIIS.ManagementApi
 					new AuthenticationTicket( new ClaimsPrincipal( new ClaimsIdentity( Scheme.Name ) ), Scheme.Name ) );
 			}
 
-			if ( !Request.Headers.ContainsKey( Options.HeaderName ) )
-				return AuthenticateResult.Fail( $"Missing header {Options.HeaderName}." );
+			if ( !Request.Headers.ContainsKey( Options.HeaderName ) && !Request.Headers.ContainsKey( "Authorization" ) )
+				return AuthenticateResult.Fail( $"Missing {Options.HeaderName} or Authorization header." );
 
-			string headerValue = Request.Headers[Options.HeaderName]!;
+			string? headerValue = Request.Headers[Options.HeaderName];
 
-			if ( !string.IsNullOrEmpty( Options.ApiKey ) && headerValue == Options.ApiKey )
+			if ( !string.IsNullOrEmpty( headerValue ) && !string.IsNullOrEmpty( Options.ApiKey ) && headerValue == Options.ApiKey )
 			{
 				var claimsIdentity = new ClaimsIdentity( Scheme.Name );
 
 				// Api-Key auth doesn't support custom claims, so we permit everything.
 				claimsIdentity.AddClaim( new Claim( "namespace", "*" ) );
-				claimsIdentity.AddClaim( new Claim( "job", "*" ) );
+				claimsIdentity.AddClaim( new Claim( "jobName", "*" ) );
 				claimsIdentity.AddClaim( new Claim( "allocId", "*" ) );
+
+				foreach ( var cap in Enum.GetValues<AuthorizationCapability>() )
+					claimsIdentity.AddClaim( new Claim( "capabilities", Enum.GetName( cap )! ) );
 
 				var principal = new ClaimsPrincipal( claimsIdentity );
 
@@ -63,6 +66,9 @@ namespace NomadIIS.ManagementApi
 
 			if ( !string.IsNullOrEmpty( Options.ApiJwtSecret ) )
 			{
+				headerValue = Request.Headers.Authorization;
+				headerValue = headerValue?["Bearer ".Length..];
+
 				var validationResult = await new JwtSecurityTokenHandler()
 					.ValidateTokenAsync( headerValue, new TokenValidationParameters()
 					{

@@ -1,9 +1,11 @@
 ﻿#if MANAGEMENT_API
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using NomadIIS.ManagementApi.ApiModel;
 using NomadIIS.Services;
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
@@ -28,7 +30,7 @@ public sealed class ManagementApiController : Controller
 		if ( taskHandle is null )
 			return NotFound();
 
-		if ( !taskHandle.IsAuthorized( HttpContext ) )
+		if ( !taskHandle.IsAuthorized( HttpContext, AuthorizationCapability.Status ) )
 			return Forbid();
 
 		var status = await taskHandle.GetStatusAsync();
@@ -44,7 +46,7 @@ public sealed class ManagementApiController : Controller
 		if ( taskHandle is null )
 			return NotFound();
 
-		if ( !taskHandle.IsAuthorized( HttpContext ) )
+		if ( !taskHandle.IsAuthorized( HttpContext, AuthorizationCapability.AppPoolLifecycle ) )
 			return Forbid();
 
 		await taskHandle.StartAppPoolAsync();
@@ -59,7 +61,7 @@ public sealed class ManagementApiController : Controller
 		if ( taskHandle is null )
 			return NotFound();
 
-		if ( !taskHandle.IsAuthorized( HttpContext ) )
+		if ( !taskHandle.IsAuthorized( HttpContext, AuthorizationCapability.AppPoolLifecycle ) )
 			return Forbid();
 
 		await taskHandle.StopAppPoolAsync();
@@ -74,7 +76,7 @@ public sealed class ManagementApiController : Controller
 		if ( taskHandle is null )
 			return NotFound();
 
-		if ( !taskHandle.IsAuthorized( HttpContext ) )
+		if ( !taskHandle.IsAuthorized( HttpContext, AuthorizationCapability.AppPoolLifecycle ) )
 			return Forbid();
 
 		await taskHandle.RecycleAppPoolAsync();
@@ -90,7 +92,7 @@ public sealed class ManagementApiController : Controller
 		if ( taskHandle is null )
 			return NotFound();
 
-		if ( !taskHandle.IsAuthorized( HttpContext ) )
+		if ( !taskHandle.IsAuthorized( HttpContext, AuthorizationCapability.FilesystemAccess ) )
 			return Forbid();
 
 		path = HttpUtility.UrlDecode( path );
@@ -107,7 +109,7 @@ public sealed class ManagementApiController : Controller
 		if ( taskHandle is null )
 			return NotFound();
 
-		if ( !taskHandle.IsAuthorized( HttpContext ) )
+		if ( !taskHandle.IsAuthorized( HttpContext, AuthorizationCapability.FilesystemAccess ) )
 			return Forbid();
 
 		path = HttpUtility.UrlDecode( path );
@@ -126,7 +128,7 @@ public sealed class ManagementApiController : Controller
 		if ( taskHandle is null )
 			return NotFound();
 
-		if ( !taskHandle.IsAuthorized( HttpContext ) )
+		if ( !taskHandle.IsAuthorized( HttpContext, AuthorizationCapability.FilesystemAccess ) )
 			return Forbid();
 
 		path = HttpUtility.UrlDecode( path );
@@ -145,7 +147,7 @@ public sealed class ManagementApiController : Controller
 		if ( taskHandle is null )
 			return NotFound();
 
-		if ( !taskHandle.IsAuthorized( HttpContext ) )
+		if ( !taskHandle.IsAuthorized( HttpContext, AuthorizationCapability.FilesystemAccess ) )
 			return Forbid();
 
 		path = HttpUtility.UrlDecode( path );
@@ -164,7 +166,7 @@ public sealed class ManagementApiController : Controller
 		if ( taskHandle is null )
 			return NotFound();
 
-		if ( !taskHandle.IsAuthorized( HttpContext ) )
+		if ( !taskHandle.IsAuthorized( HttpContext, AuthorizationCapability.Screenshots ) )
 			return Forbid();
 
 		var screenshot = await taskHandle.TakeScreenshotAsync( path, cancellationToken );
@@ -183,7 +185,7 @@ public sealed class ManagementApiController : Controller
 		if ( taskHandle is null )
 			return NotFound();
 
-		if ( !taskHandle.IsAuthorized( HttpContext ) )
+		if ( !taskHandle.IsAuthorized( HttpContext, AuthorizationCapability.ProcDump ) )
 			return Forbid();
 
 		var dumpFile = new FileInfo( Path.GetTempFileName() + ".dmp" );
@@ -205,6 +207,31 @@ public sealed class ManagementApiController : Controller
 			if ( dumpFile.Exists )
 				dumpFile.Delete();
 		}
+	}
+
+	[HttpGet( "v1/debug" )]
+	public IActionResult GetDebugInformation ()
+	{
+		if ( !Authorization.IsAuthorized( HttpContext, AuthorizationCapability.Debug ) )
+			return Forbid();
+
+		var handles = _managementService.GetHandlesSnapshot();
+
+		return Ok( new DebugInformation()
+		{
+			IisHandleCount = handles.Length,
+			IisHandles = handles.Select( x => new DebugIisHandle()
+			{
+				TaskId = x.TaskId,
+				AppPoolName = x.AppPoolName,
+				AllocId = x.TaskConfig?.AllocId,
+				Namespace = x.TaskConfig?.Namespace,
+				JobId = x.TaskConfig?.JobId,
+				JobName = x.TaskConfig?.JobName,
+				TaskName = x.TaskConfig?.Name,
+				TaskGroupName = x.TaskConfig?.TaskGroupName
+			} ).ToArray()
+		} );
 	}
 }
 #endif
