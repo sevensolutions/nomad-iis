@@ -4,6 +4,10 @@ sidebar_position: 8
 
 # 🛠 Management API
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import JwtTokenGenerator from '@site/src/components/JwtTokenGenerator.tsx';
+
 :::caution
 The Management API is only available when using a special binary of *Nomad IIS*.  
 Please also note, that the API is experimental and may change in the future.
@@ -20,17 +24,44 @@ You need to enable the Management API by providing a dedicated port as shown bel
 
 ```hcl
 plugin "nomad_iis" {
-  args = ["--management-api-port=5004", "--management-api-key=12345"]
+  args = ["--management-api-port=5004"]
   config {
     enabled = true
   }
 }
 ```
 
-### Securing the API
+## Securing the API
 
-It is highly recommended to provide an API-Key to secure the API. Specify the key using the `--management-api-key`-argument as shown above.
-In this case, every API-call needs to provide this key as `X-Api-Key` header.
+It is highly recommended to secure the API by using an API-Key or a JWT token.
+
+<Tabs>
+<TabItem value="api-key" label="API-Key" default>
+
+Specify the key using the `--management-api-key`-argument as shown:
+
+```hcl
+plugin "nomad_iis" {
+  args = [
+    "--management-api-port=5004",
+    # highlight-next-line
+    "--management-api-key=12345"
+  ]
+  config {
+    enabled = true
+  }
+}
+```
+
+Every API-call needs to provide this key as `X-Api-Key` header.
+
+</TabItem>
+<TabItem value="jwt" label="JWT Tokens">
+
+<JwtTokenGenerator />
+
+</TabItem>
+</Tabs>
 
 ## Task Status
 
