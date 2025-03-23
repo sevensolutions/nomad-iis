@@ -6,13 +6,15 @@ import './JwtTokenGeneratorClient.styles.css';
 export default function JwtTokenGeneratorClient() {
 	const [secret, setSecret] = useState<string>(generateRandomString(32));
 	const [token, setToken] = useState<string>("");
+	const [expDate, setExpDate] = useState<string>(getNextYearDateFormatted());
 	const [namespace, setNamespace] = useState<string>("*");
-	const [jobId, setJobId] = useState<string>("*");
+	const [jobName, setJobName] = useState<string>("*");
 	const [allocId, setAllocId] = useState<string>("*");
 	const [filesystemAccess, setFilesystemAccess] = useState<boolean>(true);
 	const [appPoolLifecycle, setAppPoolLifecycle] = useState<boolean>(true);
 	const [screenshots, setScreenshots] = useState<boolean>(true);
 	const [processDumps, setProcessDumps] = useState<boolean>(true);
+	const [debug, setDebug] = useState<boolean>(true);
 
 	useEffect(() => {
 		generateToken();
@@ -56,6 +58,13 @@ export default function JwtTokenGeneratorClient() {
 			<h3>Generate a JWT Token</h3>
 
 			<div style={{ display: "flex", gap: "1em" }}>
+				<div className="jwtTokenGenerator_row">
+					<label className="label">Expiration Date:</label>
+					<input className="control" type="date" value={expDate} onChange={ev => setExpDate(ev.target.value)} style={{ flex: 1 }}></input>
+				</div>
+			</div>
+
+			<div style={{ display: "flex", gap: "1em" }}>
 				<div style={{ flex: 1 }}>
 					<h4>Limit to Job</h4>
 
@@ -64,8 +73,8 @@ export default function JwtTokenGeneratorClient() {
 						<input className="control" type="text" value={namespace} onChange={ev => setNamespace(ev.target.value)} style={{ flex: 1 }}></input>
 					</div>
 					<div className="jwtTokenGenerator_row">
-						<label className="label">Job Id:</label>
-						<input className="control" type="text" value={jobId} onChange={ev => setJobId(ev.target.value)} style={{ flex: 1 }}></input>
+						<label className="label">Job Name:</label>
+						<input className="control" type="text" value={jobName} onChange={ev => setJobName(ev.target.value)} style={{ flex: 1 }}></input>
 					</div>
 					<div className="jwtTokenGenerator_row">
 						<label className="label">Alloc Id:</label>
@@ -94,6 +103,10 @@ export default function JwtTokenGeneratorClient() {
 					<div className="jwtTokenGenerator_row">
 						<input id="cbCapability4" type="checkbox" checked={processDumps} onChange={ev => setProcessDumps(ev.target.checked)}></input>
 						<label htmlFor="cbCapability4">Process Dumps</label>
+					</div>
+					<div className="jwtTokenGenerator_row">
+						<input id="cbCapability5" type="checkbox" checked={debug} onChange={ev => setDebug(ev.target.checked)}></input>
+						<label htmlFor="cbCapability5">Debug Information</label>
 					</div>
 				</div>
 			</div>
@@ -126,25 +139,33 @@ export default function JwtTokenGeneratorClient() {
 
 	async function generateToken() {
 		try {
-			var claims: any = {
+			const now = new Date();
+
+			const claims: any = {
+				iss: "NomadIIS",
+  				aud: "ManagementApi",
+				iat: Math.round(now.getTime() / 1000),
+				exp: Math.round(Date.parse(expDate) / 1000),
 				capabilities: []
 			};
 
 			if (namespace)
 				claims.namespace = namespace;
-			if (jobId)
-				claims.jobId = jobId;
+			if (jobName)
+				claims.jobName = jobName;
 			if (allocId)
 				claims.allocId = allocId;
 
 			if (filesystemAccess)
-				claims.capabilities.push("filesystemAccess");
+				claims.capabilities.push("FilesystemAccess");
 			if (appPoolLifecycle)
-				claims.capabilities.push("appPoolLifecycle");
+				claims.capabilities.push("AppPoolLifecycle");
 			if (screenshots)
-				claims.capabilities.push("screenshots");
+				claims.capabilities.push("Screenshots");
 			if (processDumps)
-				claims.capabilities.push("procDump");
+				claims.capabilities.push("ProcDump");
+			if (debug)
+				claims.capabilities.push("Debug");
 
 			console.log(claims);
 
@@ -187,8 +208,7 @@ export default function JwtTokenGeneratorClient() {
 			["sign", "verify"] //can be any combination of "sign" and "verify"
 		);
 
-		var jsonString = JSON.stringify(data);
-		var encodedData = encoder.encode(jsonString);
+		var encodedData = encoder.encode(data);
 
 		const token = await window.crypto.subtle.sign(
 			{
@@ -199,12 +219,19 @@ export default function JwtTokenGeneratorClient() {
 		);
 
 		var u8 = new Uint8Array(token);
-		var b64encoded = encodeBase64Url(String.fromCharCode.apply(null, u8));
+		var b64encoded = encodeBase64Url(String.fromCharCode(...u8));
 
 		return b64encoded;
 	}
 
 	function encodeBase64Url(data) {
 		return btoa(data).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+	}
+
+	function getNextYearDateFormatted() {
+		const now = new Date();
+		const nextYear = new Date(now.setFullYear(now.getFullYear() + 1));
+
+		return nextYear.toISOString().split('T')[0];
 	}
 }
