@@ -13,8 +13,7 @@ public static class Authorization
 		var jobName = taskHandle.TaskConfig?.JobName ?? throw new InvalidOperationException();
 		var allocId = taskHandle.TaskConfig?.AllocId ?? throw new InvalidOperationException();
 
-
-		if ( !httpContext.User.HasClaim( "namespace", jobName ) && !httpContext.User.HasClaim( "namespace", "*" ) )
+		if ( !httpContext.User.HasClaim( "namespace", jobNamespace ) && !httpContext.User.HasClaim( "namespace", "*" ) )
 			return false;
 		if ( !httpContext.User.HasClaim( "jobName", jobName ) && !httpContext.User.HasClaim( "jobName", "*" ) )
 			return false;
