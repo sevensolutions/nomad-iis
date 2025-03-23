@@ -30,7 +30,7 @@ public sealed class ManagementApiController : Controller
 		if ( taskHandle is null )
 			return NotFound();
 
-		if ( !taskHandle.IsAuthorized( HttpContext ) )
+		if ( !taskHandle.IsAuthorized( HttpContext, AuthorizationCapability.Status ) )
 			return Forbid();
 
 		var status = await taskHandle.GetStatusAsync();
@@ -46,7 +46,7 @@ public sealed class ManagementApiController : Controller
 		if ( taskHandle is null )
 			return NotFound();
 
-		if ( !taskHandle.IsAuthorized( HttpContext ) )
+		if ( !taskHandle.IsAuthorized( HttpContext, AuthorizationCapability.AppPoolLifecycle ) )
 			return Forbid();
 
 		await taskHandle.StartAppPoolAsync();
@@ -61,7 +61,7 @@ public sealed class ManagementApiController : Controller
 		if ( taskHandle is null )
 			return NotFound();
 
-		if ( !taskHandle.IsAuthorized( HttpContext ) )
+		if ( !taskHandle.IsAuthorized( HttpContext, AuthorizationCapability.AppPoolLifecycle ) )
 			return Forbid();
 
 		await taskHandle.StopAppPoolAsync();
@@ -76,7 +76,7 @@ public sealed class ManagementApiController : Controller
 		if ( taskHandle is null )
 			return NotFound();
 
-		if ( !taskHandle.IsAuthorized( HttpContext ) )
+		if ( !taskHandle.IsAuthorized( HttpContext, AuthorizationCapability.AppPoolLifecycle ) )
 			return Forbid();
 
 		await taskHandle.RecycleAppPoolAsync();
@@ -92,7 +92,7 @@ public sealed class ManagementApiController : Controller
 		if ( taskHandle is null )
 			return NotFound();
 
-		if ( !taskHandle.IsAuthorized( HttpContext ) )
+		if ( !taskHandle.IsAuthorized( HttpContext, AuthorizationCapability.FilesystemAccess ) )
 			return Forbid();
 
 		path = HttpUtility.UrlDecode( path );
@@ -109,7 +109,7 @@ public sealed class ManagementApiController : Controller
 		if ( taskHandle is null )
 			return NotFound();
 
-		if ( !taskHandle.IsAuthorized( HttpContext ) )
+		if ( !taskHandle.IsAuthorized( HttpContext, AuthorizationCapability.FilesystemAccess ) )
 			return Forbid();
 
 		path = HttpUtility.UrlDecode( path );
@@ -128,7 +128,7 @@ public sealed class ManagementApiController : Controller
 		if ( taskHandle is null )
 			return NotFound();
 
-		if ( !taskHandle.IsAuthorized( HttpContext ) )
+		if ( !taskHandle.IsAuthorized( HttpContext, AuthorizationCapability.FilesystemAccess ) )
 			return Forbid();
 
 		path = HttpUtility.UrlDecode( path );
@@ -147,7 +147,7 @@ public sealed class ManagementApiController : Controller
 		if ( taskHandle is null )
 			return NotFound();
 
-		if ( !taskHandle.IsAuthorized( HttpContext ) )
+		if ( !taskHandle.IsAuthorized( HttpContext, AuthorizationCapability.FilesystemAccess ) )
 			return Forbid();
 
 		path = HttpUtility.UrlDecode( path );
@@ -166,7 +166,7 @@ public sealed class ManagementApiController : Controller
 		if ( taskHandle is null )
 			return NotFound();
 
-		if ( !taskHandle.IsAuthorized( HttpContext ) )
+		if ( !taskHandle.IsAuthorized( HttpContext, AuthorizationCapability.Screenshots ) )
 			return Forbid();
 
 		var screenshot = await taskHandle.TakeScreenshotAsync( path, cancellationToken );
@@ -185,7 +185,7 @@ public sealed class ManagementApiController : Controller
 		if ( taskHandle is null )
 			return NotFound();
 
-		if ( !taskHandle.IsAuthorized( HttpContext ) )
+		if ( !taskHandle.IsAuthorized( HttpContext, AuthorizationCapability.ProcDump ) )
 			return Forbid();
 
 		var dumpFile = new FileInfo( Path.GetTempFileName() + ".dmp" );
@@ -210,11 +210,14 @@ public sealed class ManagementApiController : Controller
 	}
 
 	[HttpGet( "v1/debug" )]
-	public DebugInformation GetDebugInformation ()
+	public IActionResult GetDebugInformation ()
 	{
+		if ( !Authorization.IsAuthorized( HttpContext, AuthorizationCapability.Debug ) )
+			return Forbid();
+
 		var handles = _managementService.GetHandlesSnapshot();
 
-		return new DebugInformation()
+		return Ok( new DebugInformation()
 		{
 			IisHandleCount = handles.Length,
 			IisHandles = handles.Select( x => new DebugIisHandle()
@@ -228,7 +231,7 @@ public sealed class ManagementApiController : Controller
 				TaskName = x.TaskConfig?.Name,
 				TaskGroupName = x.TaskConfig?.TaskGroupName
 			} ).ToArray()
-		};
+		} );
 	}
 }
 #endif
