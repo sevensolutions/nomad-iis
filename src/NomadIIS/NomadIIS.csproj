@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+<Project Sdk="Microsoft.NET.Sdk.Web">
 
 	<PropertyGroup>
 		<TargetFramework>net9.0</TargetFramework>
@@ -27,8 +27,8 @@
 	</ItemGroup>
 
 	<ItemGroup Condition="$(DefineConstants.Contains('MANAGEMENT_API'))">
-		<PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.6.1" />
-		<PackageReference Include="Microsoft.Playwright" Version="1.50.0" />
+		<PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.7.0" />
+		<PackageReference Include="Microsoft.Playwright" Version="1.51.0" />
 		<PackageReference Include="CliWrap" Version="3.8.2" />
 	</ItemGroup>
 
