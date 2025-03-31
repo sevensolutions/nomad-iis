@@ -97,7 +97,7 @@ jobs:
     - name: Install .NET Core
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 8.0.x
+        dotnet-version: 9.0.x
 
     # Install IIS
     - name: Install IIS
@@ -158,7 +158,7 @@ jobs:
     - name: Run tests
       env:
         RUNNING_IN_CI: true
-        TEST_PLUGIN_DIRECTORY: ..\..\..\..\..\artifacts # Relative to bin\Debug\net8.0
+        TEST_PLUGIN_DIRECTORY: ..\..\..\..\..\artifacts # Relative to bin\Debug\net9.0
         #MANAGEMENT_API: ${{ matrix.profile.artifactName == 'nomad_iis_mgmt_api' && 'true' || '' }}
       run: |
         $args = ''
@@ -166,6 +166,6 @@ jobs:
           $args = '-p:DefineConstants="MANAGEMENT_API"'
         }
         dotnet test src\NomadIIS.Tests\NomadIIS.Tests.csproj ${args}
-      #  Get-Content -Path "src\NomadIIS.Tests\bin\Debug\net8.0\debug.test.txt"
+      #  Get-Content -Path "src\NomadIIS.Tests\bin\Debug\net9.0\debug.test.txt"
 
 # cat ./src/NomadIIS/PluginInfo.cs | grep -oP 'public static readonly string Version = "([0-9]+\.[0-9]+\.[0-9])";'
