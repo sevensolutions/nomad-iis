@@ -201,7 +201,7 @@ job "static-sample-app" {
 This is usefull for testing HTTPS and *MUST NOT* be used in production.
 :::
 
-## Usefull Information
+## Useful Information
 
 ### Where can i find the installed certificates?
 
@@ -211,5 +211,5 @@ Just select the server-node and navigate to *Server Certificates*. Each certific
 
 ### Are the certificates being uninstalled when no longer needed?
 
-Yes of course. They will be uninstalled when the allocation is stopped, but keep in mind, that multiple allocation may use the same certificate.
+Yes of course. They will be uninstalled when the allocation is stopped, but keep in mind, that multiple allocations may use the same certificate.
 This means, that the certificate will be removed, once the last allocation, with a binding to it, has been stopped.

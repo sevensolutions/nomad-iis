@@ -109,6 +109,11 @@ Download the latest version of the Nomad-IIS plugin from the Releases page at Gi
 
 [Download](https://github.com/sevensolutions/nomad-iis/releases)
 
+:::tip
+If you want to use the [Management API](../features/management-api.md), you need to download `nomad_iis_mgmt_api.zip`.
+Otherwise you can download the smaller file `nomad_iis.zip` which contains the exact same features, except the Management API.
+:::
+
 Extract the ZIP-file and copy the *nomad_iis.exe* into your configured plugin directory.
 
 ## Configure Nomad IIS
