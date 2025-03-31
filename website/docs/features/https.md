@@ -198,7 +198,7 @@ job "static-sample-app" {
 ```
 
 :::caution
-This is usefull for testing HTTPS and *MUST NOT* be used in production.
+This is useful for testing HTTPS and *MUST NOT* be used in production.
 :::
 
 ## Useful Information

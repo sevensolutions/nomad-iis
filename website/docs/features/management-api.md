@@ -118,7 +118,7 @@ Setting the `clean`-parameter to true will delete all files in the target-direct
 The difference between the `PUT` and `PATCH` method is, that `PUT` will stop the application while uploading the file, whereas `PATCH` will hot-patch the file, keeping the app running. Keep in mind that hot-patching may fail if some files are currently being locked by the worker process.
 
 :::tip
-Using these methods it is possible to upload an application into a previously deployed allocation. This can be thought as the opposite of Nomad pulling the application from somewhere. This is usefull if you want to run an application shortly, eg. to run UI-tests against.
+Using these methods it is possible to upload an application into a previously deployed allocation. This can be thought as the opposite of Nomad pulling the application from somewhere. This is useful if you want to run an application shortly, eg. to run UI-tests against.
 :::
 
 :::info
