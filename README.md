@@ -10,7 +10,7 @@
   </a>
 </p>
 
-A task driver for [HashiCorp Nomad](https://www.nomadproject.io/) to run web-applications in IIS on Windows machines. Unlike most other Nomad task drivers, this one is written in the C# language using ASP.NET 8.
+A task driver for [HashiCorp Nomad](https://www.nomadproject.io/) to run web-applications in IIS on Windows machines. Unlike most other Nomad task drivers, this one is written in the C# language using ASP.NET 9.
 It uses the *Microsoft.Web.Administration*-API to communicate with IIS.
 Feel free to use it as-is or as a reference implementation for your own C#-based Nomad-plugins.
 
@@ -27,10 +27,10 @@ Feel free to use it as-is or as a reference implementation for your own C#-based
 | Multiple Applications | ✔ | Support for multiple sub-applications below the website. |
 | Virtual Directories | ✔ | Support for multiple *virtual directories* below an application. |
 | HTTP Bindings | ✔ | |
-| HTTPS Bindings | ✔ | [GH-3](https://github.com/sevensolutions/nomad-iis/issues/3) |
+| HTTPS Bindings | ✔ | [Details](https://nomad-iis.sevensolutions.cc/docs/features/https) |
 | Environment Variables | ✔ | [Details](https://nomad-iis.sevensolutions.cc/docs/features/environment-variables) |
 | Resource Statistics | ✔ | |
-| Logging | ✔ | Experimental UDP logging. See [GH-6](https://github.com/sevensolutions/nomad-iis/issues/6) for details. |
+| Logging | ✔ | Experimental UDP logging. [Details](https://nomad-iis.sevensolutions.cc/docs/features/udp-logging) |
 | Signals | ✔ | [Details](https://nomad-iis.sevensolutions.cc/docs/features/signals) |
 | Exec (Shell Access) | ❌ | I'am playing around a little bit but don't want to give you hope :/. See [GH-15](https://github.com/sevensolutions/nomad-iis/issues/15) for status. |
 | Filesystem Isolation | 🔶 | [Details](https://nomad-iis.sevensolutions.cc/docs/features/filesystem-isolation) |
@@ -67,7 +67,7 @@ Note: To debug the driver itself, you need to attach the debugger to the nomad_i
 
 ## 🎁 How to build Release version
 
-Run the *Release.pubxml* publish profile from Visual Studio. This will create a single binary exe called *nomad_iis.exe*.
+Run the *Release.pubxml* or *ReleaseWithMgmtApi.pubxml* publish profile from Visual Studio. This will create a single binary exe called *nomad_iis.exe*.
 
 ## 🚧 TODOs and Known Issues
 
@@ -75,6 +75,9 @@ Check the [Open Issues here](https://github.com/sevensolutions/nomad-iis/issues)
 
 ## ☕ Support
 
-You want to support me?
+I put a lot of ❤️ and effort into this project and i want to make it *the best* IIS driver for Nomad.
+Every contribution helps me to improve it, fix bugs and develop new features.
+Please also dont forget to ★ the repo.
+Thank You!
 
-<a href="https://www.buymeacoffee.com/sevensolutions" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
+[![](https://img.shields.io/static/v1?label=Sponsor&color=blue&message=%E2%9D%A4&logo=GitHub)](https://github.com/sponsors/sevensolutions)

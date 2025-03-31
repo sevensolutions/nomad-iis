@@ -73,3 +73,34 @@ public enum JobStatus
 	[JsonPropertyName( "dead" )]
 	Dead
 }
+
+public sealed class AllocationResponse
+{
+	[JsonPropertyName( "ID" )]
+	public string Id { get; set; } = default!;
+	[JsonPropertyName( "Name" )]
+	public string Name { get; set; } = default!;
+	[JsonPropertyName( "Resources" )]
+	public AllocationResources Resources { get; set; } = default!;
+}
+public sealed class AllocationResources
+{
+	[JsonPropertyName( "Networks" )]
+	public AllocationNetwork[] Networks { get; set; } = default!;
+}
+public sealed class AllocationNetwork
+{
+	[JsonPropertyName( "DynamicPorts" )]
+	public NetworkDynamicPort[] DynamicPorts { get; set; } = default!;
+}
+public sealed class NetworkDynamicPort
+{
+	[JsonPropertyName( "Label" )]
+	public string Label { get; set; } = default!;
+	[JsonPropertyName( "Value" )]
+	public int Value { get; set; } = default!;
+	[JsonPropertyName( "To" )]
+	public int To { get; set; } = default!;
+	[JsonPropertyName( "HostNetwork" )]
+	public string HostNetwork { get; set; } = default!;
+}

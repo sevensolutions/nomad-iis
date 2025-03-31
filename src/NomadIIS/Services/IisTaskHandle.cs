@@ -21,12 +21,15 @@ using System.Security.Cryptography.X509Certificates;
 using System.Security.Principal;
 using System.Text;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 
 namespace NomadIIS.Services;
 
 public sealed class IisTaskHandle : IDisposable
 {
+	public const string AppPoolOrWebsiteNamePrefix = "nomad-";
+
 	private readonly ManagementService _owner;
 	private readonly ILogger _logger;
 	private readonly CancellationTokenSource _ctsDisposed = new();
@@ -34,12 +37,21 @@ public sealed class IisTaskHandle : IDisposable
 	// Note: These fields need to be recovered by RecoverState()!
 	private TaskConfig? _taskConfig;
 	private DriverStateV1? _state;
+	private bool _isRecovered;
 
 	private readonly CpuStats _totalCpuStats = new();
 	private readonly CpuStats _kernelModeCpuStats = new();
 	private readonly CpuStats _userModeCpuStats = new();
 
+	private readonly Channel<UsageStatistics> _statsChannel = Channel.CreateBounded<UsageStatistics>( new BoundedChannelOptions( 1 )
+	{
+		FullMode = BoundedChannelFullMode.DropOldest
+	} );
+
+	// TODO: Maybe i'll re-use this later
+#pragma warning disable CS0414 // Dem Feld "IisTaskHandle._appPoolStoppedIntentionally" wurde ein Wert zugewiesen, der aber nie verwendet wird.
 	private bool _appPoolStoppedIntentionally = false;
+#pragma warning restore CS0414 // Dem Feld "IisTaskHandle._appPoolStoppedIntentionally" wurde ein Wert zugewiesen, der aber nie verwendet wird.
 
 	private NamedPipeClientStream? _stdoutLogStream;
 
@@ -57,6 +69,9 @@ public sealed class IisTaskHandle : IDisposable
 	public string TaskId { get; }
 	public TaskConfig? TaskConfig => _taskConfig;
 	public int? UdpLoggerPort => _state?.UdpLoggerPort;
+	public string? AppPoolName => _state?.AppPoolName;
+	public string? WebsiteName => _state?.WebsiteName;
+	public bool IsRecovered => _isRecovered;
 
 	public async Task<DriverStateV1> RunAsync ( TaskConfig task )
 	{
@@ -75,41 +90,21 @@ public sealed class IisTaskHandle : IDisposable
 
 			config = MessagePackHelper.Deserialize<DriverTaskConfig>( task.MsgpackDriverConfig );
 
-			foreach ( var app in config.Applications )
-			{
-				// In case someone is specifying the alias with a leading slash.
-				if ( app.Alias is not null )
-					app.Alias = app.Alias.TrimStart( '/' );
-			}
+			ValidateAndCoerceTaskConfiguration( config );
 
-			if ( config.Applications.Select( x => x.Alias ).Distinct().Count() != config.Applications.Length )
-				throw new ArgumentException( "Every application alias must be unique." );
-
-			if ( !string.IsNullOrEmpty( config.TargetWebsite ) )
-			{
-				if ( !IsAllowedTargetWebsite( config.TargetWebsite ) )
-					throw new InvalidOperationException( $"Using target_website \"{config.TargetWebsite}\" is not allowed on this node." );
-
-				if ( config.TargetWebsite.StartsWith( "nomad-" ) )
-					throw new InvalidOperationException( $"Re-using the existing nomad website \"{config.TargetWebsite}\" as target_website is not allowed." );
-
-				if ( config.Applications.Any( x => string.IsNullOrEmpty( x.Alias ) ) )
-					throw new ArgumentException( "Defining a root application with an empty alias is not allowed when using a target_website." );
-			}
-
-			await _owner.LockAsync( serverManager =>
+			await _owner.LockAsync( async handle =>
 			{
 				// Get a new port for the UDP logger
 				if ( config.EnableUdpLogging )
 					_state.UdpLoggerPort = GetAvailablePort( 10000 );
 
 				// Create AppPool
-				var appPool = FindApplicationPool( serverManager, _state.AppPoolName );
+				var appPool = FindApplicationPool( handle.ServerManager, _state.AppPoolName );
 				if ( appPool is null )
 				{
 					_logger.LogInformation( $"Task {task.Id}: Creating AppPool with name {_state.AppPoolName}..." );
 
-					appPool = CreateApplicationPool( serverManager, _state.AppPoolName, _taskConfig, config, _state.UdpLoggerPort, _owner.UdpLoggerPort );
+					appPool = CreateApplicationPool( handle.ServerManager, _state.AppPoolName, _taskConfig, config, _state.UdpLoggerPort, _owner.UdpLoggerPort );
 				}
 
 				// Create Website
@@ -117,7 +112,7 @@ public sealed class IisTaskHandle : IDisposable
 
 				if ( !string.IsNullOrEmpty( config.TargetWebsite ) )
 				{
-					website = FindWebsiteByName( serverManager, config.TargetWebsite );
+					website = FindWebsiteByName( handle.ServerManager, config.TargetWebsite );
 
 					if ( website is null )
 						throw new KeyNotFoundException( $"The specified target_website \"{config.TargetWebsite}\" does not exist. Make sure you constrain the job to nodes containing the specified target_website." );
@@ -132,13 +127,13 @@ public sealed class IisTaskHandle : IDisposable
 					_state.WebsiteName = _state.AppPoolName;
 					_state.TaskOwnsWebsite = true;
 
-					website = FindWebsiteByName( serverManager, _state.WebsiteName );
+					website = FindWebsiteByName( handle.ServerManager, _state.WebsiteName );
 
 					if ( website is null )
 					{
 						_logger.LogInformation( $"Task {task.Id}: Creating Website with name {_state.WebsiteName}..." );
 
-						website = CreateWebsite( serverManager, _state.WebsiteName, _taskConfig, config, appPool );
+						website = await CreateWebsiteAsync( handle, _state.WebsiteName, _taskConfig, config, appPool );
 					}
 				}
 
@@ -163,6 +158,15 @@ public sealed class IisTaskHandle : IDisposable
 		{
 			await SendTaskEventAsync( $"Error: {ex.Message}" );
 
+			try
+			{
+				await StopAndCleanupAsync();
+			}
+			catch ( Exception exCleanup )
+			{
+				_logger.LogWarning( exCleanup, "Failed to start the application and we also failed to cleanup." );
+			}
+
 			throw;
 		}
 
@@ -182,17 +186,62 @@ public sealed class IisTaskHandle : IDisposable
 
 		return _state;
 	}
+
+	private void ValidateAndCoerceTaskConfiguration ( DriverTaskConfig config )
+	{
+		foreach ( var app in config.Applications )
+		{
+			// In case someone is specifying the alias with a leading slash.
+			if ( app.Alias is not null )
+				app.Alias = app.Alias.TrimStart( '/' );
+		}
+
+		if ( config.Applications.Select( x => x.Alias ).Distinct().Count() != config.Applications.Length )
+			throw new ArgumentException( "Every application alias must be unique." );
+
+		if ( !string.IsNullOrEmpty( config.TargetWebsite ) )
+		{
+			if ( !IsAllowedTargetWebsite( config.TargetWebsite ) )
+				throw new InvalidOperationException( $"Using target_website \"{config.TargetWebsite}\" is not allowed on this node." );
+
+			if ( config.TargetWebsite.StartsWith( AppPoolOrWebsiteNamePrefix ) )
+				throw new InvalidOperationException( $"Re-using the existing nomad website \"{config.TargetWebsite}\" as target_website is not allowed." );
+
+			if ( config.Applications.Any( x => string.IsNullOrEmpty( x.Alias ) ) )
+				throw new ArgumentException( "Defining a root application with an empty alias is not allowed when using a target_website." );
+		}
+	}
+
 	public async Task StopAsync ()
 	{
-		if ( _state is null || _taskConfig is null || string.IsNullOrEmpty( _state.AppPoolName ) || string.IsNullOrEmpty( _state.WebsiteName ) )
+		if ( _state is null || _taskConfig is null )
 			throw new InvalidOperationException( "Invalid state." );
 
 		_logger.LogInformation( $"Stopping task {_taskConfig.Id} (Alloc: {_taskConfig.AllocId})..." );
 
-		await _owner.LockAsync( serverManager =>
+		await StopAndCleanupAsync();
+	}
+	public async Task DestroyAsync ()
+	{
+		if ( _state is null || _taskConfig is null )
+			throw new InvalidOperationException( "Invalid state." );
+
+		_logger.LogInformation( $"Destroying task {_taskConfig.Id} (Alloc: {_taskConfig.AllocId})..." );
+
+		await StopAndCleanupAsync();
+	}
+
+	private async Task StopAndCleanupAsync ()
+	{
+		if ( _state is null || _taskConfig is null )
+			throw new InvalidOperationException( "Invalid state." );
+
+		HashSet<string>? certificatesToUninstall = null;
+
+		await _owner.LockAsync( handle =>
 		{
-			var website = FindWebsiteByName( serverManager, _state.WebsiteName );
-			var appPool = FindApplicationPool( serverManager, _state.AppPoolName );
+			var website = _state.WebsiteName is not null ? FindWebsiteByName( handle.ServerManager, _state.WebsiteName ) : null;
+			var appPool = _state.AppPoolName is not null ? FindApplicationPool( handle.ServerManager, _state.AppPoolName ) : null;
 
 			if ( appPool is not null )
 			{
@@ -203,12 +252,27 @@ public sealed class IisTaskHandle : IDisposable
 				}
 				catch ( Exception ex )
 				{
-					_logger.LogWarning( ex, $"Failed to stop AppPool {_state.AppPoolName}." );
+					_logger.LogWarning( ex, $"Failed to stop AppPool {_state.AppPoolName}. Will be removed anyway." );
 				}
 			}
 
 			if ( website is not null )
 			{
+				try
+				{
+					// Check which certificates can be uninstalled. (where usage-count is 1, only this website)
+					certificatesToUninstall = website.Bindings
+						.Where( x => x.CertificateHash is not null )
+						.GroupBy( x => x.CertificateHash )
+						.Where( x => x.Count() == 1 )
+						.Select( x => Convert.ToHexString( x.Key ) )
+						.ToHashSet();
+				}
+				catch ( Exception ex )
+				{
+					_logger.LogError( ex, "Failed to detect certificates to uninstall." );
+				}
+
 				if ( !_state.TaskOwnsWebsite )
 				{
 					// Just remove the applications
@@ -227,19 +291,25 @@ public sealed class IisTaskHandle : IDisposable
 				else
 				{
 					// Remove the entire site
-					serverManager.Sites.Remove( website );
+					handle.ServerManager.Sites.Remove( website );
 				}
 			}
 
 			if ( appPool is not null )
-				serverManager.ApplicationPools.Remove( appPool );
+				handle.ServerManager.ApplicationPools.Remove( appPool );
 
 			return Task.CompletedTask;
 		} );
-	}
-	public async Task DestroyAsync ()
-	{
-		await StopAsync();
+
+		try
+		{
+			if ( certificatesToUninstall is not null )
+				await CertificateHelper.UninstallCertificatesAsync( certificatesToUninstall );
+		}
+		catch ( Exception ex )
+		{
+			_logger.LogError( ex, $"Failed to uninstall certificates of ${_state.WebsiteName}" );
+		}
 	}
 
 	public void RecoverState ( RecoverTaskRequest request )
@@ -260,6 +330,8 @@ public sealed class IisTaskHandle : IDisposable
 		}
 		else
 			throw new InvalidOperationException( "Invalid state." );
+
+		_isRecovered = true;
 
 		_logger.LogInformation( $"Recovered task {_taskConfig.Id} from state: {_state}" );
 	}
@@ -298,92 +370,47 @@ public sealed class IisTaskHandle : IDisposable
 	}
 	public async Task<int> WaitAsync ()
 	{
-		var exitCode = 0;
+		var tcs = new TaskCompletionSource();
 
-		try
-		{
-			while ( !_ctsDisposed.IsCancellationRequested )
-			{
-				await Task.Delay( 3000, _ctsDisposed.Token );
+		// TODO: Right now, i have no idea how to monitor the app pool state without producing a memory leak.
 
-				if ( _state is null )
-				{
-					exitCode = -1;
-					break;
-				}
+		_ctsDisposed.Token.Register( () => tcs.SetResult() );
 
-				exitCode = await _owner.LockAsync( serverManager =>
-				{
-					var appPool = FindApplicationPool( serverManager, _state.AppPoolName );
+		await tcs.Task;
 
-					if ( _appPoolStoppedIntentionally )
-						return Task.FromResult( 0 );
-
-					if ( appPool is not null )
-					{
-						_logger.LogDebug( $"AppPool {_state.AppPoolName} is in state {appPool.State}" );
-
-						if ( appPool.State == ObjectState.Stopped )
-							return Task.FromResult( -1 );
-					}
-					else
-						return Task.FromResult( -1 );
-
-					return Task.FromResult( 0 );
-				} );
-
-				if ( exitCode != 0 )
-					break;
-			}
-		}
-		catch ( OperationCanceledException )
-		{
-		}
-
-		return exitCode;
+		return 0;
 	}
+
+	internal ValueTask PublishStatsAsync ( UsageStatistics statistics )
+		=> _statsChannel.Writer.WriteAsync( statistics, _ctsDisposed.Token );
 
 	public async Task<TaskResourceUsage> GetStatisticsAsync ()
 	{
 		if ( _state is null || string.IsNullOrEmpty( _state.AppPoolName ) )
 			throw new InvalidOperationException( "Invalid state." );
 
-		return await _owner.LockAsync( serverManager =>
+		var stats = await _statsChannel.Reader.ReadAsync( _ctsDisposed.Token );
+
+		var cpuShares = _taskConfig?.Resources.AllocatedResources.Cpu.CpuShares ?? 0L;
+
+		var totalCpu = _totalCpuStats.Percent( stats.KernelModeTime + stats.UserModeTime );
+
+		return new TaskResourceUsage()
 		{
-			var appPool = GetApplicationPool( serverManager, _state.AppPoolName );
-
-			var w3wpPids = appPool.WorkerProcesses.Select( x => x.ProcessId ).ToArray();
-
-			if ( w3wpPids.Length > 0 )
+			Cpu = new CPUUsage()
 			{
-				var stats = WmiHelper.QueryWmiStatistics( w3wpPids );
-
-				var cpuShares = _taskConfig?.Resources.AllocatedResources.Cpu.CpuShares ?? 0L;
-
-				var totalCpu = _totalCpuStats.Percent( stats.KernelModeTime + stats.UserModeTime );
-
-				return Task.FromResult( new TaskResourceUsage()
-				{
-					Cpu = new CPUUsage()
-					{
-						Percent = totalCpu,
-						SystemMode = _kernelModeCpuStats.Percent( stats.KernelModeTime ),
-						UserMode = _userModeCpuStats.Percent( stats.UserModeTime ),
-						TotalTicks = ( cpuShares / 100d ) * totalCpu, // _totalCpuStats.TicksConsumed( totalCpu ),
-						MeasuredFields = { CPUUsage.Types.Fields.Percent, CPUUsage.Types.Fields.SystemMode, CPUUsage.Types.Fields.UserMode, CPUUsage.Types.Fields.TotalTicks }
-					},
-					Memory = new MemoryUsage()
-					{
-						Rss = stats.WorkingSetPrivate,
-						MeasuredFields = { MemoryUsage.Types.Fields.Rss }
-					}
-				} );
-			}
-			else
+				Percent = totalCpu,
+				SystemMode = _kernelModeCpuStats.Percent( stats.KernelModeTime ),
+				UserMode = _userModeCpuStats.Percent( stats.UserModeTime ),
+				TotalTicks = ( cpuShares / 100d ) * totalCpu, // _totalCpuStats.TicksConsumed( totalCpu ),
+				MeasuredFields = { CPUUsage.Types.Fields.Percent, CPUUsage.Types.Fields.SystemMode, CPUUsage.Types.Fields.UserMode, CPUUsage.Types.Fields.TotalTicks }
+			},
+			Memory = new MemoryUsage()
 			{
-				return Task.FromResult( new TaskResourceUsage() );
+				Rss = stats.WorkingSetPrivate,
+				MeasuredFields = { MemoryUsage.Types.Fields.Rss }
 			}
-		} );
+		};
 	}
 
 	public Task<InspectTaskResponse> InspectAsync ()
@@ -425,7 +452,7 @@ public sealed class IisTaskHandle : IDisposable
 
 	private static string BuildAppPoolOrWebsiteName ( TaskConfig taskConfig )
 	{
-		var rawName = $"nomad-{taskConfig.AllocId}-{taskConfig.Name}";
+		var rawName = $"{AppPoolOrWebsiteNamePrefix}{taskConfig.AllocId}-{taskConfig.Name}";
 
 		var invalidChars = ApplicationPoolCollection.InvalidApplicationPoolNameCharacters()
 			.Union( SiteCollection.InvalidSiteNameCharacters() )
@@ -445,7 +472,7 @@ public sealed class IisTaskHandle : IDisposable
 
 		// AppPool name limit is 64 characters. Website's doesn't seem to have a limit.
 		if ( finalName.Length > 64 )
-			finalName = $"nomad-{taskConfig.AllocId}";
+			finalName = $"{AppPoolOrWebsiteNamePrefix}{taskConfig.AllocId}";
 
 		return finalName;
 	}
@@ -480,14 +507,29 @@ public sealed class IisTaskHandle : IDisposable
 		if ( config.IdleTimeout is not null )
 			appPool.ProcessModel.IdleTimeout = config.IdleTimeout.Value;
 
-		appPool.Recycling.DisallowOverlappingRotation = config.DisabledOverlappedRecycle;
+		if ( config.DisabledOverlappedRecycle is not null )
+			appPool.Recycling.DisallowOverlappingRotation = config.DisabledOverlappedRecycle.Value;
+
+		if ( config.Enable32BitAppOnWin64 is not null )
+			appPool.Enable32BitAppOnWin64 = config.Enable32BitAppOnWin64.Value;
 
 		if ( config.PeriodicRestart is not null )
 			appPool.Recycling.PeriodicRestart.Time = config.PeriodicRestart.Value;
 
+		if ( config.ServiceUnavailableResponse is not null )
+			appPool.Failure.LoadBalancerCapabilities = config.ServiceUnavailableResponse.Value;
+
+		if ( config.QueueLength is not null )
+			appPool.QueueLength = config.QueueLength.Value;
+
+		if ( config.StartTimeLimit is not null )
+			appPool.ProcessModel.StartupTimeLimit = config.StartTimeLimit.Value;
+		if ( config.ShutdownTimeLimit is not null )
+			appPool.ProcessModel.ShutdownTimeLimit = config.ShutdownTimeLimit.Value;
+
 		var envVarsCollection = appPool.GetCollection( "environmentVariables" );
 
-		foreach ( var env in taskConfig.Env )
+		foreach ( var env in GetTaskConfigEnvironmentVariables( taskConfig ) )
 			AddEnvironmentVariable( envVarsCollection, env.Key, env.Value );
 
 		if ( udpLocalPort is not null && udpRemotePort is not null )
@@ -512,9 +554,34 @@ public sealed class IisTaskHandle : IDisposable
 		}
 	}
 
+	private static IEnumerable<KeyValuePair<string, string>> GetTaskConfigEnvironmentVariables ( TaskConfig taskConfig )
+	{
+		var processVariables = Environment
+			.GetEnvironmentVariables( EnvironmentVariableTarget.Process )
+			.Keys.Cast<string>().ToHashSet();
+
+		var userVariables = new Dictionary<string, string>();
+
+		foreach ( var nomadEnv in taskConfig.Env )
+		{
+			if ( !string.IsNullOrEmpty( nomadEnv.Key ) && !processVariables.Contains( nomadEnv.Key ) )
+				userVariables[nomadEnv.Key] = nomadEnv.Value;
+		}
+
+		// Overwrite the temp directory variables to use nomad's own tmp directory acc. to: https://developer.hashicorp.com/nomad/docs/concepts/filesystem
+		var tempPath = Path.GetFullPath( Path.Combine( taskConfig.AllocDir, taskConfig.Name, "tmp" ) );
+		if ( !Directory.Exists( tempPath ) )
+			Directory.CreateDirectory( tempPath );
+
+		userVariables["TMP"] = tempPath;
+		userVariables["TEMP"] = tempPath;
+
+		return userVariables.ToArray();
+	}
+
 	private static Site? FindWebsiteByName ( ServerManager serverManager, string name )
 		=> serverManager.Sites.FirstOrDefault( x => x.Name == name );
-	private static Site CreateWebsite ( ServerManager serverManager, string name, TaskConfig taskConfig, DriverTaskConfig config, ApplicationPool appPool )
+	private async Task<Site> CreateWebsiteAsync ( IManagementLockHandle handle, string name, TaskConfig taskConfig, DriverTaskConfig config, ApplicationPool appPool )
 	{
 		var bindings = config.Bindings.Select( binding =>
 		{
@@ -540,9 +607,9 @@ public sealed class IisTaskHandle : IDisposable
 			return new { Binding = binding, Port = port, PortMapping = portMapping };
 		} ).ToArray();
 
-		var website = serverManager.Sites.CreateElement();
+		var website = handle.ServerManager.Sites.CreateElement();
 
-		website.Id = GetNextAvailableWebsiteId( serverManager );
+		website.Id = GetNextAvailableWebsiteId( handle.ServerManager );
 		website.Name = name;
 		website.ApplicationDefaults.ApplicationPoolName = appPool.Name;
 
@@ -553,40 +620,106 @@ public sealed class IisTaskHandle : IDisposable
 
 		foreach ( var b in bindings )
 		{
-			string? certificateStoreName = null;
-			byte[]? certificateHash = null;
-
-			if ( b.Binding.CertificateHash is not null )
-			{
-				using var store = new X509Store( StoreName.My, StoreLocation.LocalMachine );
-
-				store.Open( OpenFlags.ReadOnly );
-
-				var certificate = store.Certificates
-					.FirstOrDefault( x => x.GetCertHashString().Equals( b.Binding.CertificateHash, StringComparison.InvariantCultureIgnoreCase ) );
-
-				if ( certificate is null )
-					throw new KeyNotFoundException( $"Couldn't find certificate with hash {b.Binding.CertificateHash}." );
-
-				certificateStoreName = store.Name;
-				certificateHash = certificate.GetCertHash();
-			}
-
+			(X509Certificate2 Certificate, string? StoreName)? usedCertificate = null;
 			var sslFlags = SslFlags.None;
-			if ( b.Binding.RequireSni is not null && b.Binding.RequireSni.Value )
-				sslFlags |= SslFlags.Sni;
+
+			if ( b.Binding.Type == DriverTaskConfigBindingType.Https )
+			{
+				var certificateBlock = b.Binding.Certificates.FirstOrDefault();
+				if ( certificateBlock is null )
+					throw new ArgumentException( "Missing certificate configuration for HTTPS binding." );
+
+				if ( !string.IsNullOrEmpty( certificateBlock.Thumbprint ) )
+				{
+					usedCertificate = await CertificateHelper.FindCertificateByThumbprintAsync( certificateBlock.Thumbprint );
+
+					if ( usedCertificate is null )
+						throw new KeyNotFoundException( $"Couldn't find certificate with hash {certificateBlock.Thumbprint}." );
+				}
+				else
+				{
+					// Install the Certificate.
+					// This is done by joining the IIS Commit-Transaction which means:
+					// If committing the IIS changes will fail, it will also rollback the certificate installation.
+					await handle.JoinTransactionAsync( async () =>
+					{
+						if ( !string.IsNullOrEmpty( certificateBlock.PfxFile ) )
+						{
+							var certificateFilePath = certificateBlock.PfxFile;
+
+							// If the path is not an absolute path, make it relative to the task-directory.
+							if ( !Path.IsPathRooted( certificateFilePath ) )
+								certificateFilePath = Path.Combine( taskConfig.AllocDir, taskConfig.Name, certificateFilePath );
+
+							if ( !File.Exists( certificateFilePath ) )
+								throw new FileNotFoundException( $"Couldn't find certificate file {certificateFilePath}." );
+
+							usedCertificate = await CertificateHelper.InstallPfxCertificateAsync(
+								certificateFilePath, certificateBlock.Password );
+
+							if ( usedCertificate is null )
+								throw new Exception( $"Failed to install certificate because it wasn't found after install. Maybe it's not valid anymore?" );
+
+							await SendTaskEventAsync( $"Installed certificate: {usedCertificate.Value.Certificate.Thumbprint}" );
+						}
+						else if ( !string.IsNullOrEmpty( certificateBlock.CertFile ) || !string.IsNullOrEmpty( certificateBlock.KeyFile ) )
+						{
+							if ( string.IsNullOrEmpty( certificateBlock.CertFile ) || string.IsNullOrEmpty( certificateBlock.KeyFile ) )
+								throw new ArgumentException( $"When using pem encoded certificates, cert_file and key_file must be specified in combination." );
+
+							var certificateFilePath = certificateBlock.CertFile;
+							var keyFilePath = certificateBlock.KeyFile;
+
+							// If the path is not an absolute path, make it relative to the task-directory.
+							if ( !Path.IsPathRooted( certificateFilePath ) )
+								certificateFilePath = Path.Combine( taskConfig.AllocDir, taskConfig.Name, certificateFilePath );
+							if ( !Path.IsPathRooted( keyFilePath ) )
+								keyFilePath = Path.Combine( taskConfig.AllocDir, taskConfig.Name, keyFilePath );
+
+							usedCertificate = await CertificateHelper.InstallPemCertificateAsync(
+								certificateFilePath, keyFilePath );
+
+							if ( usedCertificate is null )
+								throw new Exception( $"Failed to install certificate because it wasn't found after install. Maybe it's not valid anymore?" );
+
+							await SendTaskEventAsync( $"Installed certificate: {usedCertificate.Value.Certificate.Thumbprint}" );
+						}
+						else if ( certificateBlock.UseSelfSigned )
+						{
+							var temFile = Path.GetTempFileName() + ".pfx";
+							var randomPassword = Guid.NewGuid().ToString( "N" );
+
+							var selfSignedCertificate = CertificateHelper.GenerateSelfSignedCertificate(
+								b.Binding.Hostname ?? "localhost", TimeSpan.FromDays( 365 ), temFile, randomPassword );
+
+							usedCertificate = await CertificateHelper.InstallPfxCertificateAsync( temFile, randomPassword );
+
+							await SendTaskEventAsync( $"Installed self-signed certificate: {usedCertificate.Value.Certificate.Thumbprint}" );
+						}
+						else
+							throw new ArgumentException( $"No certificate has been specified for the HTTPS binding on port {b.Port}." );
+					}, async () =>
+					{
+						if ( usedCertificate?.Certificate?.Thumbprint is not null )
+							await CertificateHelper.UninstallCertificatesAsync( new HashSet<string>( [usedCertificate.Value.Certificate.Thumbprint] ) );
+					} );
+				}
+
+				if ( b.Binding.RequireSni is not null && b.Binding.RequireSni.Value )
+					sslFlags |= SslFlags.Sni;
+			}
 
 			var ipAddress = b.Binding.IPAddress ?? "*";
 
 			// Note: Certificate needs to be specified in this Add() method. Otherwise it doesn't work.
 			var binding = website.Bindings.Add(
 				$"{ipAddress}:{b.Port}:{b.Binding.Hostname}",
-				certificateHash, certificateStoreName, sslFlags );
+				usedCertificate?.Certificate.GetCertHash(), usedCertificate?.StoreName, sslFlags );
 
 			binding.Protocol = b.Binding.Type.ToString().ToLower();
 		}
 
-		serverManager.Sites.Add( website );
+		handle.ServerManager.Sites.Add( website );
 
 		return website;
 	}
@@ -639,6 +772,7 @@ public sealed class IisTaskHandle : IDisposable
 			{
 				var physicalVdirPath = vdir.Path.Replace( '/', '\\' );
 
+				// If the path is not an absolute path, make it relative to the task-directory.
 				if ( !Path.IsPathRooted( physicalVdirPath ) )
 					physicalVdirPath = Path.Combine( taskConfig.AllocDir, taskConfig.Name, physicalVdirPath );
 
@@ -710,8 +844,6 @@ public sealed class IisTaskHandle : IDisposable
 		// https://learn.microsoft.com/en-us/troubleshoot/developer/webapps/iis/www-authentication-authorization/default-permissions-user-rights
 		// https://stackoverflow.com/questions/51277338/remove-users-group-permission-for-folder-inside-programdata
 
-#pragma warning disable CA1416 // Plattformkompatibilität überprüfen
-
 		var appPoolIdentity = $"IIS AppPool\\{_state!.AppPoolName}";
 
 		string[] identities = config.PermitIusr ? [appPoolIdentity, "IUSR"] : [appPoolIdentity];
@@ -770,13 +902,10 @@ public sealed class IisTaskHandle : IDisposable
 			// Apply the new ACL
 			directory.SetAccessControl( acl );
 		}
-
-#pragma warning restore CA1416 // Plattformkompatibilität überprüfen
 	}
 
 	private SecurityIdentifier? TryGetSid ( WellKnownSidType sidType )
 	{
-#pragma warning disable CA1416 // Plattformkompatibilität überprüfen
 		try
 		{
 			return new SecurityIdentifier( sidType, null );
@@ -787,7 +916,6 @@ public sealed class IisTaskHandle : IDisposable
 
 			return null;
 		}
-#pragma warning restore CA1416 // Plattformkompatibilität überprüfen
 	}
 
 	private static long GetNextAvailableWebsiteId ( ServerManager serverManager )
@@ -865,9 +993,9 @@ public sealed class IisTaskHandle : IDisposable
 		if ( _state is null || string.IsNullOrEmpty( _state.AppPoolName ) )
 			throw new InvalidOperationException( "Invalid state." );
 
-		await _owner.LockAsync( async serverManager =>
+		await _owner.LockAsync( async handle =>
 		{
-			var appPool = GetApplicationPool( serverManager, _state.AppPoolName );
+			var appPool = GetApplicationPool( handle.ServerManager, _state.AppPoolName );
 
 			try
 			{
@@ -895,9 +1023,9 @@ public sealed class IisTaskHandle : IDisposable
 		if ( _state is null || string.IsNullOrEmpty( _state.AppPoolName ) )
 			throw new InvalidOperationException( "Invalid state." );
 
-		await _owner.LockAsync( serverManager =>
+		await _owner.LockAsync( handle =>
 		{
-			var appPool = GetApplicationPool( serverManager, _state.AppPoolName );
+			var appPool = GetApplicationPool( handle.ServerManager, _state.AppPoolName );
 
 			_appPoolStoppedIntentionally = true;
 			if ( appPool.State == ObjectState.Started )
@@ -913,9 +1041,9 @@ public sealed class IisTaskHandle : IDisposable
 		if ( _state is null || string.IsNullOrEmpty( _state.AppPoolName ) )
 			throw new InvalidOperationException( "Invalid state." );
 
-		await _owner.LockAsync( serverManager =>
+		await _owner.LockAsync( handle =>
 		{
-			var appPool = GetApplicationPool( serverManager, _state.AppPoolName );
+			var appPool = GetApplicationPool( handle.ServerManager, _state.AppPoolName );
 
 			appPool.Recycle();
 
@@ -932,9 +1060,9 @@ public sealed class IisTaskHandle : IDisposable
 		if ( _state is null || _taskConfig is null || string.IsNullOrEmpty( _state.AppPoolName ) )
 			throw new InvalidOperationException( "Invalid state." );
 
-		return await _owner.LockAsync( serverManager =>
+		return await _owner.LockAsync( handle =>
 		{
-			var appPool = GetApplicationPool( serverManager, _state.AppPoolName );
+			var appPool = GetApplicationPool( handle.ServerManager, _state.AppPoolName );
 
 			var isWorkerProcessRunning = appPool.WorkerProcesses.Any(
 				x => x.State == WorkerProcessState.Starting || x.State == WorkerProcessState.Running );
@@ -1062,9 +1190,9 @@ public sealed class IisTaskHandle : IDisposable
 		if ( string.IsNullOrEmpty( path ) || !path.StartsWith( '/' ) )
 			path = $"/{path}";
 
-		var port = await _owner.LockAsync( serverManager =>
+		var port = await _owner.LockAsync( handle =>
 		{
-			var site = serverManager.Sites.First( x => x.Name == _state.WebsiteName );
+			var site = handle.ServerManager.Sites.First( x => x.Name == _state.WebsiteName );
 
 			var httpBinding = site.Bindings.FirstOrDefault( x => x.Protocol == "http" )?.EndPoint;
 
@@ -1090,9 +1218,9 @@ public sealed class IisTaskHandle : IDisposable
 		if ( !_owner.ProcdumpEulaAccepted )
 			throw new InvalidOperationException( "Procdump EULA has not been accepted." );
 
-		var w3wpPids = await _owner.LockAsync( serverManager =>
+		var w3wpPids = await _owner.LockAsync( handle =>
 		{
-			var appPool = GetApplicationPool( serverManager, _state.AppPoolName );
+			var appPool = GetApplicationPool( handle.ServerManager, _state.AppPoolName );
 
 			return Task.FromResult( appPool.WorkerProcesses.Select( x => x.ProcessId ).ToArray() );
 		}, cancellationToken );

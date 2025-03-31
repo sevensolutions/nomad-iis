@@ -17,7 +17,6 @@ using System;
 using System.Net;
 using System.Security.Principal;
 
-#pragma warning disable CA1416 // Plattformkompatibilität überprüfen
 using ( var identity = WindowsIdentity.GetCurrent() )
 {
 	var principal = new WindowsPrincipal( identity );
@@ -27,7 +26,6 @@ using ( var identity = WindowsIdentity.GetCurrent() )
 		return -1;
 	}
 }
-#pragma warning restore CA1416 // Plattformkompatibilität überprüfen
 
 var excludeRouting = Matching.FromSource( "Microsoft.AspNetCore.Routing" );
 var excludeHosting = Matching.FromSource( "Microsoft.AspNetCore.Hosting" );
@@ -93,6 +91,8 @@ builder.Services.AddProblemDetails();
 
 #if MANAGEMENT_API
 var mgmtApiKey = builder.Configuration.GetValue<string>( "management-api-key" );
+var mgmtApiJwtSecret = builder.Configuration.GetValue<string>( "management-api-jwt-secret" );
+var needsAuthorization = !string.IsNullOrEmpty( mgmtApiKey ) || !string.IsNullOrEmpty( mgmtApiJwtSecret );
 
 if ( managementApiPort > 0 )
 {
@@ -104,6 +104,7 @@ if ( managementApiPort > 0 )
 	.AddApiKey( config =>
 	{
 		config.ApiKey = mgmtApiKey;
+		config.ApiJwtSecret = mgmtApiJwtSecret;
 	} );
 
 	builder.Services.AddAuthorization();
@@ -143,7 +144,7 @@ if ( managementApiPort > 0 )
 		.MapControllers()
 		.RequireHost( $"*:{managementApiPort}" );
 
-	if ( !string.IsNullOrEmpty( mgmtApiKey ) )
+	if ( needsAuthorization )
 		epApi.RequireAuthorization();
 }
 #endif

@@ -8,6 +8,11 @@ Now you're ready to submit your first workload.
 
 Open your Nomad cluster's Web UI and submit the following job. Of course you can also submit it using Nomad's CLI. Choose whatever you prefer.
 
+:::note
+The following example downloads a very simple HTML app from this repository.
+Feel free to inspect the ZIP before running the job.
+:::
+
 ```hcl
 job "static-sample-app" {
   datacenters = ["dc1"]
@@ -15,6 +20,11 @@ job "static-sample-app" {
 
   group "app" {
     count = 1
+
+    # See: https://nomad-iis.sevensolutions.cc/docs/tips-and-tricks/in-place-update
+    # disconnect {
+    #  lost_after = "1m"
+    # }
   
     network {
       port "httplabel" {}

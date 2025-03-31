@@ -1,6 +1,9 @@
 using Microsoft.Web.Administration;
 using System;
+using System.IO;
 using Xunit.Abstractions;
+using NomadIIS.Services;
+using System.Linq;
 
 namespace NomadIIS.Tests;
 
@@ -220,6 +223,100 @@ public class IntegrationTests : IClassFixture<NomadIISFixture>
 		await _fixture.StopJobAsync( jobId );
 
 		_output.WriteLine( "Job stopped." );
+	}
+
+	[Fact]
+	public async Task JobWithCertificateFile_WebsiteShouldUseCertificate ()
+	{
+		var certificateFile = Path.GetTempFileName() + ".pfx";
+
+		var certificateThumbprint = CertificateHelper.GenerateSelfSignedCertificate(
+			"NomadIISTest", TimeSpan.FromDays( 2 ), certificateFile, "super#secure" );
+
+		var jobHcl = $$"""
+			job "https-job-with-cert-file" {
+			  datacenters = ["dc1"]
+			  type = "service"
+
+			  group "app" {
+			    count = 1
+
+			    network {
+			      port "httplabel" {}
+			    }
+
+			    task "app" {
+			      driver = "iis"
+
+			      config {
+			        application {
+			          path = "C:\\inetpub\\wwwroot"
+			        }
+
+			        binding {
+			          type = "https"
+			          port = "httplabel"
+
+			          certificate {
+			            pfx_file = "{{certificateFile.Replace( "\\", "\\\\" )}}"
+			            password = "super#secure"
+			          }
+			        }
+			      }
+			    }
+			  }
+			}
+			""";
+
+		_output.WriteLine( "Submitting job..." );
+
+		var jobId = await _fixture.ScheduleJobAsync( jobHcl );
+
+		_output.WriteLine( $"Job Id: {jobId}" );
+
+		var allocations = await _fixture.ListJobAllocationsAsync( jobId );
+
+		if ( allocations is null || allocations.Length == 0 )
+			Assert.Fail( "No job allocations" );
+
+		var poolAndWebsiteName = $"nomad-{allocations[0].Id}-app";
+
+		_output.WriteLine( $"AppPool and Website Name: {poolAndWebsiteName}" );
+
+		_fixture.AccessIIS( iis =>
+		{
+			iis.AppPool( poolAndWebsiteName ).ShouldExist();
+			iis.Website( poolAndWebsiteName ).ShouldExist();
+
+			iis.Website( poolAndWebsiteName ).Binding( 0 ).IsHttps();
+			iis.Website( poolAndWebsiteName ).Binding( 0 ).CertificateThumbprintIs( certificateThumbprint );
+		} );
+
+		var allocation = await _fixture.ReadAllocationAsync( allocations[0].Id );
+
+		Assert.NotNull( allocation );
+
+		var appPort = allocation.Resources.Networks[0].DynamicPorts.First( x => x.Label == "httplabel" ).Value;
+
+		var serverCertificate = _fixture.GetServerCertificate( "localhost", appPort );
+
+		Assert.NotNull( serverCertificate );
+
+		Assert.Equal( "CN=NomadIISTest", serverCertificate.Subject );
+
+		_output.WriteLine( "Stopping job..." );
+
+		await _fixture.StopJobAsync( jobId );
+
+		_output.WriteLine( "Job stopped." );
+
+		_fixture.AccessIIS( iis =>
+		{
+			iis.AppPool( poolAndWebsiteName ).ShouldNotExist();
+			iis.Website( poolAndWebsiteName ).ShouldNotExist();
+		} );
+
+		// TODO: Certificate should have been removed
 	}
 
 #if MANAGEMENT_API

@@ -30,7 +30,21 @@ jobs:
     - name: Install .NET Core
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 8.0.x
+        dotnet-version: 9.0.x
+
+    # Extract and publish version
+    - name: extract version
+      run: |
+        Get-Content "./src/NomadIIS/PluginInfo.cs" | Select-String 'public static readonly string Version = "([0-9]+\.[0-9]+\.[0-9])";' | ForEach-Object {
+          $version = $_.Matches[0].Groups[1].Value
+        }
+        $version | Out-File -Path version -NoNewline
+    - name: Upload version
+      if: ${{ matrix.profile.artifactName == 'nomad_iis' }} # We only need to do this once
+      uses: actions/upload-artifact@v4
+      with:
+        name: version
+        path: ./version
 
     # Extract and publish version
     - name: extract version
@@ -54,7 +68,7 @@ jobs:
     - name: Copy to output folder
       run: |
         mkdir dist
-        copy .\src\NomadIIS\bin\Release\net8.0\win-x64\publish\nomad_iis.exe .\dist\nomad_iis.exe
+        copy .\src\NomadIIS\bin\Release\net9.0\win-x64\publish\nomad_iis.exe .\dist\nomad_iis.exe
 
     # Upload the artifact
     - name: Upload build artifacts

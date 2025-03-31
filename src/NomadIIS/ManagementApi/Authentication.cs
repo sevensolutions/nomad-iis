@@ -2,9 +2,12 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 using NomadIIS.ManagementApi;
 using System;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Text;
 using System.Text.Encodings.Web;
 using System.Threading.Tasks;
 
@@ -19,6 +22,7 @@ namespace NomadIIS.ManagementApi
 	{
 		public string HeaderName { get; set; } = "X-Api-Key";
 		public string? ApiKey { get; set; }
+		public string? ApiJwtSecret { get; set; }
 	}
 
 	public sealed class ApiKeyAuthenticationHandler : AuthenticationHandler<ApiKeyAuthenticationOptions>
@@ -28,28 +32,73 @@ namespace NomadIIS.ManagementApi
 		{
 		}
 
-		protected override Task<AuthenticateResult> HandleAuthenticateAsync ()
+		protected override async Task<AuthenticateResult> HandleAuthenticateAsync ()
 		{
-			if ( string.IsNullOrEmpty( Options.ApiKey ) )
+			if ( string.IsNullOrEmpty( Options.ApiKey ) && string.IsNullOrEmpty( Options.ApiJwtSecret ) )
 			{
-				return Task.FromResult(
-					AuthenticateResult.Success(
-						new AuthenticationTicket( new ClaimsPrincipal( new ClaimsIdentity( Scheme.Name ) ), Scheme.Name ) ) );
+				return AuthenticateResult.Success(
+					new AuthenticationTicket( new ClaimsPrincipal( new ClaimsIdentity( Scheme.Name ) ), Scheme.Name ) );
 			}
 
-			if ( !Request.Headers.ContainsKey( Options.HeaderName ) )
-				return Task.FromResult( AuthenticateResult.Fail( $"Missing header {Options.HeaderName}." ) );
+			if ( !Request.Headers.ContainsKey( Options.HeaderName ) && !Request.Headers.ContainsKey( "Authorization" ) )
+				return AuthenticateResult.Fail( $"Missing {Options.HeaderName} or Authorization header." );
 
-			string headerValue = Request.Headers[Options.HeaderName]!;
+			string? headerValue = Request.Headers[Options.HeaderName];
 
-			if ( headerValue != Options.ApiKey )
-				return Task.FromResult( AuthenticateResult.Fail( "Invalid token." ) );
+			if ( !string.IsNullOrEmpty( headerValue ) && !string.IsNullOrEmpty( Options.ApiKey ) && headerValue == Options.ApiKey )
+			{
+				var claimsIdentity = new ClaimsIdentity( Scheme.Name );
 
-			var principal = new ClaimsPrincipal( new ClaimsIdentity( Scheme.Name ) );
+				// Api-Key auth doesn't support custom claims, so we permit everything.
+				claimsIdentity.AddClaim( new Claim( "namespace", "*" ) );
+				claimsIdentity.AddClaim( new Claim( "jobName", "*" ) );
+				claimsIdentity.AddClaim( new Claim( "allocId", "*" ) );
 
-			var ticket = new AuthenticationTicket( principal, Scheme.Name );
+				foreach ( var cap in Enum.GetValues<AuthorizationCapability>() )
+					claimsIdentity.AddClaim( new Claim( "capabilities", Enum.GetName( cap )! ) );
 
-			return Task.FromResult( AuthenticateResult.Success( ticket ) );
+				var principal = new ClaimsPrincipal( claimsIdentity );
+
+				var ticket = new AuthenticationTicket( principal, Scheme.Name );
+
+				return AuthenticateResult.Success( ticket );
+			}
+
+			if ( !string.IsNullOrEmpty( Options.ApiJwtSecret ) )
+			{
+				headerValue = Request.Headers.Authorization;
+				headerValue = headerValue?["Bearer ".Length..];
+
+				var validationResult = await new JwtSecurityTokenHandler()
+					.ValidateTokenAsync( headerValue, new TokenValidationParameters()
+					{
+						ValidateLifetime = true,
+						ValidateIssuerSigningKey = true,
+						IssuerSigningKey = new SymmetricSecurityKey( Encoding.UTF8.GetBytes( Options.ApiJwtSecret ) )
+						{
+							KeyId = "static"
+						},
+						ValidIssuer = "NomadIIS",
+						ValidateIssuer = true,
+						ValidAudience = "ManagementApi",
+						ValidateAudience = true
+					} );
+
+				if ( !validationResult.IsValid )
+				{
+					Logger.LogWarning( validationResult.Exception, "Received invalid JWT token for Management API." );
+
+					return AuthenticateResult.Fail( "Invalid token." );
+				}
+
+				var principal = new ClaimsPrincipal( validationResult.ClaimsIdentity );
+
+				var ticket = new AuthenticationTicket( principal, Scheme.Name );
+
+				return AuthenticateResult.Success( ticket );
+			}
+
+			return AuthenticateResult.Fail( "Invalid token." );
 		}
 	}
 }

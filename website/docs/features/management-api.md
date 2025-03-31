@@ -1,8 +1,12 @@
 ---
-sidebar_position: 7
+sidebar_position: 8
 ---
 
 # 🛠 Management API
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import JwtTokenGenerator from '@site/src/components/JwtTokenGenerator.tsx';
 
 :::caution
 The Management API is only available when using a special binary of *Nomad IIS*.  
@@ -20,17 +24,72 @@ You need to enable the Management API by providing a dedicated port as shown bel
 
 ```hcl
 plugin "nomad_iis" {
-  args = ["--management-api-port=5004", "--management-api-key=12345"]
+  args = ["--management-api-port=5004"]
   config {
     enabled = true
   }
 }
 ```
 
-### Securing the API
+## Securing the API
 
-It is highly recommended to provide an API-Key to secure the API. Specify the key using the `--management-api-key`-argument as shown above.
-In this case, every API-call needs to provide this key as `X-Api-Key` header.
+It is highly recommended to secure the API by using an API-Key or a JWT token.
+
+<Tabs>
+<TabItem value="api-key" label="API-Key" default>
+
+Specify the key using the `--management-api-key`-argument as shown:
+
+```hcl
+plugin "nomad_iis" {
+  args = [
+    "--management-api-port=5004",
+    # highlight-next-line
+    "--management-api-key=12345"
+  ]
+  config {
+    enabled = true
+  }
+}
+```
+
+Every API-call needs to provide this key as `X-Api-Key` header.
+
+</TabItem>
+<TabItem value="jwt" label="JWT Tokens">
+
+<JwtTokenGenerator />
+
+</TabItem>
+</Tabs>
+
+## Task Status
+
+### Getting the current Task and Application Pool Status
+
+```
+GET /api/v1/allocs/{allocId}/{taskName}/status
+```
+
+This will return a JSON-object in the following format:
+
+```json
+{
+  "allocId": "<allocId>",
+  "taskName": "<taskName>",
+  "applicationPool": {
+    "status": "Started",
+    "isWorkerProcessRunning": true
+  }
+}
+```
+
+`applicationPool.status` values are:
+  - Starting
+  - Started
+  - Stopping
+  - Stopped
+  - Unknown
 
 ## Filesystem Access
 
@@ -59,7 +118,7 @@ Setting the `clean`-parameter to true will delete all files in the target-direct
 The difference between the `PUT` and `PATCH` method is, that `PUT` will stop the application while uploading the file, whereas `PATCH` will hot-patch the file, keeping the app running. Keep in mind that hot-patching may fail if some files are currently being locked by the worker process.
 
 :::tip
-Using these methods it is possible to upload an application into a previously deployed allocation. This can be thought as the opposite of Nomad pulling the application from somewhere. This is usefull if you want to run an application shortly, eg. to run UI-tests against.
+Using these methods it is possible to upload an application into a previously deployed allocation. This can be thought as the opposite of Nomad pulling the application from somewhere. This is useful if you want to run an application shortly, eg. to run UI-tests against.
 :::
 
 :::info
@@ -159,3 +218,62 @@ curl -X GET -O \
   -H "X-Api-Key: 12345" \
   http://localhost:5004/api/v1/allocs/e4c0ee58-2e27-2cd6-7ca5-6ef1ed036aad/app/procdump
 ```
+
+## Debug Endpoint
+
+The debug endpoint provides some detailed information about the plugin and the IIS to the cluster operator.
+
+```
+GET /api/v1/debug
+```
+
+Calling this endpoint will return a JSON document in the following format:
+
+```json
+{
+  "iisHandleCount": 1,
+  "iisHandles": [
+    {
+      "taskId": "07aabf5c-d774-8520-4772-38f1328d8964/app/f9b22d98",
+      "appPoolName": "nomad-07aabf5c-d774-8520-4772-38f1328d8964-app",
+      "allocId": "07aabf5c-d774-8520-4772-38f1328d8964",
+      "namespace": "default",
+      "jobId": "static-sample-app",
+      "jobName": "static-sample-app",
+      "taskName": "app",
+      "taskGroupName": "app",
+      "isRecovered": false
+    }
+  ],
+  "danglingIisAppPools": 1,
+  "danglingIisWebsites": 0,
+  "iisAppPools": [
+    {
+      "name": "DefaultAppPool",
+      "isDangling": false
+    },
+    {
+      "name": "nomad-abc",
+      "isDangling": true
+    },
+    {
+      "name": "nomad-07aabf5c-d774-8520-4772-38f1328d8964-app",
+      "isDangling": false
+    }
+  ],
+  "iisWebsites": [
+    {
+      "name": "Default Web Site",
+      "isDangling": false
+    },
+    {
+      "name": "nomad-07aabf5c-d774-8520-4772-38f1328d8964-app",
+      "isDangling": false
+    }
+  ]
+}
+```
+
+:::info
+`iisAppPools.isDangling` or `iisWebsites.isDangling` will return true, if the AppPool's or Website's name starts with the *nomad-* prefix and is not managed by the plugin anymore. Meaning, there is no active `iisHandles` anymore. These AppPools or Websites need to be cleaned up by the cluster operator manually.
+:::

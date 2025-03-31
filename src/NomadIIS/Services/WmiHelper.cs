@@ -1,56 +1,86 @@
 ﻿using System.Management;
+using System.Collections.Generic;
 using System;
 
 namespace NomadIIS.Services;
 
-internal static class WmiHelper
+internal sealed class WmiHelper : IDisposable
 {
-	public static (ulong KernelModeTime, ulong UserModeTime, ulong WorkingSetPrivate) QueryWmiStatistics ( params int[] processIds )
+	private static ManagementObjectSearcher? _currentMemorySearcher;
+	private static ManagementObjectSearcher? _currentCpuSearcher;
+
+	public Dictionary<string, UsageStatistics> QueryWorkerProcesses ( IDictionary<int, string> w3wpProcessToAppPoolNameMapping )
 	{
-#pragma warning disable CA1416 // Validate platform compatibility
+		var result = new Dictionary<string, UsageStatistics>( StringComparer.InvariantCultureIgnoreCase );
 
-		if ( processIds is null || processIds.Length <= 0 )
-			throw new ArgumentNullException( nameof( processIds ) );
-
-		var condition = string.Format( "ProcessID={0}", string.Join( " OR ProcessID=", processIds ) );
-
-		// https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-process
-		var query = new SelectQuery( "Win32_Process", condition );
-
-
-		using var ipsearcher = new ManagementObjectSearcher( query );
-		using var ipresults = ipsearcher.Get();
-
-		var kernelModeTime = 0UL;
-		var userModeTime = 0UL;
-
-		foreach ( var r in ipresults )
+		if ( _currentMemorySearcher is null )
 		{
-			kernelModeTime += (ulong)r.GetPropertyValue( "KernelModeTime" );
-			userModeTime += (ulong)r.GetPropertyValue( "UserModeTime" );
+			_currentMemorySearcher = new ManagementObjectSearcher(
+				new SelectQuery( "Win32_PerfFormattedData_PerfProc_Process", "Name LIKE 'w3wp%'", ["IDProcess", "WorkingSetPrivate"] ) );
 		}
 
-		// 
-		condition = string.Format( "IDProcess={0}", string.Join( " OR IDProcess=", processIds ) );
+		using var mocMemory = _currentMemorySearcher.Get();
 
-		query = new SelectQuery( "Win32_PerfFormattedData_PerfProc_Process", condition );
-
-		using var ipsearcher2 = new ManagementObjectSearcher( query );
-		using var ipresults2 = ipsearcher2.Get();
-
-		var workingSetPrivate = 0UL;
-
-		foreach ( var r in ipresults2 )
+		foreach ( var mo in mocMemory )
 		{
-			workingSetPrivate += (ulong)r.GetPropertyValue( "WorkingSetPrivate" );
+			try
+			{
+				var pid = (int)(uint)mo.GetPropertyValue( "IDProcess" );
+				var workingSetPrivate = (ulong)mo.GetPropertyValue( "WorkingSetPrivate" );
+
+				if ( w3wpProcessToAppPoolNameMapping.TryGetValue( pid, out var appPoolName ) )
+				{
+					if ( result.TryGetValue( appPoolName, out var stats ) )
+						stats.WorkingSetPrivate += workingSetPrivate;
+					else
+						result.Add( appPoolName, new UsageStatistics( 0UL, 0UL, workingSetPrivate ) );
+				}
+			}
+			finally
+			{
+				mo.Dispose();
+			}
 		}
 
-		// Need to multiply cpu stats by one hundred to align with nomad method CpuStats.Percent's expected decimal placement
-		//kernelModeTime *= 100;
-		//userModeTime *= 100;
+		if ( _currentCpuSearcher is null )
+		{
+			_currentCpuSearcher = new ManagementObjectSearcher(
+				new SelectQuery( "Win32_Process", "Name LIKE 'w3wp%'", ["ProcessID", "KernelModeTime", "UserModeTime"] ) );
+		}
 
-		return (kernelModeTime, userModeTime, workingSetPrivate);
+		using var mocCpu = _currentCpuSearcher.Get();
 
-#pragma warning restore CA1416 // Validate platform compatibility
+		foreach ( var mo in mocCpu )
+		{
+			try
+			{
+				var pid = (int)(uint)mo.GetPropertyValue( "ProcessID" );
+				var kernelModeTime = (ulong)mo.GetPropertyValue( "KernelModeTime" );
+				var userModeTime = (ulong)mo.GetPropertyValue( "UserModeTime" );
+
+				if ( w3wpProcessToAppPoolNameMapping.TryGetValue( pid, out var appPoolName ) )
+				{
+					if ( result.TryGetValue( appPoolName, out var stats ) )
+					{
+						stats.KernelModeTime += kernelModeTime;
+						stats.UserModeTime += userModeTime;
+					}
+					else
+						result.Add( appPoolName, new UsageStatistics( kernelModeTime, userModeTime, 0UL ) );
+				}
+			}
+			finally
+			{
+				mo.Dispose();
+			}
+		}
+
+		return result;
+	}
+
+	public void Dispose ()
+	{
+		_currentMemorySearcher?.Dispose();
+		_currentCpuSearcher?.Dispose();
 	}
 }

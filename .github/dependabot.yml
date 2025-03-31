@@ -13,3 +13,12 @@ updates:
       dependencies: # Just a name
         patterns:
           - "*"
+  - package-ecosystem: "npm"
+    directory: "/website"
+    schedule:
+      interval: "monthly"
+    groups:
+      dependencies: # Just a name
+        patterns: ["*"]
+    allow:
+      - dependency-name: "@docusaurus/*"

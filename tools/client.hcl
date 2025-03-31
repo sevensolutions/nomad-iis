@@ -26,6 +26,12 @@ consul {
 }
 
 plugin "nomad_iis" {
+  args = [
+    "--management-api-port=5004",
+    "--management-api-key=12345",
+    "--management-api-jwt-secret=VETkEPWkaVTxWf7J4Mm20KJWOx2cK4S7VvoP3ybjh6fr9P9PXvyhlY8HV2Jgxm2O"
+  ]
+
   config {
     enabled = true,
 	fingerprint_interval = "10s"

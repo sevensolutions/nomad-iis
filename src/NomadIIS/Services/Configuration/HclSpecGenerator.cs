@@ -89,7 +89,7 @@ internal sealed class HclSpecGenerator
 			return "string";
 		if ( type == typeof( bool ) || type == typeof( bool? ) )
 			return "bool";
-		if ( type == typeof( int ) || type == typeof( int? ) )
+		if ( type == typeof( int ) || type == typeof( int? ) || type == typeof( long ) || type == typeof( long? ) )
 			return "number";
 		if ( type == typeof( TimeSpan ) || type == typeof( TimeSpan? ) )
 			return "string";
@@ -103,11 +103,13 @@ internal sealed class HclSpecGenerator
 	private static string ConvertDefaultValue ( object? value )
 	{
 		if ( value is string strValue )
-			return $"\"{strValue.Replace("\\", "\\\\")}\"";
+			return $"\"{strValue.Replace( "\\", "\\\\" )}\"";
 		if ( value is bool bValue )
 			return bValue ? "true" : "false";
 		if ( value is int intValue )
 			return intValue.ToString();
+		if ( value is long longValue )
+			return longValue.ToString();
 
 		return "";
 	}

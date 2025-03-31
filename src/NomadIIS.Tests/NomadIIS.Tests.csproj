@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>enable</Nullable>
 
@@ -15,14 +15,14 @@
 	</PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="CliWrap" Version="3.6.6" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
-    <PackageReference Include="xunit" Version="2.9.2" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="3.0.0-pre.35">
+    <PackageReference Include="CliWrap" Version="3.8.2" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.0.2">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="coverlet.collector" Version="6.0.2">
+    <PackageReference Include="coverlet.collector" Version="6.0.4">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
@@ -35,11 +35,17 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Remove="data\certificates\cert1.key.pem" />
+    <None Remove="data\certificates\cert1.pem" />
     <None Remove="Data\nomad_api_config.hcl" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\NomadIIS\NomadIIS.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Data\certificates\" />
   </ItemGroup>
 
 </Project>
