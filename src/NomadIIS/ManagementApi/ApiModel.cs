@@ -37,7 +37,19 @@ public sealed class DebugInformation
 
 	[JsonPropertyName( "iisHandles" )]
 	public DebugIisHandle[] IisHandles { get; set; } = default!;
+
+	[JsonPropertyName( "danglingIisAppPools" )]
+	public int DanglingIisAppPools { get; set; }
+	[JsonPropertyName( "danglingIisWebsites" )]
+	public int DanglingIisWebsites { get; set; }
+
+	[JsonPropertyName( "iisAppPools" )]
+	public DebugIisAppPool[] IisAppPools { get; set; } = default!;
+
+	[JsonPropertyName( "iisWebsites" )]
+	public DebugIisWebsite[] IisWebsites { get; set; } = default!;
 }
+
 public sealed class DebugIisHandle
 {
 	[JsonPropertyName( "taskId" )]
@@ -58,5 +70,23 @@ public sealed class DebugIisHandle
 	public string? TaskGroupName { get; set; }
 	[JsonPropertyName( "isRecovered" )]
 	public bool IsRecovered { get; set; }
+}
+
+public sealed class DebugIisAppPool
+{
+	[JsonPropertyName( "name" )]
+	public string Name { get; set; } = default!;
+
+	[JsonPropertyName( "isDangling" )]
+	public bool IsDangling { get; set; }
+}
+
+public sealed class DebugIisWebsite
+{
+	[JsonPropertyName( "name" )]
+	public string Name { get; set; } = default!;
+
+	[JsonPropertyName( "isDangling" )]
+	public bool IsDangling { get; set; }
 }
 #endif
