@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using NomadIIS.ManagementApi.ApiModel;
 using NomadIIS.Services;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -210,12 +211,38 @@ public sealed class ManagementApiController : Controller
 	}
 
 	[HttpGet( "v1/debug" )]
-	public IActionResult GetDebugInformation ()
+	public async Task<IActionResult> GetDebugInformation ( CancellationToken cancellationToken = default )
 	{
 		if ( !Authorization.IsAuthorized( HttpContext, AuthorizationCapability.Debug ) )
 			return Forbid();
 
 		var handles = _managementService.GetHandlesSnapshot();
+
+		var iisAppPools = new List<DebugIisAppPool>();
+		var iisWebsites = new List<DebugIisWebsite>();
+
+		await _managementService.LockAsync( iis =>
+		{
+			foreach ( var appPool in iis.ServerManager.ApplicationPools )
+			{
+				iisAppPools.Add( new DebugIisAppPool()
+				{
+					Name = appPool.Name,
+					IsDangling = appPool.Name.StartsWith( IisTaskHandle.AppPoolOrWebsiteNamePrefix ) && !handles.Any( x => x.AppPoolName == appPool.Name )
+				} );
+			}
+
+			foreach ( var site in iis.ServerManager.Sites )
+			{
+				iisWebsites.Add( new DebugIisWebsite()
+				{
+					Name = site.Name,
+					IsDangling = site.Name.StartsWith( IisTaskHandle.AppPoolOrWebsiteNamePrefix ) && !handles.Any( x => x.WebsiteName == site.Name )
+				} );
+			}
+
+			return Task.CompletedTask;
+		}, cancellationToken );
 
 		return Ok( new DebugInformation()
 		{
@@ -231,7 +258,11 @@ public sealed class ManagementApiController : Controller
 				TaskName = x.TaskConfig?.Name,
 				TaskGroupName = x.TaskConfig?.TaskGroupName,
 				IsRecovered = x.IsRecovered
-			} ).ToArray()
+			} ).ToArray(),
+			DanglingIisAppPools = iisAppPools.Count( x => x.IsDangling ),
+			DanglingIisWebsites = iisWebsites.Count( x => x.IsDangling ),
+			IisAppPools = iisAppPools.ToArray(),
+			IisWebsites = iisWebsites.ToArray()
 		} );
 	}
 }

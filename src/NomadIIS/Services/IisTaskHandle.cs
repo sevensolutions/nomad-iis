@@ -28,6 +28,8 @@ namespace NomadIIS.Services;
 
 public sealed class IisTaskHandle : IDisposable
 {
+	public const string AppPoolOrWebsiteNamePrefix = "nomad-";
+
 	private readonly ManagementService _owner;
 	private readonly ILogger _logger;
 	private readonly CancellationTokenSource _ctsDisposed = new();
@@ -68,6 +70,7 @@ public sealed class IisTaskHandle : IDisposable
 	public TaskConfig? TaskConfig => _taskConfig;
 	public int? UdpLoggerPort => _state?.UdpLoggerPort;
 	public string? AppPoolName => _state?.AppPoolName;
+	public string? WebsiteName => _state?.WebsiteName;
 	public bool IsRecovered => _isRecovered;
 
 	public async Task<DriverStateV1> RunAsync ( TaskConfig task )
@@ -201,7 +204,7 @@ public sealed class IisTaskHandle : IDisposable
 			if ( !IsAllowedTargetWebsite( config.TargetWebsite ) )
 				throw new InvalidOperationException( $"Using target_website \"{config.TargetWebsite}\" is not allowed on this node." );
 
-			if ( config.TargetWebsite.StartsWith( "nomad-" ) )
+			if ( config.TargetWebsite.StartsWith( AppPoolOrWebsiteNamePrefix ) )
 				throw new InvalidOperationException( $"Re-using the existing nomad website \"{config.TargetWebsite}\" as target_website is not allowed." );
 
 			if ( config.Applications.Any( x => string.IsNullOrEmpty( x.Alias ) ) )
@@ -449,7 +452,7 @@ public sealed class IisTaskHandle : IDisposable
 
 	private static string BuildAppPoolOrWebsiteName ( TaskConfig taskConfig )
 	{
-		var rawName = $"nomad-{taskConfig.AllocId}-{taskConfig.Name}";
+		var rawName = $"{AppPoolOrWebsiteNamePrefix}{taskConfig.AllocId}-{taskConfig.Name}";
 
 		var invalidChars = ApplicationPoolCollection.InvalidApplicationPoolNameCharacters()
 			.Union( SiteCollection.InvalidSiteNameCharacters() )
@@ -469,7 +472,7 @@ public sealed class IisTaskHandle : IDisposable
 
 		// AppPool name limit is 64 characters. Website's doesn't seem to have a limit.
 		if ( finalName.Length > 64 )
-			finalName = $"nomad-{taskConfig.AllocId}";
+			finalName = $"{AppPoolOrWebsiteNamePrefix}{taskConfig.AllocId}";
 
 		return finalName;
 	}
