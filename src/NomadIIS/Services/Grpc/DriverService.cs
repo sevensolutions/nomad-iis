@@ -295,7 +295,27 @@ public sealed class DriverService : Driver.DriverBase
 
 				try
 				{
-					runHandle = await CreateProcessWithAppPoolIdentity( handle, command, sb, responseStream.WriteAsync );
+					runHandle = await CreateProcessWithAppPoolIdentity( handle, command, sb, responseStream.WriteAsync, async () =>
+					{
+						runHandle?.Dispose();
+
+						await responseStream.WriteAsync( new ExecTaskStreamingResponse()
+						{
+							Exited = true,
+							Result = new ExitResult()
+							{
+								ExitCode = runHandle.ExitCode
+							},
+							Stdout = new ExecTaskStreamingIOOperation()
+							{
+								Close = true
+							},
+							Stderr = new ExecTaskStreamingIOOperation()
+							{
+								Close = true
+							}
+						} );
+					} );
 
 					await responseStream.WriteAsync( new ExecTaskStreamingResponse()
 					{
@@ -341,10 +361,13 @@ public sealed class DriverService : Driver.DriverBase
 						runHandle.Close();
 						runHandle.Dispose();
 
-						// TODOPEI: Exit Code
 						await responseStream.WriteAsync( new ExecTaskStreamingResponse()
 						{
 							Exited = true,
+							Result = new ExitResult()
+							{
+								ExitCode = runHandle.ExitCode
+							},
 							Stdout = new ExecTaskStreamingIOOperation()
 							{
 								Close = true
@@ -369,13 +392,18 @@ public sealed class DriverService : Driver.DriverBase
 		public AnonymousPipeServerStream? StdoutPipe { get; set; }
 		public AnonymousPipeServerStream? StderrPipe { get; set; }
 		public Thread? StdoutThread { get; set; }
+		public CancellationTokenSource? CancellationTokenSource { get; set; }
+		public int ExitCode { get; set; }
 
 		public void Close ()
 		{
+			CancellationTokenSource?.Cancel();
 			Process?.Terminate( NtStatus.STATUS_CONTROL_C_EXIT );
 		}
 		public void Dispose ()
 		{
+			ExitCode = Process?.ExitStatus ?? 0;
+
 			StdinPipe?.Dispose();
 			StdoutPipe?.Dispose();
 			StderrPipe?.Dispose();
@@ -385,7 +413,7 @@ public sealed class DriverService : Driver.DriverBase
 		}
 	}
 
-	private static async Task<ProcessRunHandle> CreateProcessWithAppPoolIdentity ( IisTaskHandle iisTaskHandle, string cmdline, StringBuilder logger, Func<ExecTaskStreamingResponse, Task> onDataReceived )
+	private static async Task<ProcessRunHandle> CreateProcessWithAppPoolIdentity ( IisTaskHandle iisTaskHandle, string cmdline, StringBuilder logger, Func<ExecTaskStreamingResponse, Task> onDataReceived, Func<Task> onExited )
 	{
 		if ( iisTaskHandle.TaskConfig is null )
 			throw new InvalidOperationException( "Invalid state." );
@@ -402,6 +430,8 @@ public sealed class DriverService : Driver.DriverBase
 			throw new Exception( "w3wp not running" );
 
 		var token = w3wp.OpenToken();
+
+		var cts = new CancellationTokenSource();
 
 		var stdinPipe = new AnonymousPipeServerStream( PipeDirection.Out, HandleInheritability.Inheritable );
 		var stdoutPipe = new AnonymousPipeServerStream( PipeDirection.In, HandleInheritability.Inheritable );
@@ -420,7 +450,7 @@ public sealed class DriverService : Driver.DriverBase
 				var buffer = new byte[4096];
 				int bytesRead;
 
-				while ( ( bytesRead = await stdoutPipe.ReadAsync( buffer, 0, buffer.Length ) ) > 0 )
+				while ( ( bytesRead = await stdoutPipe.ReadAsync( buffer, 0, buffer.Length, cts.Token ) ) > 0 )
 				{
 					await onDataReceived( new ExecTaskStreamingResponse()
 					{
@@ -441,6 +471,9 @@ public sealed class DriverService : Driver.DriverBase
 						Close = true
 					}
 				} );
+			}
+			catch ( OperationCanceledException )
+			{
 			}
 			catch ( Exception ex )
 			{
@@ -463,7 +496,7 @@ public sealed class DriverService : Driver.DriverBase
 				var buffer = new byte[4096];
 				int bytesRead;
 
-				while ( ( bytesRead = await stderrPipe.ReadAsync( buffer, 0, buffer.Length ) ) > 0 )
+				while ( ( bytesRead = await stderrPipe.ReadAsync( buffer, 0, buffer.Length, cts.Token ) ) > 0 )
 				{
 					await onDataReceived( new ExecTaskStreamingResponse()
 					{
@@ -484,6 +517,9 @@ public sealed class DriverService : Driver.DriverBase
 						Close = true
 					}
 				} );
+			}
+			catch ( OperationCanceledException )
+			{
 			}
 			catch ( Exception ex )
 			{
@@ -516,18 +552,23 @@ public sealed class DriverService : Driver.DriverBase
 			CreationFlags = CreateProcessFlags.NoWindow | CreateProcessFlags.NewConsole
 		};
 
-		using ( var process = config.Create() )
+		var process = config.Create();
+
+		_ = process.Process.WaitAsync( -1, cts.Token ).ContinueWith( async _ =>
 		{
-			return new ProcessRunHandle()
-			{
-				Token = token,
-				Process = process,
-				StdinPipe = stdinPipe,
-				StdoutPipe = stdoutPipe,
-				StderrPipe = stderrPipe,
-				StdoutThread = stdoutThread
-			};
-		}
+			await onExited();
+		} );
+
+		return new ProcessRunHandle()
+		{
+			Token = token,
+			Process = process,
+			StdinPipe = stdinPipe,
+			StdoutPipe = stdoutPipe,
+			StderrPipe = stderrPipe,
+			StdoutThread = stdoutThread,
+			CancellationTokenSource = cts
+		};
 	}
 #endif
 
