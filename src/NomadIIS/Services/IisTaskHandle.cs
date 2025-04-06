@@ -1055,6 +1055,22 @@ public sealed class IisTaskHandle : IDisposable
 
 	#region Management API Methods
 #if MANAGEMENT_API
+	public async Task<int?> TryGetAppPoolProcessId ()
+	{
+		if ( _state is null || _taskConfig is null || string.IsNullOrEmpty( _state.AppPoolName ) )
+			throw new InvalidOperationException( "Invalid state." );
+
+		return await _owner.LockAsync( handle =>
+		{
+			var appPool = GetApplicationPool( handle.ServerManager, _state.AppPoolName );
+
+			var workerProcess = appPool.WorkerProcesses.FirstOrDefault(
+				x => x.State == WorkerProcessState.Starting || x.State == WorkerProcessState.Running );
+
+			return Task.FromResult( workerProcess?.ProcessId );
+		} );
+	}
+
 	public async Task<NomadIIS.ManagementApi.ApiModel.TaskStatusResponse> GetStatusAsync ()
 	{
 		if ( _state is null || _taskConfig is null || string.IsNullOrEmpty( _state.AppPoolName ) )

@@ -13,11 +13,14 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Projektmappenelemente", "Pr
 		..\examples\agent.hcl = ..\examples\agent.hcl
 		..\examples\aspnet_sample_app.hcl = ..\examples\aspnet_sample_app.hcl
 		..\.github\dependabot.yml = ..\.github\dependabot.yml
+		..\LICENSE = ..\LICENSE
 		..\README.md = ..\README.md
 		..\examples\static_sample_app.hcl = ..\examples\static_sample_app.hcl
 	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NomadIIS.Tests", "NomadIIS.Tests\NomadIIS.Tests.csproj", "{410B7E45-AFA4-49BA-B30C-D95A47DEF61A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NtCoreLib", "NtCoreLib\NtCoreLib.csproj", "{0818523D-3623-43D9-8AB9-40A847DFB91C}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -33,6 +36,10 @@ Global
 		{410B7E45-AFA4-49BA-B30C-D95A47DEF61A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{410B7E45-AFA4-49BA-B30C-D95A47DEF61A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{410B7E45-AFA4-49BA-B30C-D95A47DEF61A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0818523D-3623-43D9-8AB9-40A847DFB91C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0818523D-3623-43D9-8AB9-40A847DFB91C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0818523D-3623-43D9-8AB9-40A847DFB91C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0818523D-3623-43D9-8AB9-40A847DFB91C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
