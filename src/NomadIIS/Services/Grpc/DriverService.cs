@@ -289,7 +289,7 @@ public sealed class DriverService : Driver.DriverBase
 			if ( request.Setup?.TaskId is not null )
 			{
 				handle = _managementService.GetHandle( request.Setup.TaskId );
-
+				
 				var commands = request.Setup.Command.ToImmutableArray();
 				var command = commands[0];
 
@@ -420,7 +420,7 @@ public sealed class DriverService : Driver.DriverBase
 		}
 	}
 
-	private static async Task<ProcessRunHandle> CreateProcessWithAppPoolIdentity ( IisTaskHandle iisTaskHandle, string commandLine, StringBuilder logger, Func<ExecTaskStreamingResponse, Task> onDataReceived, Func<Task> onExited )
+	private async Task<ProcessRunHandle> CreateProcessWithAppPoolIdentity ( IisTaskHandle iisTaskHandle, string commandLine, StringBuilder logger, Func<ExecTaskStreamingResponse, Task> onDataReceived, Func<Task> onExited )
 	{
 		if ( iisTaskHandle.TaskConfig is null )
 			throw new InvalidOperationException( "Invalid state." );
@@ -436,6 +436,8 @@ public sealed class DriverService : Driver.DriverBase
 		if ( w3wp is null )
 			throw new Exception( "w3wp not running" );
 
+		// NOTE: This whole feature doesn't work with a local admin account.
+		// It only works when running as local system account.
 		var w3wpToken = w3wp.OpenToken();
 
 		var token = w3wpToken;
@@ -474,6 +476,16 @@ public sealed class DriverService : Driver.DriverBase
 
 				while ( ( bytesRead = await stdoutPipe.ReadAsync( buffer, 0, buffer.Length, cts.Token ) ) > 0 )
 				{
+					// If the output matches "cls\r\n", map it to the linux clear terminal sequence
+					if ( bytesRead == 5 && buffer.SequenceEqual( new byte[] { 0x63, 0x6C, 0x73, 0x0D, 0x0A } ) )
+					{
+						// "\x1b[2J\x1b[H"
+						var sequence = new byte[] { 0x1B, 0x5B, 0x32, 0x4A, 0x1B, 0x5B, 0x48 };
+
+						sequence.CopyTo( buffer, 0 );
+						bytesRead = sequence.Length;
+					}
+
 					await onDataReceived( new ExecTaskStreamingResponse()
 					{
 						Exited = false,
@@ -523,7 +535,8 @@ public sealed class DriverService : Driver.DriverBase
 					await onDataReceived( new ExecTaskStreamingResponse()
 					{
 						Exited = false,
-						Stderr = new ExecTaskStreamingIOOperation()
+						// TODOPEI: Should be Stderr, but the Nomad UI console doesn't show this for some reason
+						Stdout = new ExecTaskStreamingIOOperation()
 						{
 							Data = ByteString.CopyFrom( new ReadOnlySpan<byte>( buffer, 0, bytesRead ) ),
 							Close = false
@@ -557,7 +570,7 @@ public sealed class DriverService : Driver.DriverBase
 			}
 		}
 
-		var workingDirectory = Path.Combine( iisTaskHandle.TaskConfig.AllocDir, iisTaskHandle.TaskConfig.Name );
+		var workingDirectory = Path.Combine( iisTaskHandle.TaskConfig.AllocDir, iisTaskHandle.TaskConfig.Name, "local" );
 
 		//var firstSpace = commandLine.IndexOf( ' ' );
 		//var exePath = firstSpace >= 0 ? commandLine.Substring( 0, firstSpace ) : commandLine;
@@ -576,6 +589,8 @@ public sealed class DriverService : Driver.DriverBase
 			CurrentDirectory = workingDirectory,
 			ApplicationName = "C:\\Windows\\System32\\cmd.exe", // TODO
 			CommandLine = "\"C:\\Windows\\System32\\cmd.exe\"",
+			//ApplicationName = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+			//CommandLine = $"\"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\" -NoExit -Command \"Set-Location '{workingDirectory}'\"",
 			//Environment = envBlock,
 			StdInputHandle = stdinPipe.ClientSafePipeHandle.DangerousGetHandle(),
 			StdOutputHandle = stdoutPipe.ClientSafePipeHandle.DangerousGetHandle(),
