@@ -19,6 +19,8 @@ using NtCoreLib.Win32.Process;
 using NtCoreLib;
 using System.Linq;
 using NtCoreLib.Security.Token;
+using System.Runtime.InteropServices;
+using NtCoreLib.Win32.Security;
 
 namespace NomadIIS.Services.Grpc;
 
@@ -291,6 +293,9 @@ public sealed class DriverService : Driver.DriverBase
 				var commands = request.Setup.Command.ToImmutableArray();
 				var command = commands[0];
 
+				if ( command == "/bin/bash" || command == "/bin/sh" || command == "bash" || command == "sh" )
+					command = "cmd.exe";
+
 				var sb = new StringBuilder();
 
 				try
@@ -404,6 +409,8 @@ public sealed class DriverService : Driver.DriverBase
 		{
 			ExitCode = Process?.ExitStatus ?? 0;
 
+			CancellationTokenSource?.Cancel();
+
 			StdinPipe?.Dispose();
 			StdoutPipe?.Dispose();
 			StderrPipe?.Dispose();
@@ -413,7 +420,7 @@ public sealed class DriverService : Driver.DriverBase
 		}
 	}
 
-	private static async Task<ProcessRunHandle> CreateProcessWithAppPoolIdentity ( IisTaskHandle iisTaskHandle, string cmdline, StringBuilder logger, Func<ExecTaskStreamingResponse, Task> onDataReceived, Func<Task> onExited )
+	private static async Task<ProcessRunHandle> CreateProcessWithAppPoolIdentity ( IisTaskHandle iisTaskHandle, string commandLine, StringBuilder logger, Func<ExecTaskStreamingResponse, Task> onDataReceived, Func<Task> onExited )
 	{
 		if ( iisTaskHandle.TaskConfig is null )
 			throw new InvalidOperationException( "Invalid state." );
@@ -429,7 +436,22 @@ public sealed class DriverService : Driver.DriverBase
 		if ( w3wp is null )
 			throw new Exception( "w3wp not running" );
 
-		var token = w3wp.OpenToken();
+		var w3wpToken = w3wp.OpenToken();
+
+		var token = w3wpToken;
+
+		//token = token.Duplicate( true ).Result;
+
+		//var token = Win32Security.LsaLogonUser(
+		//		iisTaskHandle.AppPoolName,
+		//		"IIS AppPool",
+		//		null,
+		//		NtCoreLib.Win32.Security.Authentication.Logon.SecurityLogonType.Interactive,
+		//		NtCoreLib.Win32.Security.Interop.Logon32Provider.Virtual );
+
+		//token.SetDefaultDacl( w3wpToken.DefaultDacl.Clone() );
+
+		//token.SetGroups()
 
 		var cts = new CancellationTokenSource();
 
@@ -537,6 +559,16 @@ public sealed class DriverService : Driver.DriverBase
 
 		var workingDirectory = Path.Combine( iisTaskHandle.TaskConfig.AllocDir, iisTaskHandle.TaskConfig.Name );
 
+		//var firstSpace = commandLine.IndexOf( ' ' );
+		//var exePath = firstSpace >= 0 ? commandLine.Substring( 0, firstSpace ) : commandLine;
+		//exePath = Path.GetFullPath( exePath );
+
+		//var envBlock = string.Join( '\0', iisTaskHandle.TaskConfig.Env.Select( kv => $"{kv.Key}={kv.Value}" ) ) + "\0\0";
+		//var envBlockBytes = Encoding.Unicode.GetBytes( envBlock );
+
+		//var token2 = token.Duplicate( true ).Result;
+		//var envBlock = CreateForToken( token2.Handle.DangerousGetHandle(), false );
+
 		var config = new Win32ProcessConfig()
 		{
 			Token = token, // TODO
@@ -544,6 +576,7 @@ public sealed class DriverService : Driver.DriverBase
 			CurrentDirectory = workingDirectory,
 			ApplicationName = "C:\\Windows\\System32\\cmd.exe", // TODO
 			CommandLine = "\"C:\\Windows\\System32\\cmd.exe\"",
+			//Environment = envBlock,
 			StdInputHandle = stdinPipe.ClientSafePipeHandle.DangerousGetHandle(),
 			StdOutputHandle = stdoutPipe.ClientSafePipeHandle.DangerousGetHandle(),
 			StdErrorHandle = stderrPipe.ClientSafePipeHandle.DangerousGetHandle(),
@@ -569,6 +602,42 @@ public sealed class DriverService : Driver.DriverBase
 			StdoutThread = stdoutThread,
 			CancellationTokenSource = cts
 		};
+	}
+
+	[DllImport( "userenv.dll", SetLastError = true, CharSet = CharSet.Auto )]
+	private static extern bool CreateEnvironmentBlock (
+		out IntPtr lpEnvironment,
+		IntPtr hToken,
+		bool bInherit );
+	[DllImport( "userenv.dll", SetLastError = true )]
+	private static extern bool DestroyEnvironmentBlock ( IntPtr lpEnvironment );
+
+	private static byte[] CreateForToken ( IntPtr tokenHandle, bool inherit = false )
+	{
+		if ( !CreateEnvironmentBlock( out var envPtr, tokenHandle, inherit ) )
+			throw new System.ComponentModel.Win32Exception( Marshal.GetLastWin32Error() );
+
+		try
+		{
+			// Find the size of the environment block (it's double-null-terminated)
+			int size = 0;
+			while ( true )
+			{
+				if ( Marshal.ReadInt16( envPtr, size ) == 0 &&
+					Marshal.ReadInt16( envPtr, size + 2 ) == 0 )
+					break;
+				size += 2;
+			}
+			size += 4; // Include the double-null
+
+			byte[] envBytes = new byte[size];
+			Marshal.Copy( envPtr, envBytes, 0, size );
+			return envBytes;
+		}
+		finally
+		{
+			DestroyEnvironmentBlock( envPtr );
+		}
 	}
 #endif
 
