@@ -5,6 +5,7 @@ using MessagePack;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using NomadIIS.Services.Configuration;
+using Sentry;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -162,6 +163,7 @@ public sealed class DriverService : Driver.DriverBase
 		catch ( Exception ex )
 		{
 			_logger.LogError( ex, $"Failed to start task {task.Id}." );
+			SentrySdk.CaptureException( ex );
 
 			handle.Dispose();
 
@@ -185,11 +187,19 @@ public sealed class DriverService : Driver.DriverBase
 
 		var handle = _managementService.TryGetHandle( request.TaskId );
 
-		if ( handle is not null )
+		try
 		{
-			await handle.StopAsync();
-
-			handle.Dispose();
+			if ( handle is not null )
+				await handle.StopAsync();
+		}
+		catch ( Exception ex )
+		{
+			_logger.LogError( ex, $"Failed to stop task {request.TaskId}." );
+			SentrySdk.CaptureException( ex );
+		}
+		finally
+		{
+			handle?.Dispose();
 		}
 
 		return new StopTaskResponse();
@@ -213,11 +223,19 @@ public sealed class DriverService : Driver.DriverBase
 
 		var handle = _managementService.TryGetHandle( request.TaskId );
 
-		if ( handle is not null )
+		try
 		{
-			await handle.DestroyAsync();
-
-			handle.Dispose();
+			if ( handle is not null )
+				await handle.DestroyAsync();
+		}
+		catch ( Exception ex )
+		{
+			_logger.LogError( ex, $"Failed to destroy task {request.TaskId}." );
+			SentrySdk.CaptureException( ex );
+		}
+		finally
+		{
+			handle?.Dispose();
 		}
 
 		return new DestroyTaskResponse();

@@ -41,6 +41,11 @@ var builder = WebApplication.CreateBuilder( args );
 builder.Logging.ClearProviders();
 builder.Host.UseSerilog();
 
+var isErrorReportingEnabled = builder.Configuration.GetValue( "EnableErrorReporting", false );
+
+if ( isErrorReportingEnabled )
+	builder.WebHost.UseSentry();
+
 //System.Diagnostics.Debugger.Launch();
 
 var grpcPort = builder.Configuration.GetValue( "port", 5003 );
@@ -68,11 +73,6 @@ builder.WebHost.ConfigureKestrel( config =>
 		} );
 	}
 #endif
-
-	//config.ListenUnixSocket("/my-socket2.sock", listenOptions =>
-	//{
-	//    listenOptions.Protocols = HttpProtocols.Http2;
-	//});
 } );
 
 builder.Services.AddSingleton<ManagementService>();
@@ -80,7 +80,11 @@ builder.Services.AddSingleton<ManagementService>();
 builder.Services.AddHostedService( sp => sp.GetRequiredService<ManagementService>() );
 builder.Services.AddHostedService<HandshakeService>();
 
-builder.Services.AddGrpc();
+builder.Services.AddGrpc( options =>
+{
+	if ( isErrorReportingEnabled )
+		options.Interceptors.Add<SentryGrpcInterceptor>();
+} );
 builder.Services.AddGrpcReflection();
 
 builder.Services
