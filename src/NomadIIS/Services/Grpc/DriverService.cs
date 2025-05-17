@@ -576,11 +576,11 @@ public sealed class DriverService : Driver.DriverBase
 		//var exePath = firstSpace >= 0 ? commandLine.Substring( 0, firstSpace ) : commandLine;
 		//exePath = Path.GetFullPath( exePath );
 
-		//var envBlock = string.Join( '\0', iisTaskHandle.TaskConfig.Env.Select( kv => $"{kv.Key}={kv.Value}" ) ) + "\0\0";
-		//var envBlockBytes = Encoding.Unicode.GetBytes( envBlock );
+		var envBlock = string.Join( '\0', iisTaskHandle.TaskConfig.Env.Select( kv => $"{kv.Key}={kv.Value}" ) ) + "\0\0";
+		var envBlockBytes = Encoding.ASCII.GetBytes( envBlock );
 
 		//var token2 = token.Duplicate( true ).Result;
-		//var envBlock = CreateForToken( token2.Handle.DangerousGetHandle(), false );
+		//var envBlock = CreateForToken( token.Handle.DangerousGetHandle(), true );
 
 		var config = new Win32ProcessConfig()
 		{
@@ -590,8 +590,8 @@ public sealed class DriverService : Driver.DriverBase
 			ApplicationName = "C:\\Windows\\System32\\cmd.exe", // TODO
 			CommandLine = "\"C:\\Windows\\System32\\cmd.exe\"",
 			//ApplicationName = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
-			//CommandLine = $"\"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\" -NoExit -Command \"Set-Location '{workingDirectory}'\"",
-			//Environment = envBlock,
+			//CommandLine = $"\"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\"", // -NoExit -Command \"Set-Location '{workingDirectory}'\"",
+			Environment = envBlockBytes,
 			StdInputHandle = stdinPipe.ClientSafePipeHandle.DangerousGetHandle(),
 			StdOutputHandle = stdoutPipe.ClientSafePipeHandle.DangerousGetHandle(),
 			StdErrorHandle = stderrPipe.ClientSafePipeHandle.DangerousGetHandle(),
@@ -618,7 +618,7 @@ public sealed class DriverService : Driver.DriverBase
 			CancellationTokenSource = cts
 		};
 	}
-
+	/*
 	[DllImport( "userenv.dll", SetLastError = true, CharSet = CharSet.Auto )]
 	private static extern bool CreateEnvironmentBlock (
 		out IntPtr lpEnvironment,
@@ -653,7 +653,7 @@ public sealed class DriverService : Driver.DriverBase
 		{
 			DestroyEnvironmentBlock( envPtr );
 		}
-	}
+	}*/
 #endif
 
 	public override Task<RecoverTaskResponse> RecoverTask ( RecoverTaskRequest request, ServerCallContext context )
