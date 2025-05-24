@@ -215,28 +215,43 @@ public sealed class IisTaskHandle : IDisposable
 
 	private void ValidateAndCoerceTaskConfiguration ( DriverTaskConfig config )
 	{
-		if ( config.ApplicationPools.Length == 0 )
-		{
-			config.ApplicationPools = [
-				new DriverTaskConfigApplicationPool()
-				{
-					Name = "default"
-				}
-			];
-		}
-
-		if ( config.ApplicationPools.Select( x => x.Name ).Distinct().Count() != config.ApplicationPools.Length )
-			throw new ArgumentException( "Every applicationPool name must be unique." );
-
 		foreach ( var app in config.Applications )
 		{
 			// In case someone is specifying the alias with a leading slash.
 			if ( app.Alias is not null )
 				app.Alias = app.Alias.TrimStart( '/' );
+
+			if ( string.IsNullOrWhiteSpace( app.ApplicationPool ) )
+				throw new ArgumentNullException( "application_pool must not be empty." );
 		}
 
 		if ( config.Applications.Select( x => x.Alias ).Distinct().Count() != config.Applications.Length )
 			throw new ArgumentException( "Every application alias must be unique." );
+
+		// Add the default app pool if it's not already there
+		if ( !config.ApplicationPools.Any( x => x.Name == "default" ) )
+		{
+			config.ApplicationPools = config.ApplicationPools.Concat( [
+				new DriverTaskConfigApplicationPool()
+				{
+					Name = "default"
+				}
+			] ).ToArray();
+		}
+
+		// App pool names must be unique
+		if ( config.ApplicationPools.Select( x => x.Name ).Distinct().Count() != config.ApplicationPools.Length )
+			throw new ArgumentException( "Every applicationPool name must be unique." );
+
+		// Validate app pool name length and remove unused app pools
+		foreach ( var appPool in config.ApplicationPools.ToArray() )
+		{
+			if ( appPool.Name.Length > 8 )
+				throw new ArgumentException( $"Application pool names must be less or equal to 8 characters." );
+
+			if ( !config.Applications.Any( x => x.ApplicationPool == appPool.Name ) )
+				config.ApplicationPools = config.ApplicationPools.Except( [appPool] ).ToArray();
+		}
 
 		if ( !string.IsNullOrEmpty( config.TargetWebsite ) )
 		{

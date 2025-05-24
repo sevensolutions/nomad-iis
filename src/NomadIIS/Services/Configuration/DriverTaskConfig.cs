@@ -69,7 +69,7 @@ public sealed class DriverTaskConfigApplicationPool
 
 public sealed class DriverTaskConfigApplication
 {
-	[ConfigurationField( "applicationPool" )]
+	[ConfigurationField( "application_pool" )]
 	[DefaultValue( "default" )]
 	public string ApplicationPool { get; set; } = "default";
 
