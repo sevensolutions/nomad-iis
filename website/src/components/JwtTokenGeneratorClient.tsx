@@ -10,11 +10,12 @@ export default function JwtTokenGeneratorClient() {
 	const [namespace, setNamespace] = useState<string>("*");
 	const [jobName, setJobName] = useState<string>("*");
 	const [allocId, setAllocId] = useState<string>("*");
-	const [filesystemAccess, setFilesystemAccess] = useState<boolean>(true);
-	const [appPoolLifecycle, setAppPoolLifecycle] = useState<boolean>(true);
-	const [screenshots, setScreenshots] = useState<boolean>(true);
-	const [processDumps, setProcessDumps] = useState<boolean>(true);
-	const [debug, setDebug] = useState<boolean>(true);
+	const [capStatus, setCapStatus] = useState<boolean>(true);
+	const [capFilesystemAccess, setCapFilesystemAccess] = useState<boolean>(true);
+	const [capAppPoolLifecycle, setCapAppPoolLifecycle] = useState<boolean>(true);
+	const [capScreenshots, setCapScreenshots] = useState<boolean>(true);
+	const [capProcessDumps, setCapProcessDumps] = useState<boolean>(true);
+	const [capDebug, setCapDebug] = useState<boolean>(true);
 
 	useEffect(() => {
 		generateToken();
@@ -89,24 +90,28 @@ export default function JwtTokenGeneratorClient() {
 					<h4>Allowed Capabilities</h4>
 					
 					<div className="jwtTokenGenerator_row">
-						<input id="cbCapability1" type="checkbox" checked={filesystemAccess} onChange={ev => setFilesystemAccess(ev.target.checked)}></input>
-						<label htmlFor="cbCapability1">Filesystem Access</label>
+						<input id="cbCapability1" type="checkbox" checked={capStatus} onChange={ev => setCapStatus(ev.target.checked)}></input>
+						<label htmlFor="cbCapability1">Status</label>
 					</div>
 					<div className="jwtTokenGenerator_row">
-						<input id="cbCapability2" type="checkbox" checked={appPoolLifecycle} onChange={ev => setAppPoolLifecycle(ev.target.checked)}></input>
-						<label htmlFor="cbCapability2">Application Pool Lifecycle Management</label>
+						<input id="cbCapability2" type="checkbox" checked={capFilesystemAccess} onChange={ev => setCapFilesystemAccess(ev.target.checked)}></input>
+						<label htmlFor="cbCapability2">Filesystem Access</label>
 					</div>
 					<div className="jwtTokenGenerator_row">
-						<input id="cbCapability3" type="checkbox" checked={screenshots} onChange={ev => setScreenshots(ev.target.checked)}></input>
-						<label htmlFor="cbCapability3">Screenshots</label>
+						<input id="cbCapability3" type="checkbox" checked={capAppPoolLifecycle} onChange={ev => setCapAppPoolLifecycle(ev.target.checked)}></input>
+						<label htmlFor="cbCapability3">Application Pool Lifecycle Management</label>
 					</div>
 					<div className="jwtTokenGenerator_row">
-						<input id="cbCapability4" type="checkbox" checked={processDumps} onChange={ev => setProcessDumps(ev.target.checked)}></input>
-						<label htmlFor="cbCapability4">Process Dumps</label>
+						<input id="cbCapability4" type="checkbox" checked={capScreenshots} onChange={ev => setCapScreenshots(ev.target.checked)}></input>
+						<label htmlFor="cbCapability4">Screenshots</label>
 					</div>
 					<div className="jwtTokenGenerator_row">
-						<input id="cbCapability5" type="checkbox" checked={debug} onChange={ev => setDebug(ev.target.checked)}></input>
-						<label htmlFor="cbCapability5">Debug Information</label>
+						<input id="cbCapability5" type="checkbox" checked={capProcessDumps} onChange={ev => setCapProcessDumps(ev.target.checked)}></input>
+						<label htmlFor="cbCapability5">Process Dumps</label>
+					</div>
+					<div className="jwtTokenGenerator_row">
+						<input id="cbCapability6" type="checkbox" checked={capDebug} onChange={ev => setCapDebug(ev.target.checked)}></input>
+						<label htmlFor="cbCapability6">Debug Information</label>
 					</div>
 				</div>
 			</div>
@@ -156,15 +161,17 @@ export default function JwtTokenGeneratorClient() {
 			if (allocId)
 				claims.allocId = allocId;
 
-			if (filesystemAccess)
+			if (capStatus)
+				claims.capabilities.push("Status");
+			if (capFilesystemAccess)
 				claims.capabilities.push("FilesystemAccess");
-			if (appPoolLifecycle)
+			if (capAppPoolLifecycle)
 				claims.capabilities.push("AppPoolLifecycle");
-			if (screenshots)
+			if (capScreenshots)
 				claims.capabilities.push("Screenshots");
-			if (processDumps)
+			if (capProcessDumps)
 				claims.capabilities.push("ProcDump");
-			if (debug)
+			if (capDebug)
 				claims.capabilities.push("Debug");
 
 			console.log(claims);

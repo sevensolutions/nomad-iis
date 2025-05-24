@@ -203,7 +203,7 @@ You also have to agree to the EULA of procdump by setting `accept_eula` to `true
 :::
 
 ```
-GET /api/v1/allocs/{allocId}/{taskName}/procdump
+GET /api/v1/allocs/{allocId}/{taskName}/procdump[?appPoolName=default]
 ```
 
 Sometimes you need to investigate a performance or memory issue and need a process dump of the *w3wp* worker process.

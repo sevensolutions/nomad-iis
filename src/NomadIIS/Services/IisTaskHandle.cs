@@ -29,6 +29,7 @@ namespace NomadIIS.Services;
 public sealed class IisTaskHandle : IDisposable
 {
 	public const string AppPoolOrWebsiteNamePrefix = "nomad-";
+	public const string DefaultAppPoolName = "default";
 
 	private readonly ManagementService _owner;
 	private readonly ILogger _logger;
@@ -144,7 +145,7 @@ public sealed class IisTaskHandle : IDisposable
 						_logger.LogInformation( $"Task {task.Id}: Creating Website with name {_state.WebsiteName}..." );
 
 						ApplicationPool? defaultAppPool = null;
-						if ( appPools.TryGetValue( "default", out var pool ) )
+						if ( appPools.TryGetValue( DefaultAppPoolName, out var pool ) )
 							defaultAppPool = pool;
 						else
 							defaultAppPool = appPools.First().Value;
@@ -166,7 +167,7 @@ public sealed class IisTaskHandle : IDisposable
 						ApplicationPool? appPool = null;
 						if ( appPools.TryGetValue( app.ApplicationPool, out var pool ) )
 							appPool = pool;
-						else if ( app.ApplicationPool == "default" )
+						else if ( app.ApplicationPool == DefaultAppPoolName )
 							appPool = appPools.First().Value; // If we don't find a default pool, take a random one.
 						else
 							throw new KeyNotFoundException( $"Couldn't find an application pool with name {app.ApplicationPool}." );
@@ -229,12 +230,12 @@ public sealed class IisTaskHandle : IDisposable
 			throw new ArgumentException( "Every application alias must be unique." );
 
 		// Add the default app pool if it's not already there
-		if ( !config.ApplicationPools.Any( x => x.Name == "default" ) )
+		if ( !config.ApplicationPools.Any( x => x.Name == DefaultAppPoolName ) )
 		{
 			config.ApplicationPools = config.ApplicationPools.Concat( [
 				new DriverTaskConfigApplicationPool()
 				{
-					Name = "default"
+					Name = DefaultAppPoolName
 				}
 			] ).ToArray();
 		}
@@ -395,7 +396,7 @@ public sealed class IisTaskHandle : IDisposable
 				_state = new DriverStateV2()
 				{
 					StartDate = v1State.StartDate,
-					AppPoolNames = new Dictionary<string, string>() { ["default"] = v1State.AppPoolName },
+					AppPoolNames = new Dictionary<string, string>() { [DefaultAppPoolName] = v1State.AppPoolName },
 					ApplicationAliases = v1State.ApplicationAliases,
 					WebsiteName = v1State.WebsiteName,
 					TaskOwnsWebsite = v1State.TaskOwnsWebsite,
@@ -555,7 +556,7 @@ public sealed class IisTaskHandle : IDisposable
 	}
 	private static string BuildAppPoolName ( TaskConfig taskConfig, DriverTaskConfigApplicationPool appPoolConfig )
 	{
-		var suffix = appPoolConfig.Name != "default" ? $"-{appPoolConfig.Name}" : "";
+		var suffix = appPoolConfig.Name != DefaultAppPoolName ? $"-{appPoolConfig.Name}" : "";
 		var rawName = $"{AppPoolOrWebsiteNamePrefix}{taskConfig.AllocId}-{taskConfig.Name}{suffix}";
 
 		var invalidChars = ApplicationPoolCollection.InvalidApplicationPoolNameCharacters()
@@ -948,7 +949,7 @@ public sealed class IisTaskHandle : IDisposable
 		// https://learn.microsoft.com/en-us/troubleshoot/developer/webapps/iis/www-authentication-authorization/default-permissions-user-rights
 		// https://stackoverflow.com/questions/51277338/remove-users-group-permission-for-folder-inside-programdata
 
-		var appPoolIdentities = _state.AppPoolNames.Select( x => $"IIS AppPool\\{x}" ).ToArray();
+		var appPoolIdentities = _state.AppPoolNames.Select( x => $"IIS AppPool\\{x.Value}" ).ToArray();
 
 		string[] identities = config.PermitIusr ? appPoolIdentities.Concat( ["IUSR"] ).ToArray() : appPoolIdentities;
 
@@ -1175,23 +1176,27 @@ public sealed class IisTaskHandle : IDisposable
 
 		return await _owner.LockAsync( handle =>
 		{
-			var appPools = _state.AppPoolNames.Select( x => GetApplicationPool( handle.ServerManager, x.Value ) );
+			var appPools = _state.AppPoolNames.Select( x =>
+			{
+				var appPool = GetApplicationPool( handle.ServerManager, x.Value );
+
+				var isWorkerProcessRunning = appPool.WorkerProcesses.Any(
+					x => x.State == WorkerProcessState.Starting || x.State == WorkerProcessState.Running );
+
+				return new NomadIIS.ManagementApi.ApiModel.ApplicationPool()
+				{
+					Name = x.Key,
+					Status = (NomadIIS.ManagementApi.ApiModel.ApplicationPoolStatus)(int)appPool.State,
+					IsWorkerProcessRunning = isWorkerProcessRunning
+				};
+			} ).ToArray();
 
 			return Task.FromResult( new NomadIIS.ManagementApi.ApiModel.TaskStatusResponse()
 			{
 				AllocId = _taskConfig.AllocId,
 				TaskName = _taskConfig.Name,
-				ApplicationPools = appPools.Select( appPool =>
-				{
-					var isWorkerProcessRunning = appPool.WorkerProcesses.Any(
-						x => x.State == WorkerProcessState.Starting || x.State == WorkerProcessState.Running );
-
-					return new NomadIIS.ManagementApi.ApiModel.ApplicationPool()
-					{
-						Status = (NomadIIS.ManagementApi.ApiModel.ApplicationPoolStatus)(int)appPool.State,
-						IsWorkerProcessRunning = isWorkerProcessRunning
-					};
-				} ).ToArray()
+				DefaultApplicationPool = appPools.FirstOrDefault( x => x.Name == DefaultAppPoolName ),
+				ApplicationPools = appPools
 			} );
 		} );
 	}
@@ -1321,7 +1326,7 @@ public sealed class IisTaskHandle : IDisposable
 		return await PlaywrightHelper.TakeScreenshotAsync( $"http://localhost:{port}{path}", cancellationToken );
 	}
 
-	public async Task TakeProcessDump ( FileInfo targetFile, string appPoolName = "default", CancellationToken cancellationToken = default )
+	public async Task TakeProcessDump ( FileInfo targetFile, string appPoolName = DefaultAppPoolName, CancellationToken cancellationToken = default )
 	{
 		if ( _state is null )
 			throw new InvalidOperationException( "Invalid state." );
@@ -1336,7 +1341,8 @@ public sealed class IisTaskHandle : IDisposable
 
 		var w3wpPids = await _owner.LockAsync( handle =>
 		{
-			var fullAppPoolName = _state.AppPoolNames[appPoolName];
+			if ( !_state.AppPoolNames.TryGetValue( appPoolName, out var fullAppPoolName ) )
+				throw new KeyNotFoundException( $"Application pool \"{appPoolName}\" doesn't exist within allocation {_taskConfig?.AllocId}." );
 
 			var appPool = GetApplicationPool( handle.ServerManager, fullAppPoolName );
 

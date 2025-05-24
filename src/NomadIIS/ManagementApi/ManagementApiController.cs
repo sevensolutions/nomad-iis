@@ -179,7 +179,7 @@ public sealed class ManagementApiController : Controller
 	}
 
 	[HttpGet( "v1/allocs/{allocId}/{taskName}/procdump" )]
-	public async Task<IActionResult> GetProcdumpAsync ( string allocId, string taskName, [FromQuery] string appPoolName = "default", CancellationToken cancellationToken = default )
+	public async Task<IActionResult> GetProcdumpAsync ( string allocId, string taskName, [FromQuery] string appPoolName = IisTaskHandle.DefaultAppPoolName, CancellationToken cancellationToken = default )
 	{
 		var taskHandle = _managementService.TryGetHandleByAllocIdAndTaskName( allocId, taskName );
 

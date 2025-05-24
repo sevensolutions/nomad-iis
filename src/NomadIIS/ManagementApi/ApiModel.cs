@@ -9,11 +9,15 @@ public sealed class TaskStatusResponse
 	public string AllocId { get; set; } = default!;
 	[JsonPropertyName( "taskName" )]
 	public string TaskName { get; set; } = default!;
+	[JsonPropertyName( "defaultApplicationPool" )]
+	public ApplicationPool? DefaultApplicationPool { get; set; } = default!;
 	[JsonPropertyName( "applicationPools" )]
 	public ApplicationPool[] ApplicationPools { get; set; } = default!;
 }
 public sealed class ApplicationPool
 {
+	[JsonPropertyName( "name" )]
+	public string Name { get; set; } = default!;
 	[JsonPropertyName( "status" )]
 	public ApplicationPoolStatus Status { get; set; }
 	[JsonPropertyName( "isWorkerProcessRunning" )]
@@ -54,7 +58,7 @@ public sealed class DebugIisHandle
 {
 	[JsonPropertyName( "taskId" )]
 	public string TaskId { get; set; } = default!;
-	[JsonPropertyName( "appPoolName" )]
+	[JsonPropertyName( "appPoolNames" )]
 	public string[]? AppPoolNames { get; set; }
 	[JsonPropertyName( "allocId" )]
 	public string? AllocId { get; set; }

@@ -30,8 +30,8 @@ public sealed class DriverTaskConfig
 public sealed class DriverTaskConfigApplicationPool
 {
 	[ConfigurationField( "name" )]
-	[DefaultValue( "default" )]
-	public string Name { get; set; } = "default";
+	[DefaultValue( IisTaskHandle.DefaultAppPoolName )]
+	public string Name { get; set; } = IisTaskHandle.DefaultAppPoolName;
 
 	[ConfigurationField( "managed_pipeline_mode" )]
 	public ManagedPipelineMode? ManagedPipelineMode { get; set; }
@@ -70,8 +70,8 @@ public sealed class DriverTaskConfigApplicationPool
 public sealed class DriverTaskConfigApplication
 {
 	[ConfigurationField( "application_pool" )]
-	[DefaultValue( "default" )]
-	public string ApplicationPool { get; set; } = "default";
+	[DefaultValue( IisTaskHandle.DefaultAppPoolName )]
+	public string ApplicationPool { get; set; } = IisTaskHandle.DefaultAppPoolName;
 
 	[ConfigurationField( "alias" )]
 	public string? Alias { get; set; }

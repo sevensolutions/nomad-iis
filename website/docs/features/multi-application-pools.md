@@ -46,7 +46,7 @@ job "multi-pool-example" {
           start_mode = "AlwaysRunning"
         }
         applicationPool {
-          name = "appA"
+          name = "appB"
           start_mode = "AlwaysRunning"
         }
         # highlight-end
