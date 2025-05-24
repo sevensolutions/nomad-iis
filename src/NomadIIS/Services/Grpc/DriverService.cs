@@ -21,6 +21,9 @@ using System.Linq;
 using NtCoreLib.Security.Token;
 using System.Runtime.InteropServices;
 using NtCoreLib.Win32.Security;
+using Microsoft.Win32.SafeHandles;
+using System.ComponentModel;
+using System.Security.Principal;
 
 namespace NomadIIS.Services.Grpc;
 
@@ -289,7 +292,7 @@ public sealed class DriverService : Driver.DriverBase
 			if ( request.Setup?.TaskId is not null )
 			{
 				handle = _managementService.GetHandle( request.Setup.TaskId );
-				
+
 				var commands = request.Setup.Command.ToImmutableArray();
 				var command = commands[0];
 
@@ -322,15 +325,15 @@ public sealed class DriverService : Driver.DriverBase
 						} );
 					} );
 
-					await responseStream.WriteAsync( new ExecTaskStreamingResponse()
-					{
-						Exited = true,
-						Stdout = new ExecTaskStreamingIOOperation()
-						{
-							Data = ByteString.CopyFromUtf8( sb.ToString() ),
-							Close = true
-						}
-					} );
+					//await responseStream.WriteAsync( new ExecTaskStreamingResponse()
+					//{
+					//	Exited = true,
+					//	Stdout = new ExecTaskStreamingIOOperation()
+					//	{
+					//		Data = ByteString.CopyFromUtf8( sb.ToString() ),
+					//		Close = true
+					//	}
+					//} );
 				}
 				catch ( Exception ex )
 				{
@@ -399,6 +402,7 @@ public sealed class DriverService : Driver.DriverBase
 		public Thread? StdoutThread { get; set; }
 		public CancellationTokenSource? CancellationTokenSource { get; set; }
 		public int ExitCode { get; set; }
+		public nint PseudoConsoleHandle { get; internal set; }
 
 		public void Close ()
 		{
@@ -417,6 +421,8 @@ public sealed class DriverService : Driver.DriverBase
 
 			Process?.Dispose();
 			Token?.Dispose();
+
+			ConPtyInterop.ClosePseudoConsole( PseudoConsoleHandle );
 		}
 	}
 
@@ -454,8 +460,16 @@ public sealed class DriverService : Driver.DriverBase
 		//token.SetDefaultDacl( w3wpToken.DefaultDacl.Clone() );
 
 		//token.SetGroups()
-
 		var cts = new CancellationTokenSource();
+
+		var workingDirectory = Path.Combine( iisTaskHandle.TaskConfig.AllocDir, iisTaskHandle.TaskConfig.Name, "local" );
+
+		return TEST.Main( token, workingDirectory, onDataReceived, cts );
+
+
+
+
+		
 
 		var stdinPipe = new AnonymousPipeServerStream( PipeDirection.Out, HandleInheritability.Inheritable );
 		var stdoutPipe = new AnonymousPipeServerStream( PipeDirection.In, HandleInheritability.Inheritable );
@@ -570,7 +584,7 @@ public sealed class DriverService : Driver.DriverBase
 			}
 		}
 
-		var workingDirectory = Path.Combine( iisTaskHandle.TaskConfig.AllocDir, iisTaskHandle.TaskConfig.Name, "local" );
+		
 
 		//var firstSpace = commandLine.IndexOf( ' ' );
 		//var exePath = firstSpace >= 0 ? commandLine.Substring( 0, firstSpace ) : commandLine;
@@ -582,22 +596,35 @@ public sealed class DriverService : Driver.DriverBase
 		//var token2 = token.Duplicate( true ).Result;
 		//var envBlock = CreateForToken( token.Handle.DangerousGetHandle(), true );
 
+		// https://devblogs.microsoft.com/commandline/windows-command-line-introducing-the-windows-pseudo-console-conpty/
+
+		var pty = ConPtyInterop.CreatePseudoConsole( new ConPtyInterop.COORD()
+		{
+			X = 120,
+			Y = 60
+		}, stdinPipe.ClientSafePipeHandle, stdoutPipe.ClientSafePipeHandle, 0, out var phPC );
+
+
+		//ConPtyInterop.ClosePseudoConsole( phPC );
+
 		var config = new Win32ProcessConfig()
 		{
 			Token = token, // TODO
-			TokenCall = Win32ProcessConfigTokenCallFlags.Both,
+			TokenCall = Win32ProcessConfigTokenCallFlags.AsUser,
 			CurrentDirectory = workingDirectory,
 			ApplicationName = "C:\\Windows\\System32\\cmd.exe", // TODO
 			CommandLine = "\"C:\\Windows\\System32\\cmd.exe\"",
 			//ApplicationName = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
-			//CommandLine = $"\"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\"", // -NoExit -Command \"Set-Location '{workingDirectory}'\"",
-			Environment = envBlockBytes,
-			StdInputHandle = stdinPipe.ClientSafePipeHandle.DangerousGetHandle(),
-			StdOutputHandle = stdoutPipe.ClientSafePipeHandle.DangerousGetHandle(),
-			StdErrorHandle = stderrPipe.ClientSafePipeHandle.DangerousGetHandle(),
+			//CommandLine = $"\"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\" -NoExit", // -NoExit -Command \"Set-Location '{workingDirectory}'\"",
+			//Environment = envBlockBytes,
+			//StdInputHandle = stdinPipe.ClientSafePipeHandle.DangerousGetHandle(),
+			//StdOutputHandle = stdoutPipe.ClientSafePipeHandle.DangerousGetHandle(),
+			//StdErrorHandle = stderrPipe.ClientSafePipeHandle.DangerousGetHandle(),
 			InheritHandles = true, // This is important for Stdout/Stderr/Stdin to work
 			LogonFlags = CreateProcessLogonFlags.None, // TODOPEI: Do we need this?
-			CreationFlags = CreateProcessFlags.NoWindow | CreateProcessFlags.NewConsole
+													   //CreationFlags = CreateProcessFlags.NoWindow, // | CreateProcessFlags.NewConsole,
+			CreationFlags = CreateProcessFlags.ExtendedStartupInfoPresent, // | CreateProcessFlags.UnicodeEnvironment,
+			PseudoConsole = phPC
 		};
 
 		var process = config.Create();
@@ -615,9 +642,270 @@ public sealed class DriverService : Driver.DriverBase
 			StdoutPipe = stdoutPipe,
 			StderrPipe = stderrPipe,
 			StdoutThread = stdoutThread,
-			CancellationTokenSource = cts
+			CancellationTokenSource = cts,
+			PseudoConsoleHandle = phPC
 		};
 	}
+
+
+	private class TEST
+	{
+		public static ProcessRunHandle Main ( NtToken token, string workingDirectory, Func<ExecTaskStreamingResponse, Task> onDataReceived, CancellationTokenSource cts )
+		{
+			var size = new COORD { X = 80, Y = 30 };
+
+			var stdinPipe = new AnonymousPipeServerStream( PipeDirection.Out, HandleInheritability.Inheritable );
+			var stdoutPipe = new AnonymousPipeServerStream( PipeDirection.In, HandleInheritability.Inheritable );
+
+
+
+			//var stdoutThread = new Thread( StdoutListener );
+
+			//stdoutThread.Start();
+
+			//void StdoutListener ()
+			//{
+			//	var reader = new StreamReader( stdoutPipe );
+
+			//	while ( true )
+			//	{
+			//		var chr = reader.Read();
+
+			//		if ( chr > -1 )
+			//		{
+			//			onDataReceived?.Invoke( new ExecTaskStreamingResponse()
+			//			{
+			//				Exited = false,
+			//				Stdout = new ExecTaskStreamingIOOperation()
+			//				{
+			//					Data = ByteString.CopyFrom( (byte)chr ),
+			//					Close = false
+			//				}
+			//			} );
+			//		}
+			//	}
+			//}
+
+			//async void StdoutListener ()
+			//{
+			//	try
+			//	{
+			//		var buffer = new byte[4096];
+			//		int bytesRead;
+
+			//		while ( ( bytesRead = await stdoutPipe.ReadAsync( buffer, 0, buffer.Length, cts.Token ) ) > 0 )
+			//		{
+			//			await onDataReceived( new ExecTaskStreamingResponse()
+			//			{
+			//				Exited = false,
+			//				Stdout = new ExecTaskStreamingIOOperation()
+			//				{
+			//					Data = ByteString.CopyFrom( new ReadOnlySpan<byte>( buffer, 0, bytesRead ) ),
+			//					Close = false
+			//				}
+			//			} );
+			//		}
+
+			//		await onDataReceived( new ExecTaskStreamingResponse()
+			//		{
+			//			Exited = false,
+			//			Stdout = new ExecTaskStreamingIOOperation()
+			//			{
+			//				Close = true
+			//			}
+			//		} );
+			//	}
+			//	catch ( OperationCanceledException )
+			//	{
+			//	}
+			//	catch ( Exception ex )
+			//	{
+			//		await onDataReceived( new ExecTaskStreamingResponse()
+			//		{
+			//			Exited = false,
+			//			Stdout = new ExecTaskStreamingIOOperation()
+			//			{
+			//				Data = ByteString.CopyFromUtf8( ex.Message ),
+			//				Close = true
+			//			}
+			//		} );
+			//	}
+			//}
+
+
+			// Create the pseudoconsole
+			int result = CreatePseudoConsole( size,
+				stdinPipe.ClientSafePipeHandle,
+				stdoutPipe.ClientSafePipeHandle,
+				0,
+				out var hPC );
+
+			if ( result != 0 )
+				throw new Win32Exception( Marshal.GetLastWin32Error() );
+
+			// Setup attribute list
+			var startupInfo = new STARTUPINFOEX();
+			startupInfo.StartupInfo.cb = Marshal.SizeOf( startupInfo );
+			int attrListSize = 0;
+			InitializeProcThreadAttributeList( IntPtr.Zero, 1, 0, ref attrListSize );
+			startupInfo.lpAttributeList = Marshal.AllocHGlobal( attrListSize );
+
+			if ( !InitializeProcThreadAttributeList( startupInfo.lpAttributeList, 1, 0, ref attrListSize ) )
+				throw new Win32Exception( Marshal.GetLastWin32Error() );
+
+			if ( !UpdateProcThreadAttribute( startupInfo.lpAttributeList, 0,
+				(IntPtr)PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE,
+				hPC, (IntPtr)IntPtr.Size, IntPtr.Zero, IntPtr.Zero ) )
+				throw new Win32Exception( Marshal.GetLastWin32Error() );
+
+			var pi = new PROCESS_INFORMATION();
+
+			WindowsIdentity identity = WindowsIdentity.GetCurrent( TokenAccessLevels.AllAccess );
+			SafeAccessTokenHandle tokenHandle = identity.AccessToken;
+
+			bool success = CreateProcessAsUser(
+				token.Handle.DangerousGetHandle(),
+				"C:\\Windows\\System32\\cmd.exe",
+				"\"C:\\Windows\\System32\\cmd.exe\"",
+				IntPtr.Zero,
+				IntPtr.Zero,
+				true,
+				EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT,
+				IntPtr.Zero,
+				workingDirectory,
+				ref startupInfo,
+				out pi );
+
+			if ( !success )
+				throw new Win32Exception( Marshal.GetLastWin32Error() );
+
+			Marshal.FreeHGlobal( startupInfo.lpAttributeList );
+
+
+			//stdinPipe.Write( Encoding.ASCII.GetBytes( "whoami\r\n" ) );
+
+			var reader = new StreamReader( stdoutPipe );
+
+			var sb = new StringBuilder();
+
+			while ( true )
+			{
+				int chr = reader.Read();
+				sb.Append( (char)chr );
+				var s = sb.ToString();
+
+
+				onDataReceived?.Invoke( new ExecTaskStreamingResponse()
+				{
+					Exited = false,
+					Stdout = new ExecTaskStreamingIOOperation()
+					{
+						Data = ByteString.CopyFrom( (byte)chr ),
+						Close = false
+					}
+				} );
+			}
+
+			return new ProcessRunHandle()
+			{
+				StdinPipe = stdinPipe,
+				StdoutPipe = stdoutPipe,
+				//StdoutThread = stdoutThread,
+				PseudoConsoleHandle = hPC
+			};
+		}
+
+		const int PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE = 0x00020016;
+		const int EXTENDED_STARTUPINFO_PRESENT = 0x00080000;
+		const int CREATE_UNICODE_ENVIRONMENT = 0x00000400;
+
+		[DllImport( "kernel32.dll", SetLastError = true )]
+		static extern int CreatePseudoConsole (
+			COORD size,
+			SafePipeHandle hInput,
+			SafePipeHandle hOutput,
+			uint dwFlags,
+			out IntPtr phPC );
+
+		[DllImport( "kernel32.dll", SetLastError = true )]
+		static extern bool InitializeProcThreadAttributeList (
+			IntPtr lpAttributeList,
+			int dwAttributeCount,
+			int dwFlags,
+			ref int lpSize );
+
+		[DllImport( "kernel32.dll", SetLastError = true )]
+		static extern bool UpdateProcThreadAttribute (
+			IntPtr lpAttributeList,
+			uint dwFlags,
+			IntPtr attribute,
+			IntPtr lpValue,
+			IntPtr cbSize,
+			IntPtr lpPreviousValue,
+			IntPtr lpReturnSize );
+
+		[DllImport( "kernel32.dll", SetLastError = true )]
+		static extern bool CloseHandle ( IntPtr hObject );
+
+		[DllImport( "advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode )]
+		static extern bool CreateProcessAsUser (
+			IntPtr hToken,
+			string lpApplicationName,
+			string lpCommandLine,
+			IntPtr lpProcessAttributes,
+			IntPtr lpThreadAttributes,
+			bool bInheritHandles,
+			int dwCreationFlags,
+			IntPtr lpEnvironment,
+			string lpCurrentDirectory,
+			[In] ref STARTUPINFOEX lpStartupInfo,
+			out PROCESS_INFORMATION lpProcessInformation );
+
+		[StructLayout( LayoutKind.Sequential )]
+		struct COORD
+		{
+			public short X;
+			public short Y;
+		}
+
+		[StructLayout( LayoutKind.Sequential )]
+		struct STARTUPINFO
+		{
+			public int cb;
+			public string lpReserved;
+			public string lpDesktop;
+			public string lpTitle;
+			public int dwX, dwY, dwXSize, dwYSize, dwXCountChars, dwYCountChars;
+			public int dwFillAttribute;
+			public int dwFlags;
+			public short wShowWindow;
+			public short cbReserved2;
+			public IntPtr lpReserved2;
+			public IntPtr hStdInput, hStdOutput, hStdError;
+		}
+
+		[StructLayout( LayoutKind.Sequential )]
+		struct STARTUPINFOEX
+		{
+			public STARTUPINFO StartupInfo;
+			public IntPtr lpAttributeList;
+		}
+
+		[StructLayout( LayoutKind.Sequential )]
+		struct PROCESS_INFORMATION
+		{
+			public IntPtr hProcess;
+			public IntPtr hThread;
+			public int dwProcessId;
+			public int dwThreadId;
+		}
+	}
+
+
+
+
+
+
 	/*
 	[DllImport( "userenv.dll", SetLastError = true, CharSet = CharSet.Auto )]
 	private static extern bool CreateEnvironmentBlock (
@@ -719,4 +1007,34 @@ public sealed class DriverService : Driver.DriverBase
 			}
 		};
 	}
+}
+
+public static class ConPtyInterop
+{
+	public static readonly int PSEUDOCONSOLE_INHERIT = 1;
+
+	[DllImport( "kernel32.dll", SetLastError = true )]
+	public static extern int CreatePseudoConsole (
+		COORD size,
+		SafePipeHandle hInput,
+		SafePipeHandle hOutput,
+		uint dwFlags,
+		out IntPtr phPC
+	);
+
+	[DllImport( "kernel32.dll", SetLastError = true )]
+	public static extern void ClosePseudoConsole ( IntPtr hPC );
+
+	[DllImport( "kernel32.dll", SetLastError = true )]
+	public static extern int ResizePseudoConsole ( IntPtr hPC, COORD size );
+
+	[StructLayout( LayoutKind.Sequential )]
+	public struct COORD
+	{
+		public short X;
+		public short Y;
+		public COORD ( short x, short y ) { X = x; Y = y; }
+	}
+
+	// STARTUPINFOEX and other interop structs will also be needed.
 }
