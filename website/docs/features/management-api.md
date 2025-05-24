@@ -77,10 +77,28 @@ This will return a JSON-object in the following format:
 {
   "allocId": "<allocId>",
   "taskName": "<taskName>",
-  "applicationPool": {
+  "defaultApplicationPool": {
+    "name": "default",
     "status": "Started",
     "isWorkerProcessRunning": true
-  }
+  },
+  "applicationPools": [
+    {
+      "name": "default",
+      "status": "Started",
+      "isWorkerProcessRunning": true
+    },
+    {
+      "name": "poolA",
+      "status": "Started",
+      "isWorkerProcessRunning": true
+    },
+    {
+      "name": "poolB",
+      "status": "Started",
+      "isWorkerProcessRunning": true
+    }
+  ]
 }
 ```
 
