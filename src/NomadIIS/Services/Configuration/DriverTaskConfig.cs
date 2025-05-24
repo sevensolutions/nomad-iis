@@ -10,17 +10,37 @@ public sealed class DriverTaskConfig
 	[ConfigurationField( "target_website" )]
 	public string? TargetWebsite { get; set; }
 
+	[ConfigurationCollectionField( "applicationPools", "applicationPool", 0 )]
+	public DriverTaskConfigApplicationPool[] ApplicationPools { get; set; } = default!;
+
 	[ConfigurationCollectionField( "applications", "application", 1 )]
 	public DriverTaskConfigApplication[] Applications { get; set; } = default!;
 
+	[ConfigurationField( "enable_udp_logging" )]
+	public bool EnableUdpLogging { get; set; }
+
+	[DefaultValue( true )]
+	[ConfigurationField( "permit_iusr" )]
+	public bool PermitIusr { get; set; } = true;
+
+	[ConfigurationCollectionField( "bindings", "binding", 0, 2 )]
+	public DriverTaskConfigBinding[] Bindings { get; set; } = default!;
+}
+
+public sealed class DriverTaskConfigApplicationPool
+{
+	[ConfigurationField( "name" )]
+	[DefaultValue( "default" )]
+	public string Name { get; set; } = "default";
+
 	[ConfigurationField( "managed_pipeline_mode" )]
-	public Microsoft.Web.Administration.ManagedPipelineMode? ManagedPipelineMode { get; set; }
+	public ManagedPipelineMode? ManagedPipelineMode { get; set; }
 
 	[ConfigurationField( "managed_runtime_version" )]
 	public string? ManagedRuntimeVersion { get; set; }
 
 	[ConfigurationField( "start_mode" )]
-	public Microsoft.Web.Administration.StartMode? StartMode { get; set; }
+	public StartMode? StartMode { get; set; }
 
 	[ConfigurationField( "idle_timeout" )]
 	public TimeSpan? IdleTimeout { get; set; }
@@ -45,20 +65,14 @@ public sealed class DriverTaskConfig
 
 	[ConfigurationField( "shutdown_time_limit" )]
 	public TimeSpan? ShutdownTimeLimit { get; set; }
-
-	[ConfigurationField( "enable_udp_logging" )]
-	public bool EnableUdpLogging { get; set; }
-
-	[DefaultValue( true )]
-	[ConfigurationField( "permit_iusr" )]
-	public bool PermitIusr { get; set; } = true;
-
-	[ConfigurationCollectionField( "bindings", "binding", 0, 2 )]
-	public DriverTaskConfigBinding[] Bindings { get; set; } = default!;
 }
 
 public sealed class DriverTaskConfigApplication
 {
+	[ConfigurationField( "applicationPool" )]
+	[DefaultValue( "default" )]
+	public string ApplicationPool { get; set; } = "default";
+
 	[ConfigurationField( "alias" )]
 	public string? Alias { get; set; }
 

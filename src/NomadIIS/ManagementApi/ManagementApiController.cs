@@ -179,7 +179,7 @@ public sealed class ManagementApiController : Controller
 	}
 
 	[HttpGet( "v1/allocs/{allocId}/{taskName}/procdump" )]
-	public async Task<IActionResult> GetProcdumpAsync ( string allocId, string taskName, CancellationToken cancellationToken = default )
+	public async Task<IActionResult> GetProcdumpAsync ( string allocId, string taskName, [FromQuery] string appPoolName = "default", CancellationToken cancellationToken = default )
 	{
 		var taskHandle = _managementService.TryGetHandleByAllocIdAndTaskName( allocId, taskName );
 
@@ -193,7 +193,7 @@ public sealed class ManagementApiController : Controller
 
 		try
 		{
-			await taskHandle.TakeProcessDump( dumpFile, cancellationToken );
+			await taskHandle.TakeProcessDump( dumpFile, appPoolName, cancellationToken );
 
 			// Stream the file to the client
 			await Results
@@ -228,7 +228,8 @@ public sealed class ManagementApiController : Controller
 				iisAppPools.Add( new DebugIisAppPool()
 				{
 					Name = appPool.Name,
-					IsDangling = appPool.Name.StartsWith( IisTaskHandle.AppPoolOrWebsiteNamePrefix ) && !handles.Any( x => x.AppPoolName == appPool.Name )
+					IsDangling = appPool.Name.StartsWith( IisTaskHandle.AppPoolOrWebsiteNamePrefix ) &&
+						!handles.Any( x => x.AppPoolNames is not null && x.AppPoolNames.Values.Contains( appPool.Name ) )
 				} );
 			}
 
@@ -250,7 +251,7 @@ public sealed class ManagementApiController : Controller
 			IisHandles = handles.Select( x => new DebugIisHandle()
 			{
 				TaskId = x.TaskId,
-				AppPoolName = x.AppPoolName,
+				AppPoolNames = x.AppPoolNames?.Values.ToArray(),
 				AllocId = x.TaskConfig?.AllocId,
 				Namespace = x.TaskConfig?.Namespace,
 				JobId = x.TaskConfig?.JobId,
