@@ -283,10 +283,22 @@ public sealed class ManagementService : IHostedService
 
 				foreach ( var jobHandle in jobHandles )
 				{
-					if ( jobHandle.AppPoolName is not null && stats is not null &&
-						stats.TryGetValue( $"IIS AppPool\\{jobHandle.AppPoolName}", out var jobStats ) )
+					if ( jobHandle.AppPoolNames is not null && stats is not null )
 					{
-						await jobHandle.PublishStatsAsync( jobStats );
+						var fullStats = new UsageStatistics();
+
+						// If we have a task with multiple application pools, we simply sum up all the resources.
+						foreach ( var appPoolName in jobHandle.AppPoolNames )
+						{
+							if ( stats.TryGetValue( $"IIS AppPool\\{appPoolName.Value}", out var jobStats ) )
+							{
+								fullStats.KernelModeTime += jobStats.KernelModeTime;
+								fullStats.UserModeTime += jobStats.UserModeTime;
+								fullStats.WorkingSetPrivate += jobStats.WorkingSetPrivate;
+							}
+						}
+
+						await jobHandle.PublishStatsAsync( fullStats );
 					}
 					else
 						await jobHandle.PublishStatsAsync( new UsageStatistics() );

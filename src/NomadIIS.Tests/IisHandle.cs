@@ -18,7 +18,7 @@ public sealed class IisHandle : IDisposable
 		=> new IisAppPoolHandle( this, name );
 	public IisWebsiteHandle Website ( string name )
 		=> new IisWebsiteHandle( this, name );
-
+	
 	public void Dispose ()
 	{
 		_serverManager.Dispose();
@@ -122,6 +122,9 @@ public sealed class IisWebsiteHandle
 	public IisWebsiteBindingHandle Binding ( int index )
 		=> new IisWebsiteBindingHandle( GetWebsite().Bindings[index] );
 
+	public IisApplicationHandle Application ( string path )
+		=> new IisApplicationHandle( GetWebsite(), path );
+
 	private Site GetWebsite ()
 	{
 		var website = FindWebsite();
@@ -161,4 +164,42 @@ public sealed class IisWebsiteBindingHandle
 		if ( !string.Equals( tp, certificateThumbprint, StringComparison.InvariantCultureIgnoreCase ) )
 			Assert.Fail( $"Certificate hash should be {certificateThumbprint}, but is {tp}." );
 	}
+}
+
+public sealed class IisApplicationHandle
+{
+	private readonly Site _site;
+	private readonly string _path;
+
+	public IisApplicationHandle ( Site site, string path )
+	{
+		_site = site;
+		_path = path;
+	}
+
+	public void ShouldExist () => GetApplication();
+	public void ShouldNotExist ()
+	{
+		if ( FindApplication() is not null )
+			Assert.Fail( $"Application with path \"{_path}\" exists but shouldn't." );
+	}
+	public void ShouldRunOnApplicationPool ( string poolName )
+	{
+		var application = GetApplication();
+
+		Assert.Equal( poolName, application.ApplicationPoolName );
+	}
+
+	private Application GetApplication ()
+	{
+		var application = FindApplication();
+
+		if ( application is null )
+			Assert.Fail( $"Application with path \"{_path}\" doesn't exist." );
+
+		return application;
+	}
+
+	private Application? FindApplication ()
+		=> _site.Applications.FirstOrDefault( x => x.Path == _path );
 }

@@ -6,8 +6,38 @@ sidebar_position: 5
 
 | Option | Type | Required | Default Value | Description |
 |---|---|---|---|---|
+| *applicationPool* | block list | no | *none* | Defines one more application pools. See *applicationPool* schema below for details. |
 | *application* | block list | yes | *none* | Defines one more applications. See *application* schema below for details. |
 | target_website | string | no | *none* | Specifies an existing target website. In this case the driver will not create a new website but instead use the existing one where it provisions the virtual applications only. Please read the details [here](../features/existing-website.md). |
+| enable_udp_logging | bool | no | false | Enables a UDP log-sink your application can log to. Please read the details [here](../features/udp-logging.md). |
+| permit_iusr | bool | no | true | Specifies whether you want to permit the [IUSR-account](https://learn.microsoft.com/en-us/iis/get-started/planning-for-security/understanding-built-in-user-and-group-accounts-in-iis#understanding-the-new-iusr-account) on the *local* directory. When you disable this, you may need to tweak your *web.config* a bit. Read [this](./faq.md#iusr-account) for details. |
+| *binding* | block list | yes | *none* | Defines one or two port bindings. See *binding* schema below for details. |
+
+## `applicationPool` Block
+
+:::info
+In nomad-iis up to version including 0.14.x, all application pool related settings were specified on the [root configuration](#task-configuration).
+Starting with version 0.15.0 you need to put these onto a dedicated `applicationPool` block but you can omit the name if you only need a single app pool. This will be the case most of the time.
+
+Please also read [this section](../features/multi-application-pools.md) for more details about using multiple application pools.
+
+<details>
+<summary>Short Example</summary>
+
+```hcl
+config {
+  applicationPool {
+    managed_runtime_version = "None"
+  }
+}
+```
+
+</details>
+:::
+
+| Option | Type | Required | Default Value | Description |
+|---|---|---|---|---|
+| name | string | no | `default` | Specifies an alias name for the application pool. This can be used to reference the application pool within the `application` block. It is limited to 8 characters. |
 | managed_pipeline_mode | string | no | *IIS default* | Valid options are *Integrated* or *Classic* |
 | enable_32bit_app_on_win64 | bool | no | *IIS default* | When true, enables a 32-bit application to run on a computer that runs a 64-bit version of Windows. |
 | managed_runtime_version | string | no | *IIS default* | Valid options are *v4.0*, *v2.0*, *None* |
@@ -19,16 +49,14 @@ sidebar_position: 5
 | queue_length | number | no | *IIS default* | Indicates to HTTP.sys how many requests to queue for an application pool before rejecting future requests. |
 | start_time_limit | string | no | *IIS default* | Specifies the time in the form *[00w][00d][00h][00m][00s]* that IIS waits for an application pool to start. If the application pool does not startup within the startupTimeLimit, the worker process is terminated and the rapid-fail protection count is incremented. |
 | shutdown_time_limit | string | no | *IIS default* | Specifies the time in the form *[00w][00d][00h][00m][00s]* that the W3SVC service waits after it initiated a recycle. If the worker process does not shut down within the shutdownTimeLimit, it will be terminated by the W3SVC service. |
-| enable_udp_logging | bool | no | false | Enables a UDP log-sink your application can log to. Please read the details [here](../features/udp-logging.md). |
-| permit_iusr | bool | no | true | Specifies whether you want to permit the [IUSR-account](https://learn.microsoft.com/en-us/iis/get-started/planning-for-security/understanding-built-in-user-and-group-accounts-in-iis#understanding-the-new-iusr-account) on the *local* directory. When you disable this, you may need to tweak your *web.config* a bit. Read [this](./faq.md#iusr-account) for details. |
-| *binding* | block list | yes | *none* | Defines one or two port bindings. See *binding* schema below for details. |
 
 ## `application` Block
 
 | Option | Type | Required | Default Value | Description |
 |---|---|---|---|---|
 | path | string | yes | *none* | Defines the path of the web application, containing the application files. If this folder is empty, the [Placeholder App](../getting-started/driver-configuration.md) will be copied into. |
-| alias | string | no | / | Defines an optional alias at which the application should be hosted below the website. If not set, the application will be hosted at the website level. |
+| alias | string | no | `/` | Defines an optional alias at which the application should be hosted below the website. If not set, the application will be hosted at the website level. |
+| application_pool | string | no | `default` | References an application pool on which this application should be executed. |
 | enable_preload | bool | no | *IIS default* | Specifies whether the application should be pre-loaded. |
 | *virtual_directory* | block list | no | *none* | Defines optional virtual directories below this application. See *virtual_directory* schema below for details. |
 

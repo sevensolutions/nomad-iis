@@ -173,12 +173,14 @@ public class IntegrationTests : IClassFixture<NomadIISFixture>
 			          path = "C:\\inetpub\\wwwroot"
 			        }
 
-			        managed_pipeline_mode = "Integrated"
-			        managed_runtime_version = "v4.0"
-			        start_mode = "AlwaysRunning"
-			        idle_timeout = "45m"
-			        disable_overlapped_recycle = true
-			        periodic_restart = "1h30m"
+			        applicationPool {
+			          managed_pipeline_mode = "Integrated"
+			          managed_runtime_version = "v4.0"
+			          start_mode = "AlwaysRunning"
+			          idle_timeout = "45m"
+			          disable_overlapped_recycle = true
+			          periodic_restart = "1h30m"
+			        }
 
 			        binding {
 			          type = "http"
@@ -317,6 +319,207 @@ public class IntegrationTests : IClassFixture<NomadIISFixture>
 		} );
 
 		// TODO: Certificate should have been removed
+	}
+
+	[Fact]
+	public async Task JobWithMultipleAppPools ()
+	{
+		var jobHcl = $$"""
+			job "job-with-multiple-apppools" {
+			  datacenters = ["dc1"]
+			  type = "service"
+
+			  group "app" {
+			    count = 1
+
+			    network {
+			      port "httplabel" {}
+			    }
+
+			    task "app" {
+			      driver = "iis"
+
+			      config {
+			        applicationPool {
+			          name = "pool-A"
+			        }
+			        applicationPool {
+			          name = "pool-B"
+			        }
+
+			        application {
+			          path = "C:\\inetpub\\wwwroot"
+			        }
+			        application {
+			          alias = "/app-a"
+			          path = "C:\\inetpub\\wwwroot"
+			          application_pool = "pool-A"
+			        }
+			        application {
+			          alias = "/app-b"
+			          path = "C:\\inetpub\\wwwroot"
+			          application_pool = "pool-B"
+			        }
+
+			        binding {
+			          type = "http"
+			          port = "httplabel"
+			        }
+			      }
+			    }
+			  }
+			}
+			""";
+
+		_output.WriteLine( "Submitting job..." );
+
+		var jobId = await _fixture.ScheduleJobAsync( jobHcl );
+
+		_output.WriteLine( $"Job Id: {jobId}" );
+
+		var allocations = await _fixture.ListJobAllocationsAsync( jobId );
+
+		if ( allocations is null || allocations.Length == 0 )
+			Assert.Fail( "No job allocations" );
+
+		var websiteName = $"nomad-{allocations[0].Id}-app";
+		var poolDefaultName = $"nomad-{allocations[0].Id}-app";
+		var poolAName = $"nomad-{allocations[0].Id}-app-pool-A";
+		var poolBName = $"nomad-{allocations[0].Id}-app-pool-B";
+
+		_output.WriteLine( $"Website Name: {websiteName}" );
+
+		_fixture.AccessIIS( iis =>
+		{
+			iis.AppPool( poolDefaultName ).ShouldExist();
+			iis.AppPool( poolAName ).ShouldExist();
+			iis.AppPool( poolBName ).ShouldExist();
+			iis.Website( websiteName ).ShouldExist();
+
+			var app = iis.Website( websiteName ).Application( "/" );
+			app.ShouldExist();
+			app.ShouldRunOnApplicationPool( poolDefaultName );
+
+			app = iis.Website( websiteName ).Application( "/app-a" );
+			app.ShouldExist();
+			app.ShouldRunOnApplicationPool( poolAName );
+
+			app = iis.Website( websiteName ).Application( "/app-b" );
+			app.ShouldExist();
+			app.ShouldRunOnApplicationPool( poolBName );
+		} );
+
+		var allocation = await _fixture.ReadAllocationAsync( allocations[0].Id );
+
+		Assert.NotNull( allocation );
+
+		_output.WriteLine( "Stopping job..." );
+
+		await _fixture.StopJobAsync( jobId );
+
+		_output.WriteLine( "Job stopped." );
+
+		_fixture.AccessIIS( iis =>
+		{
+			iis.AppPool( poolDefaultName ).ShouldNotExist();
+			iis.AppPool( poolAName ).ShouldNotExist();
+			iis.AppPool( poolBName ).ShouldNotExist();
+			iis.Website( websiteName ).ShouldNotExist();
+		} );
+	}
+
+	[Fact]
+	public async Task UnusedAppPoolsShouldNotBeCreated ()
+	{
+		var jobHcl = $$"""
+			job "job-with-unused-apppools" {
+			  datacenters = ["dc1"]
+			  type = "service"
+
+			  group "app" {
+			    count = 1
+
+			    network {
+			      port "httplabel" {}
+			    }
+
+			    task "app" {
+			      driver = "iis"
+
+			      config {
+			        applicationPool {
+			          name = "unused-A"
+			        }
+			        applicationPool {
+			          name = "unused-B"
+			        }
+			        applicationPool {
+			          name = "pool-B"
+			        }
+
+			        application {
+			          alias = "/app-b"
+			          path = "C:\\inetpub\\wwwroot"
+			          application_pool = "pool-B"
+			        }
+
+			        binding {
+			          type = "http"
+			          port = "httplabel"
+			        }
+			      }
+			    }
+			  }
+			}
+			""";
+
+		_output.WriteLine( "Submitting job..." );
+
+		var jobId = await _fixture.ScheduleJobAsync( jobHcl );
+
+		_output.WriteLine( $"Job Id: {jobId}" );
+
+		var allocations = await _fixture.ListJobAllocationsAsync( jobId );
+
+		if ( allocations is null || allocations.Length == 0 )
+			Assert.Fail( "No job allocations" );
+
+		var websiteName = $"nomad-{allocations[0].Id}-app";
+		var poolDefaultName = $"nomad-{allocations[0].Id}-app";
+		var poolUnusedAName = $"nomad-{allocations[0].Id}-app-unused-A";
+		var poolUnusedBName = $"nomad-{allocations[0].Id}-app-unused-B";
+		var poolBName = $"nomad-{allocations[0].Id}-app-pool-B";
+
+		_output.WriteLine( $"Website Name: {websiteName}" );
+
+		_fixture.AccessIIS( iis =>
+		{
+			iis.AppPool( poolDefaultName ).ShouldNotExist();
+			iis.AppPool( poolUnusedAName ).ShouldNotExist();
+			iis.AppPool( poolUnusedBName ).ShouldNotExist();
+			iis.AppPool( poolBName ).ShouldExist();
+			iis.Website( websiteName ).ShouldExist();
+
+			var app = iis.Website( websiteName ).Application( "/app-b" );
+			app.ShouldExist();
+			app.ShouldRunOnApplicationPool( poolBName );
+		} );
+
+		var allocation = await _fixture.ReadAllocationAsync( allocations[0].Id );
+
+		Assert.NotNull( allocation );
+
+		_output.WriteLine( "Stopping job..." );
+
+		await _fixture.StopJobAsync( jobId );
+
+		_output.WriteLine( "Job stopped." );
+
+		_fixture.AccessIIS( iis =>
+		{
+			iis.AppPool( poolBName ).ShouldNotExist();
+			iis.Website( websiteName ).ShouldNotExist();
+		} );
 	}
 
 #if MANAGEMENT_API
