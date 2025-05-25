@@ -25,6 +25,7 @@ Feel free to use it as-is or as a reference implementation for your own C#-based
 |---|---|---|
 | Single Web App per Nomad Task | ✔ | The Task Driver creates an IIS Application Pool and Website for every Nomad Task in the job specification. |
 | Multiple Applications | ✔ | Support for multiple sub-applications below the website. |
+| Multiple Application Pools | ✔ | Support for multiple application pools for complex hosting requirements. [Details](https://nomad-iis.sevensolutions.cc/docs/features/multi-application-pools) |
 | Virtual Directories | ✔ | Support for multiple *virtual directories* below an application. |
 | HTTP Bindings | ✔ | |
 | HTTPS Bindings | ✔ | [Details](https://nomad-iis.sevensolutions.cc/docs/features/https) |

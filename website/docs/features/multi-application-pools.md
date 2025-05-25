@@ -7,7 +7,7 @@ sidebar_position: 7
 By default, every Nomad-task will result in a single application pool and website. You can even host multiple sub-application within that website which will all share the same application pool by default.
 
 In more complicated setup you might want to separate applications and run them on different application pools.
-Starting with Nomad 1.15.0 this might be possible.
+Starting with *nomad-iis* 0.15.0 this might be possible.
 
 Using multiple application pools might also be necessary when using multiple .NET Core applications in the *in-process hosting model* because this is a [known limitation](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/aspnet-core-module?view=aspnetcore-3.0#in-process-hosting-model).
 
