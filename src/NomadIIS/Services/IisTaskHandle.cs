@@ -532,9 +532,7 @@ public sealed class IisTaskHandle : IDisposable
 	{
 		var rawName = $"{AppPoolOrWebsiteNamePrefix}{taskConfig.AllocId}-{taskConfig.Name}";
 
-		var invalidChars = ApplicationPoolCollection.InvalidApplicationPoolNameCharacters()
-			.Union( SiteCollection.InvalidSiteNameCharacters() )
-			.ToArray();
+		var invalidChars = SiteCollection.InvalidSiteNameCharacters();
 
 		var sb = new StringBuilder();
 
@@ -548,9 +546,9 @@ public sealed class IisTaskHandle : IDisposable
 
 		var finalName = sb.ToString();
 
-		// AppPool name limit is 64 characters. Website's doesn't seem to have a limit.
+		// Website's doesn't seem to have a limit but we also limit them to 64 characters.
 		if ( finalName.Length > 64 )
-			finalName = $"{AppPoolOrWebsiteNamePrefix}{taskConfig.AllocId}";
+			throw new ArgumentException( $"The Website name is too long. please shorten your task name by {finalName.Length - 64} characters." );
 
 		return finalName;
 	}
@@ -559,9 +557,7 @@ public sealed class IisTaskHandle : IDisposable
 		var suffix = appPoolConfig.Name != DefaultAppPoolName ? $"-{appPoolConfig.Name}" : "";
 		var rawName = $"{AppPoolOrWebsiteNamePrefix}{taskConfig.AllocId}-{taskConfig.Name}{suffix}";
 
-		var invalidChars = ApplicationPoolCollection.InvalidApplicationPoolNameCharacters()
-			.Union( SiteCollection.InvalidSiteNameCharacters() )
-			.ToArray();
+		var invalidChars = ApplicationPoolCollection.InvalidApplicationPoolNameCharacters();
 
 		var sb = new StringBuilder();
 
@@ -575,9 +571,9 @@ public sealed class IisTaskHandle : IDisposable
 
 		var finalName = sb.ToString();
 
-		// AppPool name limit is 64 characters. Website's doesn't seem to have a limit.
+		// AppPool name limit is 64 characters.
 		if ( finalName.Length > 64 )
-			finalName = $"{AppPoolOrWebsiteNamePrefix}{taskConfig.AllocId}{suffix}";
+			throw new ArgumentException( $"The AppPool name is too long. please shorten your task name by {finalName.Length - 64} characters." );
 
 		return finalName;
 	}
