@@ -310,20 +310,23 @@ public sealed class IisTaskHandle : IDisposable
 		{
 			var website = _state.WebsiteName is not null ? FindWebsiteByName( handle.ServerManager, _state.WebsiteName ) : null;
 
-			foreach ( var appPoolName in _state.AppPoolNames )
+			if ( _state.AppPoolNames is not null )
 			{
-				var appPool = FindApplicationPool( handle.ServerManager, appPoolName.Value );
-
-				if ( appPool is not null )
+				foreach ( var appPoolName in _state.AppPoolNames )
 				{
-					try
+					var appPool = FindApplicationPool( handle.ServerManager, appPoolName.Value );
+
+					if ( appPool is not null )
 					{
-						if ( appPool.State != ObjectState.Stopped )
-							appPool.Stop();
-					}
-					catch ( Exception ex )
-					{
-						_logger.LogWarning( ex, $"Failed to stop AppPool {appPoolName.Value}. Will be removed anyway." );
+						try
+						{
+							if ( appPool.State != ObjectState.Stopped )
+								appPool.Stop();
+						}
+						catch ( Exception ex )
+						{
+							_logger.LogWarning( ex, $"Failed to stop AppPool {appPoolName.Value}. Will be removed anyway." );
+						}
 					}
 				}
 			}
@@ -367,11 +370,14 @@ public sealed class IisTaskHandle : IDisposable
 				}
 			}
 
-			foreach ( var appPoolName in _state.AppPoolNames )
+			if ( _state.AppPoolNames is not null )
 			{
-				var appPool = FindApplicationPool( handle.ServerManager, appPoolName.Value );
-				if ( appPool is not null )
-					handle.ServerManager.ApplicationPools.Remove( appPool );
+				foreach ( var appPoolName in _state.AppPoolNames )
+				{
+					var appPool = FindApplicationPool( handle.ServerManager, appPoolName.Value );
+					if ( appPool is not null )
+						handle.ServerManager.ApplicationPools.Remove( appPool );
+				}
 			}
 
 			return Task.CompletedTask;
@@ -401,7 +407,7 @@ public sealed class IisTaskHandle : IDisposable
 		{
 			if ( request.Handle.Version >= 2 )
 				_state = MessagePackSerializer.Deserialize<DriverStateV2>( request.Handle.DriverState.Memory );
-			if ( request.Handle.Version >= 1 )
+			else if ( request.Handle.Version >= 1 )
 			{
 				var v1State = MessagePackSerializer.Deserialize<DriverStateV1>( request.Handle.DriverState.Memory );
 
@@ -424,7 +430,7 @@ public sealed class IisTaskHandle : IDisposable
 
 		_isRecovered = true;
 
-		_logger.LogInformation( $"Recovered task {_taskConfig.Id} from state: {_state}" );
+		_logger.LogInformation( $"Recovered task {_taskConfig.Id} from state (v{request.Handle.Version}): {_state}" );
 	}
 
 	public async Task SignalAsync ( string signal )
@@ -954,6 +960,9 @@ public sealed class IisTaskHandle : IDisposable
 	}
 	private void SetupDirectoryPermissionsCore ( DriverTaskConfig config )
 	{
+		if ( _state is null || _taskConfig is null )
+			throw new InvalidOperationException( "Invalid state." );
+
 		// https://developer.hashicorp.com/nomad/docs/concepts/filesystem
 		// https://learn.microsoft.com/en-us/troubleshoot/developer/webapps/iis/www-authentication-authorization/default-permissions-user-rights
 		// https://stackoverflow.com/questions/51277338/remove-users-group-permission-for-folder-inside-programdata
