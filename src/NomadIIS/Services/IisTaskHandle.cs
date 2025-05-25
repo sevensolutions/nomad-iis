@@ -235,7 +235,20 @@ public sealed class IisTaskHandle : IDisposable
 			config.ApplicationPools = config.ApplicationPools.Concat( [
 				new DriverTaskConfigApplicationPool()
 				{
-					Name = DefaultAppPoolName
+					Name = DefaultAppPoolName,
+
+					// Temporary backwards compatibility until v0.16.0
+					ManagedPipelineMode = config.ManagedPipelineMode,
+					ManagedRuntimeVersion = config.ManagedRuntimeVersion,
+					StartMode = config.StartMode,
+					IdleTimeout = config.IdleTimeout,
+					DisabledOverlappedRecycle = config.DisabledOverlappedRecycle,
+					PeriodicRestart = config.PeriodicRestart,
+					Enable32BitAppOnWin64 = config.Enable32BitAppOnWin64,
+					ServiceUnavailableResponse = config.ServiceUnavailableResponse,
+					QueueLength = config.QueueLength,
+					StartTimeLimit = config.StartTimeLimit,
+					ShutdownTimeLimit = config.ShutdownTimeLimit
 				}
 			] ).ToArray();
 		}

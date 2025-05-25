@@ -25,6 +25,43 @@ public sealed class DriverTaskConfig
 
 	[ConfigurationCollectionField( "bindings", "binding", 0, 2 )]
 	public DriverTaskConfigBinding[] Bindings { get; set; } = default!;
+
+	#region Temporary backwards compatibility until v0.16.0
+
+	[ConfigurationField( "managed_pipeline_mode" )]
+	public ManagedPipelineMode? ManagedPipelineMode { get; set; }
+
+	[ConfigurationField( "managed_runtime_version" )]
+	public string? ManagedRuntimeVersion { get; set; }
+
+	[ConfigurationField( "start_mode" )]
+	public StartMode? StartMode { get; set; }
+
+	[ConfigurationField( "idle_timeout" )]
+	public TimeSpan? IdleTimeout { get; set; }
+
+	[ConfigurationField( "disable_overlapped_recycle" )]
+	public bool? DisabledOverlappedRecycle { get; set; }
+
+	[ConfigurationField( "periodic_restart" )]
+	public TimeSpan? PeriodicRestart { get; set; }
+
+	[ConfigurationField( "enable_32bit_app_on_win64" )]
+	public bool? Enable32BitAppOnWin64 { get; set; }
+
+	[ConfigurationField( "service_unavailable_response" )]
+	public LoadBalancerCapabilities? ServiceUnavailableResponse { get; set; }
+
+	[ConfigurationField( "queue_length" )]
+	public long? QueueLength { get; set; }
+
+	[ConfigurationField( "start_time_limit" )]
+	public TimeSpan? StartTimeLimit { get; set; }
+
+	[ConfigurationField( "shutdown_time_limit" )]
+	public TimeSpan? ShutdownTimeLimit { get; set; }
+
+	#endregion
 }
 
 public sealed class DriverTaskConfigApplicationPool
