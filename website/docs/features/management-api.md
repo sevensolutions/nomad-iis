@@ -77,10 +77,28 @@ This will return a JSON-object in the following format:
 {
   "allocId": "<allocId>",
   "taskName": "<taskName>",
-  "applicationPool": {
+  "defaultApplicationPool": {
+    "name": "default",
     "status": "Started",
     "isWorkerProcessRunning": true
-  }
+  },
+  "applicationPools": [
+    {
+      "name": "default",
+      "status": "Started",
+      "isWorkerProcessRunning": true
+    },
+    {
+      "name": "poolA",
+      "status": "Started",
+      "isWorkerProcessRunning": true
+    },
+    {
+      "name": "poolB",
+      "status": "Started",
+      "isWorkerProcessRunning": true
+    }
+  ]
 }
 ```
 
@@ -203,7 +221,7 @@ You also have to agree to the EULA of procdump by setting `accept_eula` to `true
 :::
 
 ```
-GET /api/v1/allocs/{allocId}/{taskName}/procdump
+GET /api/v1/allocs/{allocId}/{taskName}/procdump[?appPoolName=default]
 ```
 
 Sometimes you need to investigate a performance or memory issue and need a process dump of the *w3wp* worker process.
