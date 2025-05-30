@@ -4,9 +4,9 @@ sidebar_position: 7
 
 # 💬 UDP Logging
 
-:::caution
-This feature is considered experimental and not very well tested yet.
-It needs to be [enabled](../getting-started/driver-configuration.md) by specifying a port at `udp_logger_port`.
+:::danger
+This feature will be deprecated and removed in version 0.16.0!
+See [GH-116](https://github.com/sevensolutions/nomad-iis/issues/116) for details.
 :::
 
 Unfortunately, IIS doesn't attach a Console to the *w3wp* processes and therefore *STDOUT* and *STDERR* streams are not available.
