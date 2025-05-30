@@ -135,23 +135,13 @@ jobs:
         name: ${{ matrix.profile.artifactName }}
         path: artifacts
 
-    # - name: Setup tmate session
-    #   uses: mxschmitt/action-tmate@v3
-    #   with:
-    #     detached: true
-
-    # TODO: -p:DefineConstants="MANAGEMENT_API"
     - name: Run tests
       env:
         RUNNING_IN_CI: true
         TEST_PLUGIN_DIRECTORY: ..\..\..\..\..\artifacts # Relative to bin\Debug\net9.0
-        #MANAGEMENT_API: ${{ matrix.profile.artifactName == 'nomad_iis_mgmt_api' && 'true' || '' }}
       run: |
         $args = ''
         if ('${{ matrix.profile.artifactName }}' -eq 'nomad_iis_mgmt_api') {
           $args = '-p:DefineConstants="MANAGEMENT_API"'
         }
         dotnet test src\NomadIIS.Tests\NomadIIS.Tests.csproj ${args}
-      #  Get-Content -Path "src\NomadIIS.Tests\bin\Debug\net9.0\debug.test.txt"
-
-# cat ./src/NomadIIS/PluginInfo.cs | grep -oP 'public static readonly string Version = "([0-9]+\.[0-9]+\.[0-9])";'
