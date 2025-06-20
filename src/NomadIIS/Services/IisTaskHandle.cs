@@ -677,12 +677,14 @@ public sealed class IisTaskHandle : IDisposable
 
 	private static void AddExtensions( ConfigurationElement configurationElement, DriverTaskConfigExtendable taskConfig)
 	{
-		if ( taskConfig.Extensions is not null )
+		if ( taskConfig.Extensions is null )
 		{
-			foreach ( var extension in taskConfig.Extensions )
-			{
-				configurationElement.SetAttributeValue(extension.Name, extension.Value);
-			}
+			return;
+		}
+
+		foreach ( var extension in taskConfig.Extensions )
+		{
+			configurationElement.SetAttributeValue(extension.Name, extension.Value);
 		}
 	}
 
