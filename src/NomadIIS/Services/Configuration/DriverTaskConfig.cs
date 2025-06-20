@@ -192,8 +192,8 @@ public enum DriverTaskConfigBindingType
 public sealed class DriverTaskConfigExtension
 {
 	[Required]
-	[ConfigurationField( "key" )]
-	public string Key { get; set; } = default!;
+	[ConfigurationField( "name" )]
+	public string Name { get; set; } = default!;
 
 	[Required]
 	[ConfigurationField( "value" )]

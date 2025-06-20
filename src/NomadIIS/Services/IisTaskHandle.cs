@@ -681,7 +681,7 @@ public sealed class IisTaskHandle : IDisposable
 		{
 			foreach ( var extension in taskConfig.Extensions )
 			{
-				configurationElement.SetAttributeValue(extension.Key, extension.Value);
+				configurationElement.SetAttributeValue(extension.Name, extension.Value);
 			}
 		}
 	}
