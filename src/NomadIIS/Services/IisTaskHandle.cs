@@ -675,7 +675,7 @@ public sealed class IisTaskHandle : IDisposable
 		}
 	}
 
-	private static void AddExtensions( ConfigurationElement configurationElement, DriverTaskConfigExtendable taskConfig)
+	private static void AddExtensions( ConfigurationElement configurationElement, DriverTaskConfigExtendable taskConfig )
 	{
 		if ( taskConfig.Extensions is null )
 		{
