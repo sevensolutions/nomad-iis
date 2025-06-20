@@ -64,6 +64,7 @@ config {
 | queue_length | number | no | *IIS default* | Indicates to HTTP.sys how many requests to queue for an application pool before rejecting future requests. |
 | start_time_limit | string | no | *IIS default* | Specifies the time in the form *[00w][00d][00h][00m][00s]* that IIS waits for an application pool to start. If the application pool does not startup within the startupTimeLimit, the worker process is terminated and the rapid-fail protection count is incremented. |
 | shutdown_time_limit | string | no | *IIS default* | Specifies the time in the form *[00w][00d][00h][00m][00s]* that the W3SVC service waits after it initiated a recycle. If the worker process does not shut down within the shutdownTimeLimit, it will be terminated by the W3SVC service. |
+| *extension* | block list | no | *none* | Allows for additional attributes for properties not explicitly supported. See *extension* schema below for details. |
 
 ## `application` Block
 
@@ -73,7 +74,10 @@ config {
 | alias | string | no | `/` | Defines an optional alias at which the application should be hosted below the website. If not set, the application will be hosted at the website level. |
 | application_pool | string | no | `default` | References an application pool on which this application should be executed. |
 | enable_preload | bool | no | *IIS default* | Specifies whether the application should be pre-loaded. |
+| service_auto_start_enabled | bool | no | *IIS default* | Specifies whether the application should be automatically started. |
+| service_auto_start_provider | string | no | *IIS default* | Specifies the name of the autostart provider if service_auto_start_enabled is set to true. |
 | *virtual_directory* | block list | no | *none* | Defines optional virtual directories below this application. See *virtual_directory* schema below for details. |
+| *extension* | block list | no | *none* | Allows for additional attributes for properties not explicitly supported. See *extension* schema below for details. |
 
 ## `virtual_directory` Block
 
@@ -81,6 +85,17 @@ config {
 |---|---|---|---|---|
 | alias | string | yes | *none* | Defines the alias of the virtual directory |
 | path | string | yes | *none* | Defines the path of the virtual directory |
+| *extension* | block list | no | *none* | Allows for additional attributes for properties not explicitly supported. See *extension* schema below for details. |
+
+## `extension` Block
+
+:::info
+In the event that a configurable property is not supported, an extension may be used.  Extensions will overwrite any existing configured property.
+
+| Option | Type | Required | Default Value | Description |
+|---|---|---|---|---|
+| key | string | yes | *none* | Defines the extension key |
+| value | string | yes | *none* | Defines the extension value |
 
 ## `binding` Block
 

@@ -248,7 +248,7 @@ public sealed class IisTaskHandle : IDisposable
 					ServiceUnavailableResponse = config.ServiceUnavailableResponse,
 					QueueLength = config.QueueLength,
 					StartTimeLimit = config.StartTimeLimit,
-					ShutdownTimeLimit = config.ShutdownTimeLimit
+					ShutdownTimeLimit = config.ShutdownTimeLimit,
 				}
 			] ).ToArray();
 		}
@@ -604,7 +604,6 @@ public sealed class IisTaskHandle : IDisposable
 	private static ApplicationPool CreateApplicationPool ( ServerManager serverManager, string name, TaskConfig taskConfig, DriverTaskConfigApplicationPool config, int? udpLocalPort, int? udpRemotePort )
 	{
 		var appPool = serverManager.ApplicationPools.Add( name );
-		appPool.AutoStart = true;
 
 		if ( config.ManagedPipelineMode is not null )
 			appPool.ManagedPipelineMode = config.ManagedPipelineMode.Value;
@@ -658,6 +657,8 @@ public sealed class IisTaskHandle : IDisposable
 			AddEnvironmentVariable( envVarsCollection, "NOMAD_STDOUT_UDP_LOCAL_PORT", udpLocalPort.Value.ToString() );
 		}
 
+		AddExtensions(appPool, config);
+
 		return appPool;
 
 		void AddEnvironmentVariable ( ConfigurationElementCollection envVarsCollection, string key, string value )
@@ -670,6 +671,17 @@ public sealed class IisTaskHandle : IDisposable
 				envVarElement["value"] = value;
 
 				envVarsCollection.Add( envVarElement );
+			}
+		}
+	}
+
+	private static void AddExtensions( ConfigurationElement configurationElement, DriverTaskConfigExtendable taskConfig)
+	{
+		if ( taskConfig.Extensions is not null )
+		{
+			foreach ( var extension in taskConfig.Extensions )
+			{
+				configurationElement.SetAttributeValue(extension.Key, extension.Value);
 			}
 		}
 	}
@@ -883,6 +895,12 @@ public sealed class IisTaskHandle : IDisposable
 		if ( appConfig.EnablePreload is not null )
 			application.SetAttributeValue( "preloadEnabled", appConfig.EnablePreload.Value );
 
+		if ( appConfig.ServiceAutoStartEnabled is not null )
+			application.SetAttributeValue( "serviceAutoStartEnabled", appConfig.ServiceAutoStartEnabled.Value );
+
+		if ( appConfig.ServiceAutoStartProvider is not null )
+			application.SetAttributeValue( "serviceAutoStartProvider", appConfig.ServiceAutoStartProvider );
+
 		if ( appConfig.VirtualDirectories is not null )
 		{
 			if ( appConfig.VirtualDirectories.Select( x => x.Alias ).Distinct().Count() != appConfig.VirtualDirectories.Length )
@@ -896,9 +914,12 @@ public sealed class IisTaskHandle : IDisposable
 				if ( !Path.IsPathRooted( physicalVdirPath ) )
 					physicalVdirPath = Path.Combine( taskConfig.AllocDir, taskConfig.Name, physicalVdirPath );
 
-				application.VirtualDirectories.Add( $"/{vdir.Alias}", physicalVdirPath );
+				var virtualDirectory = application.VirtualDirectories.Add( $"/{vdir.Alias}", physicalVdirPath );
+				AddExtensions(virtualDirectory, vdir);
 			}
 		}
+
+		AddExtensions( application, appConfig );
 
 		return application;
 	}
