@@ -91,6 +91,7 @@ config {
 
 :::info
 In the event that a configurable property is not supported by a block type, an extension may be used. Each extension will set a corresponding attribute via the [IIS setting schema](<https://learn.microsoft.com/en-us/previous-versions/iis/settings-schema/aa347559(v=vs.90)>). Using an unsupported attribute may cause IIS failures.
+:::
 
 | Option | Type   | Required | Default Value | Description                 |
 | ------ | ------ | -------- | ------------- | --------------------------- |
