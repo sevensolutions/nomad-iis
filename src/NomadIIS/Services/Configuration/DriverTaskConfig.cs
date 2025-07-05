@@ -64,7 +64,7 @@ public sealed class DriverTaskConfig
 	#endregion
 }
 
-public sealed class DriverTaskConfigApplicationPool
+public sealed class DriverTaskConfigApplicationPool : DriverTaskConfigExtendable
 {
 	[ConfigurationField( "name" )]
 	[DefaultValue( IisTaskHandle.DefaultAppPoolName )]
@@ -104,7 +104,7 @@ public sealed class DriverTaskConfigApplicationPool
 	public TimeSpan? ShutdownTimeLimit { get; set; }
 }
 
-public sealed class DriverTaskConfigApplication
+public sealed class DriverTaskConfigApplication : DriverTaskConfigExtendable
 {
 	[ConfigurationField( "application_pool" )]
 	[DefaultValue( IisTaskHandle.DefaultAppPoolName )]
@@ -120,11 +120,17 @@ public sealed class DriverTaskConfigApplication
 	[ConfigurationField( "enable_preload" )]
 	public bool? EnablePreload { get; set; }
 
+	[ConfigurationField( "service_auto_start_enabled" )]
+	public bool? ServiceAutoStartEnabled { get; set; }
+
+	[ConfigurationField( "service_auto_start_provider" )]
+	public string? ServiceAutoStartProvider { get; set; }
+
 	[ConfigurationCollectionField( "virtual_directories", "virtual_directory" )]
 	public DriverTaskConfigVirtualDirectory[]? VirtualDirectories { get; set; }
 }
 
-public sealed class DriverTaskConfigVirtualDirectory
+public sealed class DriverTaskConfigVirtualDirectory : DriverTaskConfigExtendable
 {
 	[Required]
 	[ConfigurationField( "alias" )]
@@ -181,4 +187,21 @@ public enum DriverTaskConfigBindingType
 {
 	Http,
 	Https
+}
+
+public sealed class DriverTaskConfigExtension
+{
+	[Required]
+	[ConfigurationField( "name" )]
+	public string Name { get; set; } = default!;
+
+	[Required]
+	[ConfigurationField( "value" )]
+	public string Value { get; set; } = default!;
+}
+
+public abstract class DriverTaskConfigExtendable
+{
+	[ConfigurationCollectionField( "extensions", "extension" )]
+	public DriverTaskConfigExtension[]? Extensions { get; set; }
 }
