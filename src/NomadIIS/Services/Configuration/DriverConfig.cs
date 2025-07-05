@@ -21,10 +21,6 @@ public sealed class DriverConfig
 	[ConfigurationField( "allowed_target_websites" )]
 	public string[]? AllowedTargetWebsites { get; set; }
 
-	[DefaultValue( 0 )]
-	[ConfigurationField( "udp_logger_port" )]
-	public int? UdpLoggerPort { get; set; } = 0;
-
 	[DefaultValue( "C:\\inetpub\\wwwroot" )]
 	[ConfigurationField( "placeholder_app_path" )]
 	public string? PlaceholderAppPath { get; set; }

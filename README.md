@@ -31,7 +31,6 @@ Feel free to use it as-is or as a reference implementation for your own C#-based
 | HTTPS Bindings | ✔ | [Details](https://nomad-iis.sevensolutions.cc/docs/features/https) |
 | Environment Variables | ✔ | [Details](https://nomad-iis.sevensolutions.cc/docs/features/environment-variables) |
 | Resource Statistics | ✔ | |
-| Logging | ✔ | Experimental UDP logging. [Details](https://nomad-iis.sevensolutions.cc/docs/features/udp-logging) |
 | Signals | ✔ | [Details](https://nomad-iis.sevensolutions.cc/docs/features/signals) |
 | Exec (Shell Access) | ❌ | I'am playing around a little bit but don't want to give you hope :/. See [GH-15](https://github.com/sevensolutions/nomad-iis/issues/15) for status. |
 | Filesystem Isolation | 🔶 | [Details](https://nomad-iis.sevensolutions.cc/docs/features/filesystem-isolation) |

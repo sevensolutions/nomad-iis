@@ -14,7 +14,6 @@ using System.IO;
 using System.IO.Compression;
 using System.IO.Pipes;
 using System.Linq;
-using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
 using System.Security.AccessControl;
 using System.Security.Cryptography.X509Certificates;
@@ -54,8 +53,6 @@ public sealed class IisTaskHandle : IDisposable
 	private bool _appPoolStoppedIntentionally = false;
 #pragma warning restore CS0414 // Dem Feld "IisTaskHandle._appPoolStoppedIntentionally" wurde ein Wert zugewiesen, der aber nie verwendet wird.
 
-	private NamedPipeClientStream? _stdoutLogStream;
-
 	internal IisTaskHandle ( ManagementService owner, ILogger logger, string taskId )
 	{
 		if ( string.IsNullOrWhiteSpace( taskId ) )
@@ -69,7 +66,6 @@ public sealed class IisTaskHandle : IDisposable
 
 	public string TaskId { get; }
 	public TaskConfig? TaskConfig => _taskConfig;
-	public int? UdpLoggerPort => _state?.UdpLoggerPort;
 	public IReadOnlyDictionary<string, string>? AppPoolNames => _state?.AppPoolNames?.AsReadOnly();
 	public string? WebsiteName => _state?.WebsiteName;
 	public bool IsRecovered => _isRecovered;
@@ -93,10 +89,6 @@ public sealed class IisTaskHandle : IDisposable
 
 			await _owner.LockAsync( async handle =>
 			{
-				// Get a new port for the UDP logger
-				if ( config.EnableUdpLogging )
-					_state.UdpLoggerPort = GetAvailablePort( 10000 );
-
 				var appPools = new Dictionary<string, ApplicationPool>();
 
 				// Create AppPools
@@ -112,7 +104,7 @@ public sealed class IisTaskHandle : IDisposable
 					{
 						_logger.LogInformation( $"Task {task.Id}: Creating AppPool with name {fullAppPoolName}..." );
 
-						appPool = CreateApplicationPool( handle.ServerManager, fullAppPoolName, _taskConfig, appPoolConfig, _state.UdpLoggerPort, _owner.UdpLoggerPort );
+						appPool = CreateApplicationPool( handle.ServerManager, fullAppPoolName, _taskConfig, appPoolConfig );
 
 						appPools.Add( appPoolConfig.Name, appPool );
 					}
@@ -235,20 +227,7 @@ public sealed class IisTaskHandle : IDisposable
 			config.ApplicationPools = config.ApplicationPools.Concat( [
 				new DriverTaskConfigApplicationPool()
 				{
-					Name = DefaultAppPoolName,
-
-					// Temporary backwards compatibility until v0.16.0
-					ManagedPipelineMode = config.ManagedPipelineMode,
-					ManagedRuntimeVersion = config.ManagedRuntimeVersion,
-					StartMode = config.StartMode,
-					IdleTimeout = config.IdleTimeout,
-					DisabledOverlappedRecycle = config.DisabledOverlappedRecycle,
-					PeriodicRestart = config.PeriodicRestart,
-					Enable32BitAppOnWin64 = config.Enable32BitAppOnWin64,
-					ServiceUnavailableResponse = config.ServiceUnavailableResponse,
-					QueueLength = config.QueueLength,
-					StartTimeLimit = config.StartTimeLimit,
-					ShutdownTimeLimit = config.ShutdownTimeLimit,
+					Name = DefaultAppPoolName
 				}
 			] ).ToArray();
 		}
@@ -539,9 +518,6 @@ public sealed class IisTaskHandle : IDisposable
 	{
 		_ctsDisposed.Cancel();
 
-		if ( _stdoutLogStream is not null )
-			_stdoutLogStream.Dispose();
-
 		_owner.Delete( this );
 	}
 
@@ -601,7 +577,7 @@ public sealed class IisTaskHandle : IDisposable
 		=> FindApplicationPool( serverManager, name ) ?? throw new KeyNotFoundException( $"No AppPool with name {name} found." );
 	private static ApplicationPool? FindApplicationPool ( ServerManager serverManager, string name )
 		=> serverManager.ApplicationPools.FirstOrDefault( x => x.Name == name );
-	private static ApplicationPool CreateApplicationPool ( ServerManager serverManager, string name, TaskConfig taskConfig, DriverTaskConfigApplicationPool config, int? udpLocalPort, int? udpRemotePort )
+	private static ApplicationPool CreateApplicationPool ( ServerManager serverManager, string name, TaskConfig taskConfig, DriverTaskConfigApplicationPool config )
 	{
 		var appPool = serverManager.ApplicationPools.Add( name );
 
@@ -651,12 +627,6 @@ public sealed class IisTaskHandle : IDisposable
 		foreach ( var env in GetTaskConfigEnvironmentVariables( taskConfig ) )
 			AddEnvironmentVariable( envVarsCollection, env.Key, env.Value );
 
-		if ( udpLocalPort is not null && udpRemotePort is not null )
-		{
-			AddEnvironmentVariable( envVarsCollection, "NOMAD_STDOUT_UDP_REMOTE_PORT", udpRemotePort.Value.ToString() );
-			AddEnvironmentVariable( envVarsCollection, "NOMAD_STDOUT_UDP_LOCAL_PORT", udpLocalPort.Value.ToString() );
-		}
-
 		AddExtensions(appPool, config);
 
 		return appPool;
@@ -678,14 +648,10 @@ public sealed class IisTaskHandle : IDisposable
 	private static void AddExtensions( ConfigurationElement configurationElement, DriverTaskConfigExtendable taskConfig )
 	{
 		if ( taskConfig.Extensions is null )
-		{
 			return;
-		}
 
 		foreach ( var extension in taskConfig.Extensions )
-		{
 			configurationElement.SetAttributeValue(extension.Name, extension.Value);
-		}
 	}
 
 	private static IEnumerable<KeyValuePair<string, string>> GetTaskConfigEnvironmentVariables ( TaskConfig taskConfig )
@@ -1079,59 +1045,6 @@ public sealed class IisTaskHandle : IDisposable
 		}
 
 		throw new Exception( "No more website IDs available." );
-	}
-
-
-
-	internal async Task ShipLogsAsync ( byte[] data )
-	{
-		if ( _taskConfig?.StdoutPath is null )
-			return;
-
-		if ( _stdoutLogStream is null || !_stdoutLogStream.IsConnected )
-		{
-			if ( _stdoutLogStream is not null )
-				await _stdoutLogStream.DisposeAsync();
-
-			_stdoutLogStream = new NamedPipeClientStream( _taskConfig.StdoutPath.Replace( "//./pipe/", "" ) );
-
-			await _stdoutLogStream.ConnectAsync();
-		}
-
-		await _stdoutLogStream.WriteAsync( data, _ctsDisposed.Token );
-	}
-
-	private static int GetAvailablePort ( int startingPort )
-	{
-		var portArray = new List<int>();
-
-		var properties = IPGlobalProperties.GetIPGlobalProperties();
-
-		// Ignore active connections
-		var connections = properties.GetActiveTcpConnections();
-		portArray.AddRange( from n in connections
-							where n.LocalEndPoint.Port >= startingPort
-							select n.LocalEndPoint.Port );
-
-		// Ignore active TCP listners
-		var endPoints = properties.GetActiveTcpListeners();
-		portArray.AddRange( from n in endPoints
-							where n.Port >= startingPort
-							select n.Port );
-
-		// Ignore active UDP listeners
-		endPoints = properties.GetActiveUdpListeners();
-		portArray.AddRange( from n in endPoints
-							where n.Port >= startingPort
-							select n.Port );
-
-		portArray.Sort();
-
-		for ( var i = startingPort; i < ushort.MaxValue; i++ )
-			if ( !portArray.Contains( i ) )
-				return i;
-
-		return 0;
 	}
 
 	public async Task StartAppPoolAsync ()
