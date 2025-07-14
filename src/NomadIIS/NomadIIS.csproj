@@ -22,8 +22,8 @@
 		<PackageReference Include="MessagePack" Version="3.1.4" />
 		<PackageReference Include="Microsoft.Web.Administration" Version="11.1.0" />
 		<PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
-		<PackageReference Include="System.Management" Version="9.0.6" />
-		<PackageReference Include="System.Threading.Channels" Version="9.0.6" />
+		<PackageReference Include="System.Management" Version="9.0.7" />
+		<PackageReference Include="System.Threading.Channels" Version="9.0.7" />
 	</ItemGroup>
 
 	<ItemGroup Condition="$(DefineConstants.Contains('MANAGEMENT_API'))">
