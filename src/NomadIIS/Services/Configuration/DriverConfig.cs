@@ -27,6 +27,12 @@ public sealed class DriverConfig
 
 	[ConfigurationCollectionField( "procdumps", "procdump", 0, 1 )]
 	public DriverConfigProcdump[] Procdumps { get; set; } = default!;
+
+	[ConfigurationField( "allowed_apppool_identities" )]
+	public string[]? AllowedAppPoolIdentities { get; set; } = ["ApplicationPoolIdentity"];
+
+	[ConfigurationField( "allowed_apppool_users" )]
+	public string[]? AllowedAppPoolUsers { get; set; }
 }
 
 public sealed class DriverConfigProcdump
