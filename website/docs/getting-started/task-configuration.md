@@ -43,6 +43,7 @@ Please also read [this section](../features/multi-application-pools.md) for more
 config {
   applicationPool {
     managed_runtime_version = "None"
+    identity = "NetworkService"
   }
 }
 ```
@@ -53,6 +54,9 @@ config {
 | Option                       | Type       | Required | Default Value | Description                                                                                                                                                                                                                                                                          |
 | ---------------------------- | ---------- | -------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | name                         | string     | no       | `default`     | Specifies an alias name for the application pool. This can be used to reference the application pool within the `application` block. It is limited to 8 characters.                                                                                                                  |
+| identity                     | string     | no       | `ApplicationPoolIdentity` | Specifies the identity under which the application pool runs. Valid options are `ApplicationPoolIdentity`, `LocalSystem`, `LocalService`, `NetworkService`, or `SpecificUser`. |
+| username                     | string     | no       | _none_        | Specifies the username when `identity` is set to `SpecificUser`. This field is required when using `SpecificUser` identity. |
+| password                     | string     | no       | _none_        | Specifies the password for the username when `identity` is set to `SpecificUser`. This field is optional and can be omitted for Group Managed Service Accounts (GMSA). |
 | managed_pipeline_mode        | string     | no       | _IIS default_ | Valid options are _Integrated_ or _Classic_                                                                                                                                                                                                                                          |
 | enable_32bit_app_on_win64    | bool       | no       | _IIS default_ | When true, enables a 32-bit application to run on a computer that runs a 64-bit version of Windows.                                                                                                                                                                                  |
 | managed_runtime_version      | string     | no       | _IIS default_ | Valid options are _v4.0_, _v2.0_, _None_                                                                                                                                                                                                                                             |
@@ -157,6 +161,10 @@ job "static-sample-app" {
       }
 
       config {
+        applicationPool {
+          identity = "ApplicationPoolIdentity"
+        }
+
         application {
           path = "local"
         }

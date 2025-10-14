@@ -18,7 +18,7 @@ public sealed class IisHandle : IDisposable
 		=> new IisAppPoolHandle( this, name );
 	public IisWebsiteHandle Website ( string name )
 		=> new IisWebsiteHandle( this, name );
-	
+
 	public void Dispose ()
 	{
 		_serverManager.Dispose();
@@ -85,6 +85,26 @@ public sealed class IisAppPoolHandle
 	{
 		var appPool = GetApplicationPool();
 		Assert.Equal( value, appPool.Recycling.PeriodicRestart.Time );
+	}
+	public void ShouldHaveIdentityType ( ProcessModelIdentityType identityType )
+	{
+		var appPool = GetApplicationPool();
+		Assert.Equal( identityType, appPool.ProcessModel.IdentityType );
+	}
+	public void ShouldHaveUsername ( string username )
+	{
+		var appPool = GetApplicationPool();
+		Assert.Equal( username, appPool.ProcessModel.UserName );
+	}
+	public void ShouldHavePassword ( string password )
+	{
+		var appPool = GetApplicationPool();
+		Assert.Equal( password, appPool.ProcessModel.Password );
+	}
+	public void ShouldHaveEmptyPassword ()
+	{
+		var appPool = GetApplicationPool();
+		Assert.True( string.IsNullOrEmpty( appPool.ProcessModel.Password ) );
 	}
 
 	private ApplicationPool GetApplicationPool ()
