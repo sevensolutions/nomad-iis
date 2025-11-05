@@ -53,7 +53,7 @@ public sealed class ManagementService : IHostedService
 	public string? ProcdumpBinaryPath => _procdumpConfig?.BinaryPath ?? "C:\\procdump.exe";
 	public bool ProcdumpEulaAccepted => _procdumpConfig?.AcceptEula ?? false;
 
-	public async void Configure ( DriverConfig config )
+	public Task Configure ( DriverConfig config )
 	{
 		_driverEnabled = config.Enabled;
 
@@ -65,6 +65,8 @@ public sealed class ManagementService : IHostedService
 		_allowedTargetWebsites = config.AllowedTargetWebsites ?? Array.Empty<string>();
 		_placeholderAppPath = config.PlaceholderAppPath;
 		_procdumpConfig = config.Procdumps.Length == 1 ? config.Procdumps[0] : null;
+
+		return Task.CompletedTask;
 	}
 
 	public Task StartAsync ( CancellationToken cancellationToken )
@@ -74,12 +76,14 @@ public sealed class ManagementService : IHostedService
 
 		return Task.CompletedTask;
 	}
-	public async Task StopAsync ( CancellationToken cancellationToken )
+	public Task StopAsync ( CancellationToken cancellationToken )
 	{
 		_cts.Cancel();
 
 		_wmiHelper.Dispose();
 		_serverManager.Dispose();
+
+		return Task.CompletedTask;
 	}
 
 	public IisTaskHandle CreateHandle ( string taskId )
