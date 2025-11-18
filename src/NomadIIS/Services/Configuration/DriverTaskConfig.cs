@@ -62,6 +62,16 @@ public sealed class DriverTaskConfigApplicationPool : DriverTaskConfigExtendable
 
 	[ConfigurationField( "shutdown_time_limit" )]
 	public TimeSpan? ShutdownTimeLimit { get; set; }
+
+	[ConfigurationField( "identity" )]
+	[DefaultValue( "ApplicationPoolIdentity" )]
+	public string Identity { get; set; } = "ApplicationPoolIdentity";
+
+	[ConfigurationField( "username" )]
+	public string? Username { get; set; }
+
+	[ConfigurationField( "password" )]
+	public string? Password { get; set; }
 }
 
 public sealed class DriverTaskConfigApplication : DriverTaskConfigExtendable

@@ -25,6 +25,8 @@ public sealed class ManagementService : IHostedService
 	private TimeSpan _fingerprintInterval = TimeSpan.FromSeconds( 30 );
 	private bool _directorySecurity = true;
 	private string[] _allowedTargetWebsites = Array.Empty<string>();
+	private string[] _allowedAppPoolIdentities = ["ApplicationPoolIdentity"];
+	private string[] _allowedAppPoolUsers = Array.Empty<string>();
 	private string? _placeholderAppPath;
 	private DriverConfigProcdump? _procdumpConfig;
 	private CancellationTokenSource _cts = new CancellationTokenSource();
@@ -49,6 +51,8 @@ public sealed class ManagementService : IHostedService
 	public TimeSpan FingerprintInterval => _fingerprintInterval;
 	public bool DirectorySecurity => _directorySecurity;
 	public string[] AllowedTargetWebsites => _allowedTargetWebsites;
+	public string[] AllowedAppPoolIdentities => _allowedAppPoolIdentities;
+	public string[] AllowedAppPoolUsers => _allowedAppPoolUsers;
 	public string? PlaceholderAppPath => _placeholderAppPath;
 	public string? ProcdumpBinaryPath => _procdumpConfig?.BinaryPath ?? "C:\\procdump.exe";
 	public bool ProcdumpEulaAccepted => _procdumpConfig?.AcceptEula ?? false;
@@ -63,6 +67,8 @@ public sealed class ManagementService : IHostedService
 		_fingerprintInterval = config.FingerprintInterval;
 		_directorySecurity = config.DirectorySecurity;
 		_allowedTargetWebsites = config.AllowedTargetWebsites ?? Array.Empty<string>();
+		_allowedAppPoolIdentities = config.AllowedAppPoolIdentities ?? ["ApplicationPoolIdentity"];
+		_allowedAppPoolUsers = config.AllowedAppPoolUsers ?? Array.Empty<string>();
 		_placeholderAppPath = config.PlaceholderAppPath;
 		_procdumpConfig = config.Procdumps.Length == 1 ? config.Procdumps[0] : null;
 

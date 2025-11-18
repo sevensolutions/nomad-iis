@@ -40,14 +40,19 @@ job "multi-pool-example" {
           #name = "default" # Can be omitted, because it's the default
           managed_runtime_version = "None"
           start_mode = "AlwaysRunning"
+          identity = "ApplicationPoolIdentity"
         }
         applicationPool {
           name = "appA"
           start_mode = "AlwaysRunning"
+          identity = "NetworkService"
         }
         applicationPool {
           name = "appB"
           start_mode = "AlwaysRunning"
+          identity = "SpecificUser"
+          username = "CONTOSO\\WebAppUser"
+          password = "SecretPassword123"
         }
         # highlight-end
 
@@ -82,6 +87,52 @@ job "multi-pool-example" {
   }
 }
 ```
+## Application Pool Identities
+
+Each application pool can be configured to run under a specific identity. This is useful for security scenarios where different applications need different levels of access or need to authenticate as specific users.
+
+### Supported Identity Types
+
+- **`ApplicationPoolIdentity`** (default): Each application pool runs under its own built-in account (IIS AppPool\\{PoolName})
+- **`LocalSystem`**: Runs under the local system account with high privileges
+- **`LocalService`**: Runs under the local service account with minimal privileges  
+- **`NetworkService`**: Runs under the network service account, suitable for accessing network resources
+- **`SpecificUser`**: Runs under a specific user account (requires username and optionally password)
+
+### Security Considerations
+
+When using `SpecificUser` identity:
+- The username field is required
+- The password field is optional and can be omitted for Group Managed Service Accounts (GMSA)
+- The driver administrator can restrict which identities and users are allowed via the [driver configuration](../getting-started/driver-configuration.md)
+
+### Example with Different Identities
+
+```hcl
+config {
+  applicationPool {
+    name = "web"
+    identity = "ApplicationPoolIdentity" # Default IIS AppPool identity
+  }
+  applicationPool {
+    name = "api"
+    identity = "NetworkService" # Can access network resources
+  }
+  applicationPool {
+    name = "backend"
+    identity = "SpecificUser"
+    username = "DOMAIN\\ServiceAccount"
+    password = "SecretPassword"
+  }
+  applicationPool {
+    name = "gmsa"
+    identity = "SpecificUser"
+    username = "DOMAIN\\GMSAAccount$" # Group Managed Service Account
+    # password omitted for GMSA
+  }
+}
+```
+
 ## Restrictions and Good to Know
 
 - **Environment Variables**  
@@ -89,7 +140,9 @@ Environment Variables are defined using Nomad's [`env`-stanza](https://developer
 This means that every application pool get's access to all environment variables.
 - **Folder Permissions**  
 The app pool identity is permitted to read and write the allocation directory according to [this documentation](./filesystem-isolation.md).
-If you use multiple application pools there will be no distinction and every pool will be permitted in the exact same way because the driver doesn't know which application pool needs to access which subfolder.
+If you use multiple application pools with different identities, each identity will be granted the same permissions to the allocation directory. The driver automatically determines the correct identity name for permission assignment based on the configured identity type.
+- **Identity Restrictions**  
+The driver administrator can restrict which application pool identities and specific users are allowed through the `allowed_apppool_identities` and `allowed_apppool_users` configuration options. These restrictions are enforced at task startup time.
 - **Signals**  
 *nomad-iis* provides some Nomad signals like `START`, `STOP` or `RECYCLE`. If you're using multiple application pools these signals will affect *all* application pools.
 - **Resource Usage**  
