@@ -20,7 +20,7 @@ public sealed class DriverTaskConfig
 	[ConfigurationField( "permit_iusr" )]
 	public bool PermitIusr { get; set; } = true;
 
-	[ConfigurationCollectionField( "bindings", "binding", 0, 2 )]
+	[ConfigurationCollectionField( "bindings", "binding", 0, 64 )]
 	public DriverTaskConfigBinding[] Bindings { get; set; } = default!;
 }
 
