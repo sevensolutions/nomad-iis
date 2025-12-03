@@ -1100,7 +1100,7 @@ public sealed class IisTaskHandle : IDisposable
 		}
 	}
 
-	private static string? GetAppPoolIdentityName ( DriverTaskConfigApplicationPool appPoolConfig, string appPoolName )
+	private static string GetAppPoolIdentityName ( DriverTaskConfigApplicationPool appPoolConfig, string appPoolName )
 	{
 		return appPoolConfig.Identity switch
 		{
@@ -1108,8 +1108,8 @@ public sealed class IisTaskHandle : IDisposable
 			"LocalSystem" => "NT AUTHORITY\\SYSTEM",
 			"LocalService" => "NT AUTHORITY\\LOCAL SERVICE", 
 			"NetworkService" => "NT AUTHORITY\\NETWORK SERVICE",
-			"SpecificUser" => appPoolConfig.Username,
-			_ => null
+			"SpecificUser" => appPoolConfig.Username ?? throw new ArgumentException( "Username is required when identity is set to 'SpecificUser'." ),
+			_ => throw new ArgumentOutOfRangeException( nameof( appPoolConfig.Identity ), $"Identity type '{appPoolConfig.Identity}' is not supported." )
 		};
 	}
 
