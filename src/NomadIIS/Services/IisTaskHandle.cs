@@ -650,13 +650,15 @@ public sealed class IisTaskHandle : IDisposable
 
 	private static void ValidateAndSetIdentity ( ApplicationPool appPool, DriverTaskConfigApplicationPool config, ManagementService managementService )
 	{
+		var allowedIdentities = managementService.AllowedAppPoolIdentities;
+
 		// Validate identity is allowed
-		if ( managementService.AllowedAppPoolIdentities.Length == 0 )
+		if ( allowedIdentities.Length == 0 )
 		{
 			throw new ArgumentException($"Application pool identity '{config.Identity}' is not allowed. No identities are allowed.");
 		}
 
-		if ( !managementService.AllowedAppPoolIdentities.Contains(config.Identity) )
+		if ( !allowedIdentities.Contains(config.Identity) )
 		{
 			throw new ArgumentException($"Application pool identity '{config.Identity}' is not allowed. Allowed identities: {string.Join(", ", allowedIdentities)}");
 		}
@@ -684,20 +686,22 @@ public sealed class IisTaskHandle : IDisposable
 				if ( string.IsNullOrWhiteSpace( config.Username ) )
 					throw new ArgumentException( "Username is required when identity is set to 'SpecificUser'." );
 
+				var allowedUsers = managementService.AllowedAppPoolUsers;
+
 				// Validate username is allowed
-				if ( managementService.AllowedAppPoolUsers.Length == 0 )
+				if ( allowedUsers.Length == 0 )
 				{
 					throw new ArgumentException( $"Application pool user '{config.Username}' is not allowed. No specific users are allowed." );
 				}
 
-				if ( managementService.AllowedAppPoolUsers?.Length > 0 )
+				if ( allowedUsers.Length > 0 )
 				{
-					var isWildcardAllowed = managementService.AllowedAppPoolUsers.Contains( "*" );
-					var isUserExplicitlyAllowed = managementService.AllowedAppPoolUsers.Contains( config.Username );
+					var isWildcardAllowed = allowedUsers.Contains( "*" );
+					var isUserExplicitlyAllowed = allowedUsers.Contains( config.Username );
 					
 					if ( !isWildcardAllowed && !isUserExplicitlyAllowed )
 					{
-						throw new ArgumentException( $"Application pool user '{config.Username}' is not allowed. Allowed users: {string.Join( ", ", managementService.AllowedAppPoolUsers )}" );
+						throw new ArgumentException( $"Application pool user '{config.Username}' is not allowed. Allowed users: {string.Join( ", ", allowedUsers )}" );
 					}
 				}
 
