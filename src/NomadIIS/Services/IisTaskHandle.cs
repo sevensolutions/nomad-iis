@@ -1037,21 +1037,22 @@ public sealed class IisTaskHandle : IDisposable
 				appPoolIdentities.Add( identityName );
 		}
 
-		string[] identities = config.PermitIusr ? appPoolIdentities.Concat( ["IUSR"] ).ToArray() : appPoolIdentities.ToArray();
+		var appPoolIdentitiesArray = appPoolIdentities.ToArray();
+		string[] identities = config.PermitIusr ? appPoolIdentitiesArray.Concat( ["IUSR"] ).ToArray() : appPoolIdentitiesArray;
 
 		var allocDir = new DirectoryInfo( _taskConfig!.AllocDir );
 
 		var builtinUsersSid = TryGetSid( WellKnownSidType.BuiltinUsersSid );
 		var authenticatedUserSid = TryGetSid( WellKnownSidType.AuthenticatedUserSid );
 
-		SetupDirectory( appPoolIdentities.ToArray(), @"alloc", null, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
-		SetupDirectory( appPoolIdentities.ToArray(), @"alloc\data", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
-		SetupDirectory( appPoolIdentities.ToArray(), @"alloc\logs", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
-		SetupDirectory( appPoolIdentities.ToArray(), @"alloc\tmp", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
+		SetupDirectory( appPoolIdentitiesArray, @"alloc", null, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
+		SetupDirectory( appPoolIdentitiesArray, @"alloc\data", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
+		SetupDirectory( appPoolIdentitiesArray, @"alloc\logs", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
+		SetupDirectory( appPoolIdentitiesArray, @"alloc\tmp", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
 		SetupDirectory( null, $@"{_taskConfig.Name}\private", null, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
 		SetupDirectory( identities, $@"{_taskConfig.Name}\local", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
-		SetupDirectory( appPoolIdentities.ToArray(), $@"{_taskConfig.Name}\secrets", FileSystemRights.Read, InheritanceFlags.ObjectInherit, PropagationFlags.InheritOnly );
-		SetupDirectory( appPoolIdentities.ToArray(), $@"{_taskConfig.Name}\tmp", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
+		SetupDirectory( appPoolIdentitiesArray, $@"{_taskConfig.Name}\secrets", FileSystemRights.Read, InheritanceFlags.ObjectInherit, PropagationFlags.InheritOnly );
+		SetupDirectory( appPoolIdentitiesArray, $@"{_taskConfig.Name}\tmp", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
 
 		void SetupDirectory ( string[]? identities, string subDirectory, FileSystemRights? fileSystemRights, InheritanceFlags inheritanceFlags, PropagationFlags propagationFlags )
 		{
