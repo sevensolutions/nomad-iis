@@ -651,12 +651,14 @@ public sealed class IisTaskHandle : IDisposable
 	private static void ValidateAndSetIdentity ( ApplicationPool appPool, DriverTaskConfigApplicationPool config, ManagementService managementService )
 	{
 		// Validate identity is allowed
-		if ( managementService.AllowedAppPoolIdentities?.Length > 0 )
+		if ( managementService.AllowedAppPoolIdentities.Length == 0 )
 		{
-			if ( !managementService.AllowedAppPoolIdentities.Contains( config.Identity ) )
-			{
-				throw new ArgumentException( $"Application pool identity '{config.Identity}' is not allowed. Allowed identities: {string.Join( ", ", managementService.AllowedAppPoolIdentities )}" );
-			}
+			throw new ArgumentException($"Application pool identity '{config.Identity}' is not allowed. No identities are allowed.");
+		}
+
+		if ( !managementService.AllowedAppPoolIdentities.Contains(config.Identity) )
+		{
+			throw new ArgumentException($"Application pool identity '{config.Identity}' is not allowed. Allowed identities: {string.Join(", ", allowedIdentities)}");
 		}
 
 		// Set the identity based on configuration
@@ -683,6 +685,11 @@ public sealed class IisTaskHandle : IDisposable
 					throw new ArgumentException( "Username is required when identity is set to 'SpecificUser'." );
 
 				// Validate username is allowed
+				if ( managementService.AllowedAppPoolUsers.Length == 0 )
+				{
+					throw new ArgumentException( $"Application pool user '{config.Username}' is not allowed. No specific users are allowed." );
+				}
+
 				if ( managementService.AllowedAppPoolUsers?.Length > 0 )
 				{
 					var isWildcardAllowed = managementService.AllowedAppPoolUsers.Contains( "*" );
