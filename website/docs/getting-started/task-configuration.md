@@ -70,6 +70,10 @@ config {
 | shutdown_time_limit          | string     | no       | _IIS default_ | Specifies the time in the form _[00w][00d][00h][00m][00s]_ that the W3SVC service waits after it initiated a recycle. If the worker process does not shut down within the shutdownTimeLimit, it will be terminated by the W3SVC service.                                             |
 | _extension_                  | block list | no       | _none_        | Allows for additional attributes for properties not explicitly supported. See _extension_ schema below for details.                                                                                                                                                                  |
 
+:::warning
+Resource statistics (CPU/Memory usage) are currently only collected when the `identity` is set to `ApplicationPoolIdentity`.
+:::
+
 ## `application` Block
 
 | Option                      | Type       | Required | Default Value | Description                                                                                                                                                                                |
