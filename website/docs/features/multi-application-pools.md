@@ -93,7 +93,7 @@ Each application pool can be configured to run under a specific identity. This i
 
 ### Supported Identity Types
 
-- **`ApplicationPoolIdentity`** (default): Each application pool runs under its own built-in account (IIS AppPool\\{PoolName})
+- **`ApplicationPoolIdentity`** (default): Each application pool runs under its own built-in account (IIS AppPool\\\{PoolName\})
 - **`LocalSystem`**: Runs under the local system account with high privileges
 - **`LocalService`**: Runs under the local service account with minimal privileges  
 - **`NetworkService`**: Runs under the network service account, suitable for accessing network resources
