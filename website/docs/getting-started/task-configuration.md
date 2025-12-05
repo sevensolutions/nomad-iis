@@ -43,6 +43,7 @@ Please also read [this section](../features/multi-application-pools.md) for more
 config {
   applicationPool {
     managed_runtime_version = "None"
+    identity = "NetworkService"
   }
 }
 ```
@@ -53,6 +54,9 @@ config {
 | Option                       | Type       | Required | Default Value | Description                                                                                                                                                                                                                                                                          |
 | ---------------------------- | ---------- | -------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | name                         | string     | no       | `default`     | Specifies an alias name for the application pool. This can be used to reference the application pool within the `application` block. It is limited to 8 characters.                                                                                                                  |
+| identity                     | string     | no       | `ApplicationPoolIdentity` | Specifies the identity under which the application pool runs. Valid options are `ApplicationPoolIdentity`, `LocalSystem`, `LocalService`, `NetworkService`, or `SpecificUser`. |
+| username                     | string     | no       | _none_        | Specifies the username when `identity` is set to `SpecificUser`. This field is required when using `SpecificUser` identity. |
+| password                     | string     | no       | _none_        | Specifies the password for the username when `identity` is set to `SpecificUser`. This field is optional and can be omitted for Group Managed Service Accounts (GMSA). |
 | managed_pipeline_mode        | string     | no       | _IIS default_ | Valid options are _Integrated_ or _Classic_                                                                                                                                                                                                                                          |
 | enable_32bit_app_on_win64    | bool       | no       | _IIS default_ | When true, enables a 32-bit application to run on a computer that runs a 64-bit version of Windows.                                                                                                                                                                                  |
 | managed_runtime_version      | string     | no       | _IIS default_ | Valid options are _v4.0_, _v2.0_, _None_                                                                                                                                                                                                                                             |
@@ -65,6 +69,10 @@ config {
 | start_time_limit             | string     | no       | _IIS default_ | Specifies the time in the form _[00w][00d][00h][00m][00s]_ that IIS waits for an application pool to start. If the application pool does not startup within the startupTimeLimit, the worker process is terminated and the rapid-fail protection count is incremented.               |
 | shutdown_time_limit          | string     | no       | _IIS default_ | Specifies the time in the form _[00w][00d][00h][00m][00s]_ that the W3SVC service waits after it initiated a recycle. If the worker process does not shut down within the shutdownTimeLimit, it will be terminated by the W3SVC service.                                             |
 | _extension_                  | block list | no       | _none_        | Allows for additional attributes for properties not explicitly supported. See _extension_ schema below for details.                                                                                                                                                                  |
+
+:::warning
+Resource statistics (CPU/Memory usage) are currently only collected when the `identity` is set to `ApplicationPoolIdentity`.
+:::
 
 ## `application` Block
 
@@ -157,6 +165,10 @@ job "static-sample-app" {
       }
 
       config {
+        applicationPool {
+          identity = "ApplicationPoolIdentity"
+        }
+
         application {
           path = "local"
         }

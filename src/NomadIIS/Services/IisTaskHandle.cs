@@ -104,7 +104,7 @@ public sealed class IisTaskHandle : IDisposable
 					{
 						_logger.LogInformation( $"Task {task.Id}: Creating AppPool with name {fullAppPoolName}..." );
 
-						appPool = CreateApplicationPool( handle.ServerManager, fullAppPoolName, _taskConfig, appPoolConfig );
+						appPool = CreateApplicationPool( handle.ServerManager, fullAppPoolName, _taskConfig, appPoolConfig, _owner );
 
 						appPools.Add( appPoolConfig.Name, appPool );
 					}
@@ -577,9 +577,12 @@ public sealed class IisTaskHandle : IDisposable
 		=> FindApplicationPool( serverManager, name ) ?? throw new KeyNotFoundException( $"No AppPool with name {name} found." );
 	private static ApplicationPool? FindApplicationPool ( ServerManager serverManager, string name )
 		=> serverManager.ApplicationPools.FirstOrDefault( x => x.Name == name );
-	private static ApplicationPool CreateApplicationPool ( ServerManager serverManager, string name, TaskConfig taskConfig, DriverTaskConfigApplicationPool config )
+	private static ApplicationPool CreateApplicationPool ( ServerManager serverManager, string name, TaskConfig taskConfig, DriverTaskConfigApplicationPool config, ManagementService managementService )
 	{
 		var appPool = serverManager.ApplicationPools.Add( name );
+
+		// Validate and set identity
+		ValidateAndSetIdentity( appPool, config, managementService );
 
 		if ( config.ManagedPipelineMode is not null )
 			appPool.ManagedPipelineMode = config.ManagedPipelineMode.Value;
@@ -642,6 +645,78 @@ public sealed class IisTaskHandle : IDisposable
 
 				envVarsCollection.Add( envVarElement );
 			}
+		}
+	}
+
+	private static void ValidateAndSetIdentity ( ApplicationPool appPool, DriverTaskConfigApplicationPool config, ManagementService managementService )
+	{
+		var allowedIdentities = managementService.AllowedAppPoolIdentities;
+
+		// Validate identity is allowed
+		if ( allowedIdentities.Length == 0 )
+		{
+			throw new ArgumentException($"Application pool identity '{config.Identity}' is not allowed. No identities are allowed.");
+		}
+
+		if ( !allowedIdentities.Contains(config.Identity) )
+		{
+			throw new ArgumentException($"Application pool identity '{config.Identity}' is not allowed. Allowed identities: {string.Join(", ", allowedIdentities)}");
+		}
+
+		// Set the identity based on configuration
+		switch ( config.Identity )
+		{
+			case "ApplicationPoolIdentity":
+				appPool.ProcessModel.IdentityType = ProcessModelIdentityType.ApplicationPoolIdentity;
+				break;
+
+			case "LocalSystem":
+				appPool.ProcessModel.IdentityType = ProcessModelIdentityType.LocalSystem;
+				break;
+
+			case "LocalService":
+				appPool.ProcessModel.IdentityType = ProcessModelIdentityType.LocalService;
+				break;
+
+			case "NetworkService":
+				appPool.ProcessModel.IdentityType = ProcessModelIdentityType.NetworkService;
+				break;
+
+			case "SpecificUser":
+				if ( string.IsNullOrWhiteSpace( config.Username ) )
+					throw new ArgumentException( "Username is required when identity is set to 'SpecificUser'." );
+
+				var allowedUsers = managementService.AllowedAppPoolUsers;
+
+				// Validate username is allowed
+				if ( allowedUsers.Length == 0 )
+				{
+					throw new ArgumentException( $"Application pool user '{config.Username}' is not allowed. No specific users are allowed." );
+				}
+
+				if ( allowedUsers.Length > 0 )
+				{
+					var isWildcardAllowed = allowedUsers.Contains( "*" );
+					var isUserExplicitlyAllowed = allowedUsers.Contains( config.Username );
+					
+					if ( !isWildcardAllowed && !isUserExplicitlyAllowed )
+					{
+						throw new ArgumentException( $"Application pool user '{config.Username}' is not allowed. Allowed users: {string.Join( ", ", allowedUsers )}" );
+					}
+				}
+
+				appPool.ProcessModel.IdentityType = ProcessModelIdentityType.SpecificUser;
+				appPool.ProcessModel.UserName = config.Username;
+				
+				// Password is optional for GMSA accounts
+				if ( !string.IsNullOrWhiteSpace( config.Password ) )
+				{
+					appPool.ProcessModel.Password = config.Password;
+				}
+				break;
+
+			default:
+				throw new ArgumentException( $"Unknown identity type '{config.Identity}'. Supported values: ApplicationPoolIdentity, LocalSystem, LocalService, NetworkService, SpecificUser." );
 		}
 	}
 
@@ -956,23 +1031,32 @@ public sealed class IisTaskHandle : IDisposable
 		// https://learn.microsoft.com/en-us/troubleshoot/developer/webapps/iis/www-authentication-authorization/default-permissions-user-rights
 		// https://stackoverflow.com/questions/51277338/remove-users-group-permission-for-folder-inside-programdata
 
-		var appPoolIdentities = _state.AppPoolNames.Select( x => $"IIS AppPool\\{x.Value}" ).ToArray();
+		// Get the actual identities used by the application pools
+		var appPoolIdentities = new List<string>();
+		
+		foreach ( var appPoolConfig in config.ApplicationPools )
+		{
+			var identityName = GetAppPoolIdentityName( appPoolConfig, _state.AppPoolNames[appPoolConfig.Name] );
+			if ( identityName != null )
+				appPoolIdentities.Add( identityName );
+		}
 
-		string[] identities = config.PermitIusr ? appPoolIdentities.Concat( ["IUSR"] ).ToArray() : appPoolIdentities;
+		var appPoolIdentitiesArray = appPoolIdentities.ToArray();
+		string[] identities = config.PermitIusr ? appPoolIdentitiesArray.Concat( ["IUSR"] ).ToArray() : appPoolIdentitiesArray;
 
 		var allocDir = new DirectoryInfo( _taskConfig!.AllocDir );
 
 		var builtinUsersSid = TryGetSid( WellKnownSidType.BuiltinUsersSid );
 		var authenticatedUserSid = TryGetSid( WellKnownSidType.AuthenticatedUserSid );
 
-		SetupDirectory( appPoolIdentities, @"alloc", null, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
-		SetupDirectory( appPoolIdentities, @"alloc\data", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
-		SetupDirectory( appPoolIdentities, @"alloc\logs", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
-		SetupDirectory( appPoolIdentities, @"alloc\tmp", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
+		SetupDirectory( appPoolIdentitiesArray, @"alloc", null, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
+		SetupDirectory( appPoolIdentitiesArray, @"alloc\data", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
+		SetupDirectory( appPoolIdentitiesArray, @"alloc\logs", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
+		SetupDirectory( appPoolIdentitiesArray, @"alloc\tmp", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
 		SetupDirectory( null, $@"{_taskConfig.Name}\private", null, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
 		SetupDirectory( identities, $@"{_taskConfig.Name}\local", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
-		SetupDirectory( appPoolIdentities, $@"{_taskConfig.Name}\secrets", FileSystemRights.Read, InheritanceFlags.ObjectInherit, PropagationFlags.InheritOnly );
-		SetupDirectory( appPoolIdentities, $@"{_taskConfig.Name}\tmp", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
+		SetupDirectory( appPoolIdentitiesArray, $@"{_taskConfig.Name}\secrets", FileSystemRights.Read, InheritanceFlags.ObjectInherit, PropagationFlags.InheritOnly );
+		SetupDirectory( appPoolIdentitiesArray, $@"{_taskConfig.Name}\tmp", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
 
 		void SetupDirectory ( string[]? identities, string subDirectory, FileSystemRights? fileSystemRights, InheritanceFlags inheritanceFlags, PropagationFlags propagationFlags )
 		{
@@ -1014,6 +1098,19 @@ public sealed class IisTaskHandle : IDisposable
 			// Apply the new ACL
 			directory.SetAccessControl( acl );
 		}
+	}
+
+	private static string GetAppPoolIdentityName ( DriverTaskConfigApplicationPool appPoolConfig, string appPoolName )
+	{
+		return appPoolConfig.Identity switch
+		{
+			"ApplicationPoolIdentity" => $"IIS AppPool\\{appPoolName}",
+			"LocalSystem" => "NT AUTHORITY\\SYSTEM",
+			"LocalService" => "NT AUTHORITY\\LOCAL SERVICE", 
+			"NetworkService" => "NT AUTHORITY\\NETWORK SERVICE",
+			"SpecificUser" => appPoolConfig.Username ?? throw new ArgumentException( "Username is required when identity is set to 'SpecificUser'." ),
+			_ => throw new ArgumentOutOfRangeException( nameof( appPoolConfig.Identity ), $"Identity type '{appPoolConfig.Identity}' is not supported." )
+		};
 	}
 
 	private SecurityIdentifier? TryGetSid ( WellKnownSidType sidType )

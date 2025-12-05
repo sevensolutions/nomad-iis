@@ -27,6 +27,15 @@ public sealed class DriverConfig
 
 	[ConfigurationCollectionField( "procdumps", "procdump", 0, 1 )]
 	public DriverConfigProcdump[] Procdumps { get; set; } = default!;
+
+	[ConfigurationField( "allowed_apppool_identities" )]
+	public string[]? AllowedAppPoolIdentities { get; set; } = ["ApplicationPoolIdentity"];
+
+	[ConfigurationField( "allowed_apppool_users" )]
+	public string[]? AllowedAppPoolUsers { get; set; }
+
+	[ConfigurationCollectionField( "applicationPools", "applicationPool", 0 )]
+	public DriverConfigApplicationPool[] ApplicationPools { get; set; } = default!;
 }
 
 public sealed class DriverConfigProcdump
@@ -38,4 +47,17 @@ public sealed class DriverConfigProcdump
 	[DefaultValue( false )]
 	[ConfigurationField( "accept_eula" )]
 	public bool AcceptEula { get; set; }
+}
+
+public sealed class DriverConfigApplicationPool
+{
+	[ConfigurationField( "identity" )]
+	[DefaultValue( "ApplicationPoolIdentity" )]
+	public string Identity { get; set; } = "ApplicationPoolIdentity";
+
+	[ConfigurationField( "username" )]
+	public string? Username { get; set; }
+
+	[ConfigurationField( "password" )]
+	public string? Password { get; set; }
 }
