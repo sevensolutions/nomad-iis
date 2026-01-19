@@ -16,14 +16,14 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Grpc.AspNetCore" Version="2.71.0" />
-		<PackageReference Include="Grpc.AspNetCore.HealthChecks" Version="2.71.0" />
-		<PackageReference Include="Grpc.AspNetCore.Server.Reflection" Version="2.71.0" />
+		<PackageReference Include="Grpc.AspNetCore" Version="2.76.0" />
+		<PackageReference Include="Grpc.AspNetCore.HealthChecks" Version="2.76.0" />
+		<PackageReference Include="Grpc.AspNetCore.Server.Reflection" Version="2.76.0" />
 		<PackageReference Include="MessagePack" Version="3.1.4" />
 		<PackageReference Include="Microsoft.Web.Administration" Version="11.1.0" />
-		<PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
-		<PackageReference Include="System.Management" Version="10.0.0" />
-		<PackageReference Include="System.Threading.Channels" Version="10.0.0" />
+		<PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+		<PackageReference Include="System.Management" Version="10.0.2" />
+		<PackageReference Include="System.Threading.Channels" Version="10.0.2" />
 	</ItemGroup>
 
 	<ItemGroup Condition="$(DefineConstants.Contains('MANAGEMENT_API'))">
