@@ -32,7 +32,7 @@ jobs:
     - name: Install .NET Core
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 9.0.x
+        dotnet-version: 10.0.x
 
     # Extract and publish version
     - name: extract version
@@ -56,7 +56,7 @@ jobs:
     - name: Copy to output folder
       run: |
         mkdir dist
-        copy .\src\NomadIIS\bin\Release\net9.0\win-x64\publish\nomad_iis.exe .\dist\nomad_iis.exe
+        copy .\src\NomadIIS\bin\Release\net10.0\win-x64\publish\nomad_iis.exe .\dist\nomad_iis.exe
 
     # Upload the artifact
     - name: Upload build artifacts

@@ -53,7 +53,7 @@ public sealed class NomadIISFixture : IAsyncLifetime
 
 		var pluginDir = Environment.GetEnvironmentVariable( "TEST_PLUGIN_DIRECTORY" );
 		if ( string.IsNullOrEmpty( pluginDir ) )
-			pluginDir = @"..\..\..\..\NomadIIS\bin\Debug\net9.0";
+			pluginDir = @"..\..\..\..\NomadIIS\bin\Debug\net10.0";
 
 		var pluginDirectory = Path.GetFullPath( pluginDir );
 
