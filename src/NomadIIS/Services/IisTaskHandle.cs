@@ -735,7 +735,7 @@ public sealed class IisTaskHandle : IDisposable
 			.GetEnvironmentVariables( EnvironmentVariableTarget.Process )
 			.Keys.Cast<string>().ToHashSet();
 
-		var userVariables = new Dictionary<string, string>();
+		var userVariables = new Dictionary<string, string>( StringComparer.OrdinalIgnoreCase );
 
 		foreach ( var nomadEnv in taskConfig.Env )
 		{
