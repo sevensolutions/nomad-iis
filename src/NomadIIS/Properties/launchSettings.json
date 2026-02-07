@@ -11,7 +11,7 @@
 		"Nomad (Dev)": {
 			"commandName": "Executable",
 			"executablePath": "$(MSBuildProjectDirectory)\\..\\..\\nomad\\nomad.exe",
-			"commandLineArgs": "agent -dev -config=$(MSBuildProjectDirectory)\\..\\..\\examples\\agent.dev.hcl -plugin-dir=$(MSBuildProjectDirectory)\\bin\\Debug\\net9.0",
+			"commandLineArgs": "agent -dev -config=$(MSBuildProjectDirectory)\\..\\..\\examples\\agent.dev.hcl -plugin-dir=$(MSBuildProjectDirectory)\\bin\\Debug\\net10.0",
 			"environmentVariables": {
 				"ASPNETCORE_ENVIRONMENT": "Development"
 			}
@@ -19,7 +19,7 @@
 		"Nomad": {
 			"commandName": "Executable",
 			"executablePath": "$(MSBuildProjectDirectory)\\..\\..\\nomad\\nomad.exe",
-			"commandLineArgs": "agent -config=$(MSBuildProjectDirectory)\\..\\..\\examples\\agent.hcl -plugin-dir=$(MSBuildProjectDirectory)\\bin\\Debug\\net9.0 -data-dir=$(MSBuildProjectDirectory)\\..\\..\\nomad\\data",
+			"commandLineArgs": "agent -config=$(MSBuildProjectDirectory)\\..\\..\\examples\\agent.hcl -plugin-dir=$(MSBuildProjectDirectory)\\bin\\Debug\\net10.0 -data-dir=$(MSBuildProjectDirectory)\\..\\..\\nomad\\data",
 			"environmentVariables": {
 				"ASPNETCORE_ENVIRONMENT": "Development"
 			}
