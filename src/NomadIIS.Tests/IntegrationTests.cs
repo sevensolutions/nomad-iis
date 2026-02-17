@@ -1110,4 +1110,300 @@ public class IntegrationTests : IClassFixture<NomadIISFixture>
 
 		_output.WriteLine( "Job stopped." );
 	}
+
+	[Fact]
+	public async Task JobWithCertificatePemFiles ()
+	{
+		var certFile = Path.GetFullPath( @"Data\certificates\cert1.pem" );
+		var keyFile = Path.GetFullPath( @"Data\certificates\cert1.key.pem" );
+
+		var jobHcl = $$"""
+			job "https-job-with-pem-cert" {
+			  datacenters = ["dc1"]
+			  type = "service"
+
+			  group "app" {
+			    count = 1
+
+			    network {
+			      port "httplabel" {}
+			    }
+
+			    task "app" {
+			      driver = "iis"
+
+			      config {
+			        application {
+			          path = "C:\\inetpub\\wwwroot"
+			        }
+
+			        binding {
+			          type = "https"
+			          port = "httplabel"
+
+			          certificate {
+			            cert_file = "{{certFile.Replace( "\\", "\\\\" )}}"
+			            key_file = "{{keyFile.Replace( "\\", "\\\\" )}}"
+			          }
+			        }
+			      }
+			    }
+			  }
+			}
+			""";
+
+		_output.WriteLine( "Submitting job..." );
+
+		var jobId = await _fixture.ScheduleJobAsync( jobHcl );
+
+		_output.WriteLine( $"Job Id: {jobId}" );
+
+		var allocations = await _fixture.ListJobAllocationsAsync( jobId );
+
+		if ( allocations is null || allocations.Length == 0 )
+			Assert.Fail( "No job allocations" );
+
+		var poolAndWebsiteName = $"nomad-{allocations[0].Id}-app";
+
+		_output.WriteLine( $"AppPool and Website Name: {poolAndWebsiteName}" );
+
+		_fixture.AccessIIS( iis =>
+		{
+			iis.AppPool( poolAndWebsiteName ).ShouldExist();
+			iis.Website( poolAndWebsiteName ).ShouldExist();
+
+			iis.Website( poolAndWebsiteName ).Binding( 0 ).IsHttps();
+		} );
+
+		var allocation = await _fixture.ReadAllocationAsync( allocations[0].Id );
+
+		Assert.NotNull( allocation );
+
+		var appPort = allocation.Resources.Networks[0].DynamicPorts.First( x => x.Label == "httplabel" ).Value;
+
+		var serverCertificate = _fixture.GetServerCertificate( "localhost", appPort );
+
+		Assert.NotNull( serverCertificate );
+
+		Assert.Equal( "CN=localhost", serverCertificate.Subject );
+
+		_output.WriteLine( "Stopping job..." );
+
+		await _fixture.StopJobAsync( jobId );
+
+		_output.WriteLine( "Job stopped." );
+
+		_fixture.AccessIIS( iis =>
+		{
+			iis.AppPool( poolAndWebsiteName ).ShouldNotExist();
+			iis.Website( poolAndWebsiteName ).ShouldNotExist();
+		} );
+	}
+
+	[Fact]
+	public async Task JobWithQueueLengthAndTimeouts ()
+	{
+		var jobHcl = """
+			job "job-with-queue-and-timeouts" {
+			  datacenters = ["dc1"]
+			  type = "service"
+
+			  group "app" {
+			    count = 1
+
+			    network {
+			      port "httplabel" {}
+			    }
+
+			    task "app" {
+			      driver = "iis"
+
+			      config {
+			        application {
+			          path = "C:\\inetpub\\wwwroot"
+			        }
+
+			        applicationPool {
+			          queue_length = 2000
+			          start_time_limit = "2m"
+			          shutdown_time_limit = "1m30s"
+			        }
+
+			        binding {
+			          type = "http"
+			          port = "httplabel"
+			        }
+			      }
+			    }
+			  }
+			}
+			""";
+
+		_output.WriteLine( "Submitting job..." );
+
+		var jobId = await _fixture.ScheduleJobAsync( jobHcl );
+
+		_output.WriteLine( $"Job Id: {jobId}" );
+
+		var allocations = await _fixture.ListJobAllocationsAsync( jobId );
+
+		if ( allocations is null || allocations.Length == 0 )
+			Assert.Fail( "No job allocations" );
+
+		var poolAndWebsiteName = $"nomad-{allocations[0].Id}-app";
+
+		_output.WriteLine( $"AppPool and Website Name: {poolAndWebsiteName}" );
+
+		_fixture.AccessIIS( iis =>
+		{
+			var appPool = iis.AppPool( poolAndWebsiteName );
+
+			appPool.ShouldExist();
+			appPool.ShouldHaveQueueLength( 2000 );
+			appPool.ShouldHaveStartTimeLimit( TimeSpan.FromMinutes( 2 ) );
+			appPool.ShouldHaveShutdownTimeLimit( new TimeSpan( 0, 1, 30 ) );
+		} );
+
+		_output.WriteLine( "Stopping job..." );
+
+		await _fixture.StopJobAsync( jobId );
+
+		_output.WriteLine( "Job stopped." );
+	}
+
+	[Fact]
+	public async Task JobWith32BitAppOnWin64 ()
+	{
+		var jobHcl = """
+			job "job-with-32bit-app" {
+			  datacenters = ["dc1"]
+			  type = "service"
+
+			  group "app" {
+			    count = 1
+
+			    network {
+			      port "httplabel" {}
+			    }
+
+			    task "app" {
+			      driver = "iis"
+
+			      config {
+			        application {
+			          path = "C:\\inetpub\\wwwroot"
+			        }
+
+			        applicationPool {
+			          enable_32bit_app_on_win64 = true
+			        }
+
+			        binding {
+			          type = "http"
+			          port = "httplabel"
+			        }
+			      }
+			    }
+			  }
+			}
+			""";
+
+		_output.WriteLine( "Submitting job..." );
+
+		var jobId = await _fixture.ScheduleJobAsync( jobHcl );
+
+		_output.WriteLine( $"Job Id: {jobId}" );
+
+		var allocations = await _fixture.ListJobAllocationsAsync( jobId );
+
+		if ( allocations is null || allocations.Length == 0 )
+			Assert.Fail( "No job allocations" );
+
+		var poolAndWebsiteName = $"nomad-{allocations[0].Id}-app";
+
+		_output.WriteLine( $"AppPool and Website Name: {poolAndWebsiteName}" );
+
+		_fixture.AccessIIS( iis =>
+		{
+			var appPool = iis.AppPool( poolAndWebsiteName );
+
+			appPool.ShouldExist();
+			appPool.ShouldHaveEnable32BitAppOnWin64( true );
+		} );
+
+		_output.WriteLine( "Stopping job..." );
+
+		await _fixture.StopJobAsync( jobId );
+
+		_output.WriteLine( "Job stopped." );
+	}
+
+	[Fact]
+	public async Task JobWithMultipleEnvironmentVariables ()
+	{
+		var jobHcl = """
+			job "job-with-multiple-env-vars" {
+			  datacenters = ["dc1"]
+			  type = "service"
+
+			  group "app" {
+			    count = 1
+
+			    network {
+			      port "httplabel" {}
+			    }
+
+			    task "app" {
+			      driver = "iis"
+
+			      config {
+			        application {
+			          path = "C:\\inetpub\\wwwroot"
+			        }
+
+			        binding {
+			          type = "http"
+			          port = "httplabel"
+			        }
+			      }
+
+			      env {
+			        VAR1 = "value1"
+			        VAR2 = "value2"
+			        VAR3 = "special!@#$%^&*()chars"
+			      }
+			    }
+			  }
+			}
+			""";
+
+		_output.WriteLine( "Submitting job..." );
+
+		var jobId = await _fixture.ScheduleJobAsync( jobHcl );
+
+		_output.WriteLine( $"Job Id: {jobId}" );
+
+		var allocations = await _fixture.ListJobAllocationsAsync( jobId );
+
+		if ( allocations is null || allocations.Length == 0 )
+			Assert.Fail( "No job allocations" );
+
+		var poolAndWebsiteName = $"nomad-{allocations[0].Id}-app";
+
+		_output.WriteLine( $"AppPool and Website Name: {poolAndWebsiteName}" );
+
+		_fixture.AccessIIS( iis =>
+		{
+			iis.AppPool( poolAndWebsiteName ).ShouldExist();
+			iis.AppPool( poolAndWebsiteName ).ShouldHaveEnvironmentVariable( "VAR1", "value1" );
+			iis.AppPool( poolAndWebsiteName ).ShouldHaveEnvironmentVariable( "VAR2", "value2" );
+			iis.AppPool( poolAndWebsiteName ).ShouldHaveEnvironmentVariable( "VAR3", "special!@#$%^&*()chars" );
+		} );
+
+		_output.WriteLine( "Stopping job..." );
+
+		await _fixture.StopJobAsync( jobId );
+
+		_output.WriteLine( "Job stopped." );
+	}
 }

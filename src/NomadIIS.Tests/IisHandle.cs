@@ -86,6 +86,26 @@ public sealed class IisAppPoolHandle
 		var appPool = GetApplicationPool();
 		Assert.Equal( value, appPool.Recycling.PeriodicRestart.Time );
 	}
+	public void ShouldHaveQueueLength ( long value )
+	{
+		var appPool = GetApplicationPool();
+		Assert.Equal( value, appPool.QueueLength );
+	}
+	public void ShouldHaveStartTimeLimit ( TimeSpan value )
+	{
+		var appPool = GetApplicationPool();
+		Assert.Equal( value, appPool.ProcessModel.StartupTimeLimit );
+	}
+	public void ShouldHaveShutdownTimeLimit ( TimeSpan value )
+	{
+		var appPool = GetApplicationPool();
+		Assert.Equal( value, appPool.ProcessModel.ShutdownTimeLimit );
+	}
+	public void ShouldHaveEnable32BitAppOnWin64 ( bool value )
+	{
+		var appPool = GetApplicationPool();
+		Assert.Equal( value, appPool.Enable32BitAppOnWin64 );
+	}
 	public void ShouldHaveIdentityType ( ProcessModelIdentityType identityType )
 	{
 		var appPool = GetApplicationPool();
