@@ -1406,4 +1406,158 @@ public class IntegrationTests : IClassFixture<NomadIISFixture>
 
 		_output.WriteLine( "Job stopped." );
 	}
+
+	[Fact]
+	public async Task JobWithSNIBinding ()
+	{
+		var certificateFile = Path.GetTempFileName() + ".pfx";
+
+		var certificateThumbprint = CertificateHelper.GenerateSelfSignedCertificate(
+			"SNITest", TimeSpan.FromDays( 2 ), certificateFile, "super#secure" );
+
+		var jobHcl = $$"""
+			job "job-with-sni" {
+			  datacenters = ["dc1"]
+			  type = "service"
+
+			  group "app" {
+			    count = 1
+
+			    network {
+			      port "httplabel" {
+			        static = 8889
+			      }
+			    }
+
+			    task "app" {
+			      driver = "iis"
+
+			      config {
+			        application {
+			          path = "C:\\inetpub\\wwwroot"
+			        }
+
+			        binding {
+			          type = "https"
+			          port = "httplabel"
+			          hostname = "snitest.local"
+
+			          certificate {
+			            pfx_file = "{{certificateFile.Replace( "\\", "\\\\" )}}"
+			            password = "super#secure"
+			          }
+			        }
+			      }
+			    }
+			  }
+			}
+			""";
+
+		_output.WriteLine( "Submitting job..." );
+
+		var jobId = await _fixture.ScheduleJobAsync( jobHcl );
+
+		_output.WriteLine( $"Job Id: {jobId}" );
+
+		var allocations = await _fixture.ListJobAllocationsAsync( jobId );
+
+		if ( allocations is null || allocations.Length == 0 )
+			Assert.Fail( "No job allocations" );
+
+		var poolAndWebsiteName = $"nomad-{allocations[0].Id}-app";
+
+		_output.WriteLine( $"AppPool and Website Name: {poolAndWebsiteName}" );
+
+		_fixture.AccessIIS( iis =>
+		{
+			iis.AppPool( poolAndWebsiteName ).ShouldExist();
+			iis.Website( poolAndWebsiteName ).ShouldExist();
+
+			var binding = iis.Website( poolAndWebsiteName ).Binding( 0 );
+			binding.IsHttps();
+			binding.HasHostname( "snitest.local" );
+			binding.CertificateThumbprintIs( certificateThumbprint );
+		} );
+
+		_output.WriteLine( "Stopping job..." );
+
+		await _fixture.StopJobAsync( jobId );
+
+		_output.WriteLine( "Job stopped." );
+
+		_fixture.AccessIIS( iis =>
+		{
+			iis.AppPool( poolAndWebsiteName ).ShouldNotExist();
+			iis.Website( poolAndWebsiteName ).ShouldNotExist();
+		} );
+	}
+
+	[Fact]
+	public async Task JobWithIPAddressBinding ()
+	{
+		var jobHcl = """
+			job "job-with-ip-binding" {
+			  datacenters = ["dc1"]
+			  type = "service"
+
+			  group "app" {
+			    count = 1
+
+			    network {
+			      port "httplabel" {}
+			    }
+
+			    task "app" {
+			      driver = "iis"
+
+			      config {
+			        application {
+			          path = "C:\\inetpub\\wwwroot"
+			        }
+
+			        binding {
+			          type = "http"
+			          port = "httplabel"
+			          ip = "*"
+			        }
+			      }
+			    }
+			  }
+			}
+			""";
+
+		_output.WriteLine( "Submitting job..." );
+
+		var jobId = await _fixture.ScheduleJobAsync( jobHcl );
+
+		_output.WriteLine( $"Job Id: {jobId}" );
+
+		var allocations = await _fixture.ListJobAllocationsAsync( jobId );
+
+		if ( allocations is null || allocations.Length == 0 )
+			Assert.Fail( "No job allocations" );
+
+		var poolAndWebsiteName = $"nomad-{allocations[0].Id}-app";
+
+		_output.WriteLine( $"AppPool and Website Name: {poolAndWebsiteName}" );
+
+		_fixture.AccessIIS( iis =>
+		{
+			iis.AppPool( poolAndWebsiteName ).ShouldExist();
+			iis.Website( poolAndWebsiteName ).ShouldExist();
+			iis.Website( poolAndWebsiteName ).Binding( 0 ).HasIPAddress( "*" );
+		} );
+
+		_output.WriteLine( "Stopping job..." );
+
+		await _fixture.StopJobAsync( jobId );
+
+		_output.WriteLine( "Job stopped." );
+
+		_fixture.AccessIIS( iis =>
+		{
+			iis.AppPool( poolAndWebsiteName ).ShouldNotExist();
+			iis.Website( poolAndWebsiteName ).ShouldNotExist();
+		} );
+	}
 }

@@ -206,6 +206,15 @@ public sealed class IisWebsiteBindingHandle
 			Assert.Fail( $"Binding hostname should be {hostname}, but is {_binding.Host}." );
 	}
 
+	public void HasIPAddress ( string ipAddress )
+	{
+		var bindingInfo = _binding.BindingInformation.Split( ':' );
+		var actualIP = bindingInfo.Length > 0 ? bindingInfo[0] : string.Empty;
+		
+		if ( actualIP != ipAddress )
+			Assert.Fail( $"Binding IP address should be {ipAddress}, but is {actualIP}." );
+	}
+
 	public void CertificateThumbprintIs ( string certificateThumbprint )
 	{
 		if ( _binding.CertificateHash is null || _binding.CertificateHash.Length == 0 )
