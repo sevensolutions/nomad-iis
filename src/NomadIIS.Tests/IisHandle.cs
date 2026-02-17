@@ -208,8 +208,13 @@ public sealed class IisWebsiteBindingHandle
 
 	public void HasIPAddress ( string ipAddress )
 	{
+		// IIS binding information format: IP:Port:Hostname
 		var bindingInfo = _binding.BindingInformation.Split( ':' );
-		var actualIP = bindingInfo.Length > 0 ? bindingInfo[0] : string.Empty;
+		
+		if ( bindingInfo.Length != 3 )
+			Assert.Fail( $"Binding information has unexpected format: {_binding.BindingInformation}" );
+		
+		var actualIP = bindingInfo[0];
 		
 		if ( actualIP != ipAddress )
 			Assert.Fail( $"Binding IP address should be {ipAddress}, but is {actualIP}." );

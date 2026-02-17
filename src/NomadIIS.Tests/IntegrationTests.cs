@@ -1117,6 +1117,12 @@ public class IntegrationTests : IClassFixture<NomadIISFixture>
 		var certFile = Path.GetFullPath( @"Data\certificates\cert1.pem" );
 		var keyFile = Path.GetFullPath( @"Data\certificates\cert1.key.pem" );
 
+		// Verify test certificate files exist
+		if ( !File.Exists( certFile ) )
+			Assert.Fail( $"Test certificate file not found: {certFile}" );
+		if ( !File.Exists( keyFile ) )
+			Assert.Fail( $"Test certificate key file not found: {keyFile}" );
+
 		var jobHcl = $$"""
 			job "https-job-with-pem-cert" {
 			  datacenters = ["dc1"]
