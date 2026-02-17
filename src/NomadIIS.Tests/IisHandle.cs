@@ -139,6 +139,12 @@ public sealed class IisWebsiteHandle
 			Assert.Fail( $"Website with name \"{_name}\" exists but shouldn't." );
 	}
 
+	public void ShouldHaveBindingCount ( int count )
+	{
+		var website = GetWebsite();
+		Assert.Equal( count, website.Bindings.Count );
+	}
+
 	public IisWebsiteBindingHandle Binding ( int index )
 		=> new IisWebsiteBindingHandle( GetWebsite().Bindings[index] );
 
@@ -172,6 +178,12 @@ public sealed class IisWebsiteBindingHandle
 	{
 		if ( _binding.Protocol is null || _binding.Protocol != "https" )
 			Assert.Fail( "Binding is not https but should be." );
+	}
+
+	public void HasHostname ( string hostname )
+	{
+		if ( _binding.Host != hostname )
+			Assert.Fail( $"Binding hostname should be {hostname}, but is {_binding.Host}." );
 	}
 
 	public void CertificateThumbprintIs ( string certificateThumbprint )
@@ -208,6 +220,14 @@ public sealed class IisApplicationHandle
 		var application = GetApplication();
 
 		Assert.Equal( poolName, application.ApplicationPoolName );
+	}
+	public void ShouldHaveVirtualDirectory ( string virtualDirectoryPath )
+	{
+		var application = GetApplication();
+		var vdir = application.VirtualDirectories.FirstOrDefault( x => x.Path == virtualDirectoryPath );
+
+		if ( vdir is null )
+			Assert.Fail( $"Application \"{_path}\" doesn't have a virtual directory with path \"{virtualDirectoryPath}\"." );
 	}
 
 	private Application GetApplication ()
