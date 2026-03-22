@@ -829,6 +829,9 @@ public sealed class IisTaskHandle : IDisposable
 							if ( !File.Exists( certificateFilePath ) )
 								throw new FileNotFoundException( $"Couldn't find certificate file {certificateFilePath}." );
 
+							if ( new FileInfo( certificateFilePath ).Length == 0 )
+								throw new Exception( $"Certificate file: {certificateFilePath} contains 0 bytes.");
+
 							usedCertificate = await CertificateHelper.InstallPfxCertificateAsync(
 								certificateFilePath, certificateBlock.Password );
 
