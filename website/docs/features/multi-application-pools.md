@@ -36,18 +36,18 @@ job "multi-pool-example" {
 
       config {
         # highlight-start
-        applicationPool {
+        application_pool {
           #name = "default" # Can be omitted, because it's the default
           managed_runtime_version = "None"
           start_mode = "AlwaysRunning"
           identity = "ApplicationPoolIdentity"
         }
-        applicationPool {
+        application_pool {
           name = "appA"
           start_mode = "AlwaysRunning"
           identity = "NetworkService"
         }
-        applicationPool {
+        application_pool {
           name = "appB"
           start_mode = "AlwaysRunning"
           identity = "SpecificUser"
@@ -64,7 +64,7 @@ job "multi-pool-example" {
           alias = "/app-a"
           path = "local/path-to-appA"
           # highlight-next-line
-          application_pool = "appA" # References the applicationPool name
+          application_pool = "appA" # References the application_pool name
         }
         application {
           alias = "/app-b"
@@ -110,21 +110,21 @@ When using `SpecificUser` identity:
 
 ```hcl
 config {
-  applicationPool {
+  application_pool {
     name = "web"
     identity = "ApplicationPoolIdentity" # Default IIS AppPool identity
   }
-  applicationPool {
+  application_pool {
     name = "api"
     identity = "NetworkService" # Can access network resources
   }
-  applicationPool {
+  application_pool {
     name = "backend"
     identity = "SpecificUser"
     username = "DOMAIN\\ServiceAccount"
     password = "SecretPassword"
   }
-  applicationPool {
+  application_pool {
     name = "gmsa"
     identity = "SpecificUser"
     username = "DOMAIN\\GMSAAccount$" # Group Managed Service Account
