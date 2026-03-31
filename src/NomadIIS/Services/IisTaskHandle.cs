@@ -89,6 +89,13 @@ public sealed class IisTaskHandle : IDisposable
 
 			await _owner.LockAsync( async handle =>
 			{
+				// Register service auto-start providers in applicationHost.config
+				// This must happen before creating applications that reference them.
+				EnsureServiceAutoStartProviders(
+					handle.ServerManager, config.ServiceAutoStartProviders, _logger );
+
+				_state.ServiceAutoStartProviderNames = config.ServiceAutoStartProviders?.Select( p => p.Name ).ToList();
+
 				var appPools = new Dictionary<string, ApplicationPool>();
 
 				// Create AppPools
@@ -356,6 +363,24 @@ public sealed class IisTaskHandle : IDisposable
 					var appPool = FindApplicationPool( handle.ServerManager, appPoolName.Value );
 					if ( appPool is not null )
 						handle.ServerManager.ApplicationPools.Remove( appPool );
+				}
+			}
+
+			// Clean up service auto-start providers that are no longer referenced
+			// by any other application after our site/applications have been removed.
+			if ( _state.ServiceAutoStartProviderNames is not null && _state.ServiceAutoStartProviderNames.Count > 0 )
+			{
+				try
+				{
+					var providersToCleanup = _state.ServiceAutoStartProviderNames
+						.Select( name => new DriverTaskConfigServiceAutoStartProvider { Name = name, Type = string.Empty } )
+						.ToArray();
+
+					RemoveServiceAutoStartProviders( handle.ServerManager, providersToCleanup, _logger );
+				}
+				catch ( Exception ex )
+				{
+					_logger.LogWarning( ex, "Failed to clean up service auto-start providers." );
 				}
 			}
 
@@ -630,7 +655,7 @@ public sealed class IisTaskHandle : IDisposable
 		foreach ( var env in GetTaskConfigEnvironmentVariables( taskConfig ) )
 			AddEnvironmentVariable( envVarsCollection, env.Key, env.Value );
 
-		AddExtensions(appPool, config);
+		AddExtensions( appPool, config );
 
 		return appPool;
 
@@ -655,12 +680,12 @@ public sealed class IisTaskHandle : IDisposable
 		// Validate identity is allowed
 		if ( allowedIdentities.Length == 0 )
 		{
-			throw new ArgumentException($"Application pool identity '{config.Identity}' is not allowed. No identities are allowed.");
+			throw new ArgumentException( $"Application pool identity '{config.Identity}' is not allowed. No identities are allowed." );
 		}
 
-		if ( !allowedIdentities.Contains(config.Identity) )
+		if ( !allowedIdentities.Contains( config.Identity ) )
 		{
-			throw new ArgumentException($"Application pool identity '{config.Identity}' is not allowed. Allowed identities: {string.Join(", ", allowedIdentities)}");
+			throw new ArgumentException( $"Application pool identity '{config.Identity}' is not allowed. Allowed identities: {string.Join( ", ", allowedIdentities )}" );
 		}
 
 		// Set the identity based on configuration
@@ -698,7 +723,7 @@ public sealed class IisTaskHandle : IDisposable
 				{
 					var isWildcardAllowed = allowedUsers.Contains( "*" );
 					var isUserExplicitlyAllowed = allowedUsers.Contains( config.Username );
-					
+
 					if ( !isWildcardAllowed && !isUserExplicitlyAllowed )
 					{
 						throw new ArgumentException( $"Application pool user '{config.Username}' is not allowed. Allowed users: {string.Join( ", ", allowedUsers )}" );
@@ -707,7 +732,7 @@ public sealed class IisTaskHandle : IDisposable
 
 				appPool.ProcessModel.IdentityType = ProcessModelIdentityType.SpecificUser;
 				appPool.ProcessModel.UserName = config.Username;
-				
+
 				// Password is optional for GMSA accounts
 				if ( !string.IsNullOrWhiteSpace( config.Password ) )
 				{
@@ -720,13 +745,118 @@ public sealed class IisTaskHandle : IDisposable
 		}
 	}
 
-	private static void AddExtensions( ConfigurationElement configurationElement, DriverTaskConfigExtendable taskConfig )
+	private static void AddExtensions ( ConfigurationElement configurationElement, DriverTaskConfigExtendable taskConfig )
 	{
 		if ( taskConfig.Extensions is null )
 			return;
 
 		foreach ( var extension in taskConfig.Extensions )
-			configurationElement.SetAttributeValue(extension.Name, extension.Value);
+			configurationElement.SetAttributeValue( extension.Name, extension.Value );
+	}
+
+	private static void EnsureServiceAutoStartProviders (
+		ServerManager serverManager,
+		DriverTaskConfigServiceAutoStartProvider[]? providers,
+		ILogger logger )
+	{
+		if ( providers is null || providers.Length == 0 )
+			return;
+
+		var config = serverManager.GetApplicationHostConfiguration();
+		var section = config.GetSection( "system.applicationHost/serviceAutoStartProviders" );
+		var collection = section.GetCollection();
+
+		foreach ( var provider in providers )
+		{
+			var existing = collection
+				.FirstOrDefault( e =>
+					string.Equals(
+						(string)e["name"],
+						provider.Name,
+						StringComparison.OrdinalIgnoreCase ) );
+
+			if ( existing is null )
+			{
+				logger.LogInformation(
+					"Adding service auto-start provider '{Name}' with type '{Type}'.",
+					provider.Name, provider.Type );
+
+				var element = collection.CreateElement( "add" );
+				element["name"] = provider.Name;
+				element["type"] = provider.Type;
+				collection.Add( element );
+			}
+			else if ( !string.Equals( (string)existing["type"], provider.Type, StringComparison.Ordinal ) )
+			{
+				logger.LogInformation(
+					"Updating service auto-start provider '{Name}' type from '{OldType}' to '{NewType}'.",
+					provider.Name, (string)existing["type"], provider.Type );
+
+				existing["type"] = provider.Type;
+			}
+			else
+			{
+				logger.LogDebug(
+					"Service auto-start provider '{Name}' already registered with correct type.",
+					provider.Name );
+			}
+		}
+	}
+
+	private static void RemoveServiceAutoStartProviders (
+		ServerManager serverManager,
+		DriverTaskConfigServiceAutoStartProvider[]? providers,
+		ILogger logger )
+	{
+		if ( providers is null || providers.Length == 0 )
+			return;
+
+		var config = serverManager.GetApplicationHostConfiguration();
+		var section = config.GetSection( "system.applicationHost/serviceAutoStartProviders" );
+		var collection = section.GetCollection();
+
+		foreach ( var provider in providers )
+		{
+			// Check if any other site/application still references this provider
+			var stillInUse = serverManager.Sites
+				.SelectMany( s => s.Applications )
+				.Any( a =>
+				{
+					try
+					{
+						var value = a.GetAttributeValue( "serviceAutoStartProvider" )?.ToString();
+						return string.Equals( value, provider.Name, StringComparison.OrdinalIgnoreCase );
+					}
+					catch
+					{
+						return false;
+					}
+				} );
+
+			if ( stillInUse )
+			{
+				logger.LogDebug(
+					"Service auto-start provider '{Name}' is still in use by another application, skipping removal.",
+					provider.Name );
+				continue;
+			}
+
+			var existing = collection
+				.FirstOrDefault( e =>
+					string.Equals(
+						(string)e["name"],
+						provider.Name,
+						StringComparison.OrdinalIgnoreCase ) );
+
+			if ( existing is not null )
+			{
+				logger.LogInformation(
+					"Removing service auto-start provider '{Name}'.",
+					provider.Name );
+
+				collection.Remove( existing );
+			}
+		}
 	}
 
 	private static IEnumerable<KeyValuePair<string, string>> GetTaskConfigEnvironmentVariables ( TaskConfig taskConfig )
@@ -961,7 +1091,7 @@ public sealed class IisTaskHandle : IDisposable
 					physicalVdirPath = Path.Combine( taskConfig.AllocDir, taskConfig.Name, physicalVdirPath );
 
 				var virtualDirectory = application.VirtualDirectories.Add( $"/{vdir.Alias}", physicalVdirPath );
-				AddExtensions(virtualDirectory, vdir);
+				AddExtensions( virtualDirectory, vdir );
 			}
 		}
 
@@ -1036,7 +1166,7 @@ public sealed class IisTaskHandle : IDisposable
 
 		// Get the actual identities used by the application pools
 		var appPoolIdentities = new List<string>();
-		
+
 		foreach ( var appPoolConfig in config.ApplicationPools )
 		{
 			var identityName = GetAppPoolIdentityName( appPoolConfig, _state.AppPoolNames[appPoolConfig.Name] );
@@ -1109,7 +1239,7 @@ public sealed class IisTaskHandle : IDisposable
 		{
 			"ApplicationPoolIdentity" => $"IIS AppPool\\{appPoolName}",
 			"LocalSystem" => "NT AUTHORITY\\SYSTEM",
-			"LocalService" => "NT AUTHORITY\\LOCAL SERVICE", 
+			"LocalService" => "NT AUTHORITY\\LOCAL SERVICE",
 			"NetworkService" => "NT AUTHORITY\\NETWORK SERVICE",
 			"SpecificUser" => appPoolConfig.Username ?? throw new ArgumentException( "Username is required when identity is set to 'SpecificUser'." ),
 			_ => throw new ArgumentOutOfRangeException( nameof( appPoolConfig.Identity ), $"Identity type '{appPoolConfig.Identity}' is not supported." )
