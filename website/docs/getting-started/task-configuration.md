@@ -4,36 +4,27 @@ sidebar_position: 5
 
 # Task Configuration
 
+:::caution
+In nomad-iis up to version including 0.19.x, the application pool block was named `applicationPool` (camelCase).
+In Version 0.20.0 this has been renamed to `application_pool` for consistency with all the other settings but `applicationPool` is still allowed. Both options will simply be merged together.
+The old one will be removed in the next version. Please make sure you migrate your workloads before upgrading to version 0.21.0.
+:::
+
 | Option                           | Type       | Required | Default Value | Description                                                                                                                                                                                                                                                                                                                                                               |
 | -------------------------------- | ---------- | -------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| _applicationPool_                | block list | no       | _none_        | Defines one more application pools. See _applicationPool_ schema below for details.                                                                                                                                                                                                                                                                                       |
+| ~~_applicationPool_~~            | block list | no       | _none_        | This option has been deprecated in version 0.20.0 and will finally be removed in 0.21.0. Please migrate to `application_pool`.                                                                                                                                                                                                                                                                                       |
+| _application_pool_               | block list | no       | _none_        | Defines one more application pools. See _application_Pool_ schema below for details.                                                                                                                                                                                                                                                                                       |
 | _application_                    | block list | yes      | _none_        | Defines one more applications. See _application_ schema below for details.                                                                                                                                                                                                                                                                                                |
 | target_website                   | string     | no       | _none_        | Specifies an existing target website. In this case the driver will not create a new website but instead use the existing one where it provisions the virtual applications only. Please read the details [here](../features/existing-website.md).                                                                                                                          |
-| ~~enable_udp_logging~~           | bool       | no       | false         | Enables a UDP log-sink your application can log to. Please read the details [here](../features/udp-logging.md).                                                                                                                                                                                                                                                           |
 | permit_iusr                      | bool       | no       | true          | Specifies whether you want to permit the [IUSR-account](https://learn.microsoft.com/en-us/iis/get-started/planning-for-security/understanding-built-in-user-and-group-accounts-in-iis#understanding-the-new-iusr-account) on the _local_ directory. When you disable this, you may need to tweak your _web.config_ a bit. Read [this](./faq.md#iusr-account) for details. |
 | _binding_                        | block list | yes      | _none_        | Defines one or two port bindings. See _binding_ schema below for details.                                                                                                                                                                                                                                                                                                 |
 | _service_auto_start_provider_    | block list | no       | _none_        | Registers one or more service auto-start providers in the global IIS `applicationHost.config`. See _service_auto_start_provider_ schema below for details.                                                                                                                                                                                                                |
-| ~~managed_pipeline_mode~~        | string     | no       | _IIS default_ | Valid options are _Integrated_ or _Classic_                                                                                                                                                                                                                                                                                                                               |
-| ~~enable_32bit_app_on_win64~~    | bool       | no       | _IIS default_ | When true, enables a 32-bit application to run on a computer that runs a 64-bit version of Windows.                                                                                                                                                                                                                                                                       |
-| ~~managed_runtime_version~~      | string     | no       | _IIS default_ | Valid options are _v4.0_, _v2.0_, _None_                                                                                                                                                                                                                                                                                                                                  |
-| ~~start_mode~~                   | string     | no       | _IIS default_ | Valid options are _OnDemand_ or _AlwaysRunning_                                                                                                                                                                                                                                                                                                                           |
-| ~~idle_timeout~~                 | string     | no       | _IIS default_ | The AppPool idle timeout in the form _HH:mm:ss_ or _[00w][00d][00h][00m][00s]_                                                                                                                                                                                                                                                                                            |
-| ~~disable_overlapped_recycle~~   | bool       | no       | _IIS default_ | Defines whether two AppPools are allowed to run while recycling                                                                                                                                                                                                                                                                                                           |
-| ~~periodic_restart~~             | string     | no       | _IIS default_ | The AppPool periodic restart interval in the form _HH:mm:ss_ or _[00w][00d][00h][00m][00s]_                                                                                                                                                                                                                                                                               |
-| ~~service_unavailable_response~~ | string     | no       | _IIS default_ | If this is set to `HttpLevel` and the app pool isn't running, HTTP.sys will return a 503 http-error. On the other hand if this is set to `TcpLevel` and the app pool isn't running, HTTP.sys will simply drop the connection. This may be useful when using external load balancers.                                                                                      |
-| ~~queue_length~~                 | number     | no       | _IIS default_ | Indicates to HTTP.sys how many requests to queue for an application pool before rejecting future requests.                                                                                                                                                                                                                                                                |
-| ~~start_time_limit~~             | string     | no       | _IIS default_ | Specifies the time in the form _[00w][00d][00h][00m][00s]_ that IIS waits for an application pool to start. If the application pool does not startup within the startupTimeLimit, the worker process is terminated and the rapid-fail protection count is incremented.                                                                                                    |
-| ~~shutdown_time_limit~~          | string     | no       | _IIS default_ | Specifies the time in the form _[00w][00d][00h][00m][00s]_ that the W3SVC service waits after it initiated a recycle. If the worker process does not shut down within the shutdownTimeLimit, it will be terminated by the W3SVC service.                                                                                                                                  |
 
-:::note
-Strikethrough configuration options have been removed in version 0.16.0. Please use the [`applicationPool` block](#applicationpool-block) instead.
-:::
-
-## `applicationPool` Block
+## `application_pool` Block
 
 :::info
 In nomad-iis up to version including 0.14.x, all application pool related settings were specified on the [root configuration](#task-configuration).
-Starting with version 0.15.0 you need to put these onto a dedicated `applicationPool` block but you can omit the name if you only need a single app pool. This will be the case most of the time.
+Starting with version 0.15.0 you need to put these onto a dedicated `application_pool` block but you can omit the name if you only need a single app pool. This will be the case most of the time.
 
 Please also read [this section](../features/multi-application-pools.md) for more details about using multiple application pools.
 
@@ -42,7 +33,7 @@ Please also read [this section](../features/multi-application-pools.md) for more
 
 ```hcl
 config {
-  applicationPool {
+  application_pool {
     managed_runtime_version = "None"
     identity = "NetworkService"
   }
@@ -87,43 +78,6 @@ Resource statistics (CPU/Memory usage) are currently only collected when the `id
 | service_auto_start_provider | string     | no       | _IIS default_ | Specifies the name of the autostart provider if service_auto_start_enabled is set to true. The referenced provider must be registered via a [`service_auto_start_provider` block](#service_auto_start_provider-block) in the task configuration. |
 | _virtual_directory_         | block list | no       | _none_        | Defines optional virtual directories below this application. See _virtual_directory_ schema below for details.                                                                             |
 | _extension_                 | block list | no       | _none_        | Allows for additional attributes for properties not explicitly supported. See _extension_ schema below for details.                                                                        |
-
-## `service_auto_start_provider` Block
-
-:::info
-This block registers a service auto-start provider in the global IIS `system.applicationHost/serviceAutoStartProviders` section of `applicationHost.config`. This is required when using the `service_auto_start_provider` option on an `application` block, as IIS needs to know which managed assembly to load for the named provider.
-
-The driver will automatically add or update the provider registration on task start, and remove it on task stop if no other application on the server still references it.
-:::
-
-| Option | Type   | Required | Default Value | Description                                                                                                                                                                                            |
-| ------ | ------ | -------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| name   | string | yes      | _none_        | The name of the auto-start provider. This is the value referenced by `service_auto_start_provider` in the `application` block.                                                                         |
-| type   | string | yes      | _none_        | The fully qualified managed type of the auto-start provider assembly (e.g. `MyNamespace.ApplicationPreload, MyAssembly`). The class must implement `System.Web.Hosting.IProcessHostPreloadClient`.      |
-
-<details>
-<summary>Short Example</summary>
-
-```hcl
-config {
-  service_auto_start_provider {
-    name = "MyPreloadProvider"
-    type = "MyNamespace.ApplicationPreload, MyAssembly"
-  }
-
-  applicationPool {
-    start_mode = "AlwaysRunning"
-  }
-
-  application {
-    path                        = "local"
-    service_auto_start_enabled  = true
-    service_auto_start_provider = "MyPreloadProvider"
-  }
-}
-```
-
-</details>
 
 ## `virtual_directory` Block
 
@@ -170,6 +124,43 @@ Also refer to this [advanced documentation](../features/https.md).
 | key_file        | string | no       | _none_        | Specifies the path to a local private key file in base64-encoded pkcs8 format. When using this option you also need to specify `cert_file`.                                                                                  |
 | use_self_signed | bool   | no       | false         | Set this to true if you want to use a self-signed certificate with a validity of one year. Important: This is not intended for production usage and should only be used for short lived tasks like UI- or Integration tests. |
 
+## `service_auto_start_provider` Block
+
+:::info
+This block registers a service auto-start provider in the global IIS `system.applicationHost/serviceAutoStartProviders` section of `applicationHost.config`. This is required when using the `service_auto_start_provider` option on an `application` block, as IIS needs to know which managed assembly to load for the named provider.
+
+The driver will automatically add or update the provider registration on task start, and remove it on task stop if no other application on the server still references it.
+:::
+
+| Option | Type   | Required | Default Value | Description                                                                                                                                                                                            |
+| ------ | ------ | -------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| name   | string | yes      | _none_        | The name of the auto-start provider. This is the value referenced by `service_auto_start_provider` in the `application` block.                                                                         |
+| type   | string | yes      | _none_        | The fully qualified managed type of the auto-start provider assembly (e.g. `MyNamespace.ApplicationPreload, MyAssembly`). The class must implement `System.Web.Hosting.IProcessHostPreloadClient`.      |
+
+<details>
+<summary>Short Example</summary>
+
+```hcl
+config {
+  service_auto_start_provider {
+    name = "MyPreloadProvider"
+    type = "MyNamespace.ApplicationPreload, MyAssembly"
+  }
+
+  applicationPool {
+    start_mode = "AlwaysRunning"
+  }
+
+  application {
+    path                        = "local"
+    service_auto_start_enabled  = true
+    service_auto_start_provider = "MyPreloadProvider"
+  }
+}
+```
+
+</details>
+
 ## Example
 
 :::note
@@ -203,7 +194,7 @@ job "static-sample-app" {
       }
 
       config {
-        applicationPool {
+        application_pool {
           identity = "ApplicationPoolIdentity"
         }
 

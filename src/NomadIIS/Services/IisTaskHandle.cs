@@ -241,7 +241,7 @@ public sealed class IisTaskHandle : IDisposable
 
 		// App pool names must be unique
 		if ( config.ApplicationPools.Select( x => x.Name ).Distinct().Count() != config.ApplicationPools.Length )
-			throw new ArgumentException( "Every applicationPool name must be unique." );
+			throw new ArgumentException( "Every application_pool name must be unique." );
 
 		// Validate app pool name length and remove unused app pools
 		foreach ( var appPool in config.ApplicationPools.ToArray() )
