@@ -79,43 +79,6 @@ Resource statistics (CPU/Memory usage) are currently only collected when the `id
 | _virtual_directory_         | block list | no       | _none_        | Defines optional virtual directories below this application. See _virtual_directory_ schema below for details.                                                                             |
 | _extension_                 | block list | no       | _none_        | Allows for additional attributes for properties not explicitly supported. See _extension_ schema below for details.                                                                        |
 
-## `service_auto_start_provider` Block
-
-:::info
-This block registers a service auto-start provider in the global IIS `system.applicationHost/serviceAutoStartProviders` section of `applicationHost.config`. This is required when using the `service_auto_start_provider` option on an `application` block, as IIS needs to know which managed assembly to load for the named provider.
-
-The driver will automatically add or update the provider registration on task start, and remove it on task stop if no other application on the server still references it.
-:::
-
-| Option | Type   | Required | Default Value | Description                                                                                                                                                                                            |
-| ------ | ------ | -------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| name   | string | yes      | _none_        | The name of the auto-start provider. This is the value referenced by `service_auto_start_provider` in the `application` block.                                                                         |
-| type   | string | yes      | _none_        | The fully qualified managed type of the auto-start provider assembly (e.g. `MyNamespace.ApplicationPreload, MyAssembly`). The class must implement `System.Web.Hosting.IProcessHostPreloadClient`.      |
-
-<details>
-<summary>Short Example</summary>
-
-```hcl
-config {
-  service_auto_start_provider {
-    name = "MyPreloadProvider"
-    type = "MyNamespace.ApplicationPreload, MyAssembly"
-  }
-
-  applicationPool {
-    start_mode = "AlwaysRunning"
-  }
-
-  application {
-    path                        = "local"
-    service_auto_start_enabled  = true
-    service_auto_start_provider = "MyPreloadProvider"
-  }
-}
-```
-
-</details>
-
 ## `virtual_directory` Block
 
 | Option      | Type       | Required | Default Value | Description                                                                                                         |
@@ -160,6 +123,43 @@ Also refer to this [advanced documentation](../features/https.md).
 | cert_file       | string | no       | _none_        | Specifies the path to a local certificate file in base64-encoded pem format. When using this option you also need to specify `key_file`.                                                                                     |
 | key_file        | string | no       | _none_        | Specifies the path to a local private key file in base64-encoded pkcs8 format. When using this option you also need to specify `cert_file`.                                                                                  |
 | use_self_signed | bool   | no       | false         | Set this to true if you want to use a self-signed certificate with a validity of one year. Important: This is not intended for production usage and should only be used for short lived tasks like UI- or Integration tests. |
+
+## `service_auto_start_provider` Block
+
+:::info
+This block registers a service auto-start provider in the global IIS `system.applicationHost/serviceAutoStartProviders` section of `applicationHost.config`. This is required when using the `service_auto_start_provider` option on an `application` block, as IIS needs to know which managed assembly to load for the named provider.
+
+The driver will automatically add or update the provider registration on task start, and remove it on task stop if no other application on the server still references it.
+:::
+
+| Option | Type   | Required | Default Value | Description                                                                                                                                                                                            |
+| ------ | ------ | -------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| name   | string | yes      | _none_        | The name of the auto-start provider. This is the value referenced by `service_auto_start_provider` in the `application` block.                                                                         |
+| type   | string | yes      | _none_        | The fully qualified managed type of the auto-start provider assembly (e.g. `MyNamespace.ApplicationPreload, MyAssembly`). The class must implement `System.Web.Hosting.IProcessHostPreloadClient`.      |
+
+<details>
+<summary>Short Example</summary>
+
+```hcl
+config {
+  service_auto_start_provider {
+    name = "MyPreloadProvider"
+    type = "MyNamespace.ApplicationPreload, MyAssembly"
+  }
+
+  applicationPool {
+    start_mode = "AlwaysRunning"
+  }
+
+  application {
+    path                        = "local"
+    service_auto_start_enabled  = true
+    service_auto_start_provider = "MyPreloadProvider"
+  }
+}
+```
+
+</details>
 
 ## Example
 
