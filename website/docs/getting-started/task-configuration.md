@@ -18,6 +18,7 @@ The old one will be removed in the next version. Please make sure you migrate yo
 | target_website                   | string     | no       | _none_        | Specifies an existing target website. In this case the driver will not create a new website but instead use the existing one where it provisions the virtual applications only. Please read the details [here](../features/existing-website.md).                                                                                                                          |
 | permit_iusr                      | bool       | no       | true          | Specifies whether you want to permit the [IUSR-account](https://learn.microsoft.com/en-us/iis/get-started/planning-for-security/understanding-built-in-user-and-group-accounts-in-iis#understanding-the-new-iusr-account) on the _local_ directory. When you disable this, you may need to tweak your _web.config_ a bit. Read [this](./faq.md#iusr-account) for details. |
 | _binding_                        | block list | yes      | _none_        | Defines one or two port bindings. See _binding_ schema below for details.                                                                                                                                                                                                                                                                                                 |
+| _service_auto_start_provider_    | block list | no       | _none_        | Registers one or more service auto-start providers in the global IIS `applicationHost.config`. See _service_auto_start_provider_ schema below for details.                                                                                                                                                                                                                |
 
 ## `application_pool` Block
 
@@ -74,9 +75,46 @@ Resource statistics (CPU/Memory usage) are currently only collected when the `id
 | application_pool            | string     | no       | `default`     | References an application pool on which this application should be executed.                                                                                                               |
 | enable_preload              | bool       | no       | _IIS default_ | Specifies whether the application should be pre-loaded.                                                                                                                                    |
 | service_auto_start_enabled  | bool       | no       | _IIS default_ | Specifies whether the application should be automatically started.                                                                                                                         |
-| service_auto_start_provider | string     | no       | _IIS default_ | Specifies the name of the autostart provider if service_auto_start_enabled is set to true.                                                                                                 |
+| service_auto_start_provider | string     | no       | _IIS default_ | Specifies the name of the autostart provider if service_auto_start_enabled is set to true. The referenced provider must be registered via a [`service_auto_start_provider` block](#service_auto_start_provider-block) in the task configuration. |
 | _virtual_directory_         | block list | no       | _none_        | Defines optional virtual directories below this application. See _virtual_directory_ schema below for details.                                                                             |
 | _extension_                 | block list | no       | _none_        | Allows for additional attributes for properties not explicitly supported. See _extension_ schema below for details.                                                                        |
+
+## `service_auto_start_provider` Block
+
+:::info
+This block registers a service auto-start provider in the global IIS `system.applicationHost/serviceAutoStartProviders` section of `applicationHost.config`. This is required when using the `service_auto_start_provider` option on an `application` block, as IIS needs to know which managed assembly to load for the named provider.
+
+The driver will automatically add or update the provider registration on task start, and remove it on task stop if no other application on the server still references it.
+:::
+
+| Option | Type   | Required | Default Value | Description                                                                                                                                                                                            |
+| ------ | ------ | -------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| name   | string | yes      | _none_        | The name of the auto-start provider. This is the value referenced by `service_auto_start_provider` in the `application` block.                                                                         |
+| type   | string | yes      | _none_        | The fully qualified managed type of the auto-start provider assembly (e.g. `MyNamespace.ApplicationPreload, MyAssembly`). The class must implement `System.Web.Hosting.IProcessHostPreloadClient`.      |
+
+<details>
+<summary>Short Example</summary>
+
+```hcl
+config {
+  service_auto_start_provider {
+    name = "MyPreloadProvider"
+    type = "MyNamespace.ApplicationPreload, MyAssembly"
+  }
+
+  applicationPool {
+    start_mode = "AlwaysRunning"
+  }
+
+  application {
+    path                        = "local"
+    service_auto_start_enabled  = true
+    service_auto_start_provider = "MyPreloadProvider"
+  }
+}
+```
+
+</details>
 
 ## `virtual_directory` Block
 

@@ -36,6 +36,9 @@ public sealed class DriverTaskConfig
 
 	[ConfigurationCollectionField( "bindings", "binding", 0, 64 )]
 	public DriverTaskConfigBinding[] Bindings { get; set; } = default!;
+
+	[ConfigurationCollectionField( "service_auto_start_providers", "service_auto_start_provider" )]
+	public DriverTaskConfigServiceAutoStartProvider[]? ServiceAutoStartProviders { get; set; }
 }
 
 public sealed class DriverTaskConfigApplicationPool : DriverTaskConfigExtendable
@@ -188,4 +191,15 @@ public abstract class DriverTaskConfigExtendable
 {
 	[ConfigurationCollectionField( "extensions", "extension" )]
 	public DriverTaskConfigExtension[]? Extensions { get; set; }
+}
+
+public sealed class DriverTaskConfigServiceAutoStartProvider
+{
+	[Required]
+	[ConfigurationField( "name" )]
+	public string Name { get; set; } = default!;
+
+	[Required]
+	[ConfigurationField( "type" )]
+	public string Type { get; set; } = default!;
 }
