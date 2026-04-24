@@ -4,7 +4,7 @@ using CliWrap.Buffered;
 #endif
 using Hashicorp.Nomad.Plugins.Drivers.Proto;
 using MessagePack;
-using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Microsoft.Web.Administration;
 using NomadIIS.Services.Configuration;
@@ -960,7 +960,7 @@ public sealed class IisTaskHandle : IDisposable
 								throw new FileNotFoundException( $"Couldn't find certificate file {certificateFilePath}." );
 
 							if ( new FileInfo( certificateFilePath ).Length == 0 )
-								throw new Exception( $"Certificate file: {certificateFilePath} contains 0 bytes.");
+								throw new Exception( $"Certificate file: {certificateFilePath} contains 0 bytes." );
 
 							usedCertificate = await CertificateHelper.InstallPfxCertificateAsync(
 								certificateFilePath, certificateBlock.Password );
@@ -1385,7 +1385,7 @@ public sealed class IisTaskHandle : IDisposable
 		} );
 	}
 
-	public async Task DownloadFileAsync ( HttpResponse response, string path )
+	public Task<IActionResult> DownloadFileAsync ( string path )
 	{
 		if ( _state is null || _taskConfig is null )
 			throw new InvalidOperationException( "Invalid state." );
@@ -1396,24 +1396,55 @@ public sealed class IisTaskHandle : IDisposable
 
 		if ( File.Exists( physicalPath ) )
 		{
-			response.Headers.ContentType = "application/octet-stream";
-			response.Headers.ContentDisposition = $"attachment; filename=\"{Path.GetFileName( physicalPath )}\"";
-			response.StatusCode = StatusCodes.Status200OK;
+			IActionResult result = new PhysicalFileResult( physicalPath, "application/octet-stream" )
+			{
+				FileDownloadName = Path.GetFileName( physicalPath )
+			};
 
-			await response.StartAsync();
+			return Task.FromResult( result );
+		}
+		else if ( Directory.Exists( physicalPath ) )
+		{
+			IActionResult result = new ZipDirectoryResult( physicalPath );
 
-			using var fs = File.OpenRead( physicalPath );
-			await fs.CopyToAsync( response.Body );
+			return Task.FromResult( result );
 		}
 		else
 		{
-			response.Headers.ContentType = "application/zip";
-			response.Headers.ContentDisposition = $"attachment; filename=\"{Path.GetFileName( physicalPath )}.zip\"";
-			response.StatusCode = StatusCodes.Status200OK;
+			IActionResult result = new NotFoundResult();
 
-			await response.StartAsync();
+			return Task.FromResult( result );
+		}
+	}
 
-			ZipFile.CreateFromDirectory( physicalPath, response.Body );
+	private sealed class ZipDirectoryResult : IActionResult
+	{
+		private readonly string _directoryPath;
+
+		public ZipDirectoryResult ( string directoryPath )
+		{
+			_directoryPath = directoryPath;
+		}
+
+		public async Task ExecuteResultAsync ( ActionContext context )
+		{
+			var response = context.HttpContext.Response;
+
+			response.ContentType = "application/zip";
+			response.Headers.ContentDisposition = $"attachment; filename=\"{Path.GetFileName( _directoryPath )}.zip\"";
+
+			using var archive = new ZipArchive( response.Body, ZipArchiveMode.Create, leaveOpen: true );
+
+			foreach ( var filePath in Directory.EnumerateFiles( _directoryPath, "*", SearchOption.AllDirectories ) )
+			{
+				var entryName = Path.GetRelativePath( _directoryPath, filePath ).Replace( '\\', '/' );
+				var entry = archive.CreateEntry( entryName, CompressionLevel.Fastest );
+
+				using var entryStream = entry.Open();
+				using var fileStream = File.OpenRead( filePath );
+
+				await fileStream.CopyToAsync( entryStream );
+			}
 		}
 	}
 	public async Task UploadFileAsync ( Stream stream, bool isZip, string path, bool hot, bool cleanFolder )
