@@ -86,6 +86,26 @@ public sealed class IisAppPoolHandle
 		var appPool = GetApplicationPool();
 		Assert.Equal( value, appPool.Recycling.PeriodicRestart.Time );
 	}
+	public void ShouldHaveQueueLength ( long value )
+	{
+		var appPool = GetApplicationPool();
+		Assert.Equal( value, appPool.QueueLength );
+	}
+	public void ShouldHaveStartTimeLimit ( TimeSpan value )
+	{
+		var appPool = GetApplicationPool();
+		Assert.Equal( value, appPool.ProcessModel.StartupTimeLimit );
+	}
+	public void ShouldHaveShutdownTimeLimit ( TimeSpan value )
+	{
+		var appPool = GetApplicationPool();
+		Assert.Equal( value, appPool.ProcessModel.ShutdownTimeLimit );
+	}
+	public void ShouldHaveEnable32BitAppOnWin64 ( bool value )
+	{
+		var appPool = GetApplicationPool();
+		Assert.Equal( value, appPool.Enable32BitAppOnWin64 );
+	}
 	public void ShouldHaveIdentityType ( ProcessModelIdentityType identityType )
 	{
 		var appPool = GetApplicationPool();
@@ -139,6 +159,12 @@ public sealed class IisWebsiteHandle
 			Assert.Fail( $"Website with name \"{_name}\" exists but shouldn't." );
 	}
 
+	public void ShouldHaveBindingCount ( int count )
+	{
+		var website = GetWebsite();
+		Assert.Equal( count, website.Bindings.Count );
+	}
+
 	public IisWebsiteBindingHandle Binding ( int index )
 		=> new IisWebsiteBindingHandle( GetWebsite().Bindings[index] );
 
@@ -172,6 +198,26 @@ public sealed class IisWebsiteBindingHandle
 	{
 		if ( _binding.Protocol is null || _binding.Protocol != "https" )
 			Assert.Fail( "Binding is not https but should be." );
+	}
+
+	public void HasHostname ( string hostname )
+	{
+		if ( _binding.Host != hostname )
+			Assert.Fail( $"Binding hostname should be {hostname}, but is {_binding.Host}." );
+	}
+
+	public void HasIPAddress ( string ipAddress )
+	{
+		// IIS binding information format: IP:Port:Hostname
+		var bindingInfo = _binding.BindingInformation.Split( ':' );
+		
+		if ( bindingInfo.Length != 3 )
+			Assert.Fail( $"Binding information has unexpected format: {_binding.BindingInformation}" );
+		
+		var actualIP = bindingInfo[0];
+		
+		if ( actualIP != ipAddress )
+			Assert.Fail( $"Binding IP address should be {ipAddress}, but is {actualIP}." );
 	}
 
 	public void CertificateThumbprintIs ( string certificateThumbprint )
@@ -208,6 +254,14 @@ public sealed class IisApplicationHandle
 		var application = GetApplication();
 
 		Assert.Equal( poolName, application.ApplicationPoolName );
+	}
+	public void ShouldHaveVirtualDirectory ( string virtualDirectoryPath )
+	{
+		var application = GetApplication();
+		var vdir = application.VirtualDirectories.FirstOrDefault( x => x.Path == virtualDirectoryPath );
+
+		if ( vdir is null )
+			Assert.Fail( $"Application \"{_path}\" doesn't have a virtual directory with path \"{virtualDirectoryPath}\"." );
 	}
 
 	private Application GetApplication ()
