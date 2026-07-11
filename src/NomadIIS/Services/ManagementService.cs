@@ -6,15 +6,12 @@ using NomadIIS.Services.Configuration;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Net.Sockets;
-using System.Net;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using System.Linq;
 using System.Diagnostics;
-using System.Runtime.InteropServices;
-using System.Security.Principal;
+using System.Text.RegularExpressions;
 
 namespace NomadIIS.Services;
 
@@ -233,8 +230,9 @@ public sealed class ManagementService : IHostedService
 			{
 				var jobHandles = _handles.Values.ToArray();
 
-				// Note: We try to find the worker processes directly by it's username which maps to the app pool name.
-				// This is better than using the IIS Management API or WMI because both leak memory when queried continuously.
+				// Note: We find the app pool of each worker process by parsing the -ap argument from its command line.
+				// This is better than using the IIS Management API or WMI because both leak memory when queried continuously,
+				// and unlike matching by process username, it also works when the pool runs under a custom user.
 				var stats = new Dictionary<string, UsageStatistics>( StringComparer.InvariantCultureIgnoreCase );
 
 				foreach ( var process in Process.GetProcessesByName( "w3wp" ) )
@@ -246,25 +244,25 @@ public sealed class ManagementService : IHostedService
 							if ( process.HasExited )
 								continue;
 
-							var username = GetProcessUser( process );
+							var appPoolName = GetAppPoolNameFromCommandLine( process );
 
-							if ( string.IsNullOrEmpty( username ) )
+							if ( string.IsNullOrEmpty( appPoolName ) )
 								continue;
 
 							// TimeSpan.Ticks are in 100ns units, the same unit WMI reported the processor times in.
 							var kernelModeTime = (ulong)process.PrivilegedProcessorTime.Ticks;
 							var userModeTime = (ulong)process.UserProcessorTime.Ticks;
-							var workingSetPrivate = GetPrivateWorkingSet( process );
+							var workingSetPrivate = NativeFunctions.GetPrivateWorkingSet( process );
 
-							if ( stats.TryGetValue( username, out var appPoolStats ) )
+							if ( stats.TryGetValue( appPoolName, out var appPoolStats ) )
 							{
-								stats[username] = new UsageStatistics(
+								stats[appPoolName] = new UsageStatistics(
 									appPoolStats.KernelModeTime + kernelModeTime,
 									appPoolStats.UserModeTime + userModeTime,
 									appPoolStats.WorkingSetPrivate + workingSetPrivate );
 							}
 							else
-								stats[username] = new UsageStatistics( kernelModeTime, userModeTime, workingSetPrivate );
+								stats[appPoolName] = new UsageStatistics( kernelModeTime, userModeTime, workingSetPrivate );
 						}
 						catch ( Exception )
 						{
@@ -282,7 +280,7 @@ public sealed class ManagementService : IHostedService
 						// If we have a task with multiple application pools, we simply sum up all the resources.
 						foreach ( var appPoolName in jobHandle.AppPoolNames )
 						{
-							if ( stats.TryGetValue( $"IIS AppPool\\{appPoolName.Value}", out var jobStats ) )
+							if ( stats.TryGetValue( appPoolName.Value, out var jobStats ) )
 							{
 								fullStats.KernelModeTime += jobStats.KernelModeTime;
 								fullStats.UserModeTime += jobStats.UserModeTime;
@@ -317,76 +315,23 @@ public sealed class ManagementService : IHostedService
 		}
 	}
 
-	private static string? GetProcessUser ( Process process )
+	// WAS always launches worker processes as: w3wp.exe -ap "PoolName" ...
+	private static readonly Regex _appPoolArgumentRegex = new( @"-ap\s+(?:""([^""]+)""|(\S+))", RegexOptions.Compiled );
+
+	private static string? GetAppPoolNameFromCommandLine ( Process process )
 	{
-		var processHandle = IntPtr.Zero;
+		var commandLine = NativeFunctions.GetProcessCommandLine( process );
 
-		try
-		{
-			// We cannot simply use process.Token, because we need to impersonate
-			OpenProcessToken( process.Handle, 8, out processHandle );
-
-			using var wi = new WindowsIdentity( processHandle );
-
-			return wi.Name;
-		}
-		catch
-		{
+		if ( string.IsNullOrEmpty( commandLine ) )
 			return null;
-		}
-		finally
-		{
-			if ( processHandle != IntPtr.Zero )
-				CloseHandle( processHandle );
-		}
+
+		var match = _appPoolArgumentRegex.Match( commandLine );
+
+		if ( !match.Success )
+			return null;
+
+		return match.Groups[1].Success ? match.Groups[1].Value : match.Groups[2].Value;
 	}
-
-	private static ulong GetPrivateWorkingSet ( Process process )
-	{
-		var cbEx2 = (uint)Marshal.SizeOf<PROCESS_MEMORY_COUNTERS_EX2>();
-
-		if ( GetProcessMemoryInfo( process.Handle, out var counters, cbEx2 ) )
-		{
-			// PrivateWorkingSetSize is only available since Windows Server 2022.
-			// On older versions we fall back to the private bytes.
-			return counters.PrivateWorkingSetSize > 0UL ? counters.PrivateWorkingSetSize : counters.PrivateUsage;
-		}
-
-		// Older Windows versions may reject the EX2 struct size, so retry with the EX layout.
-		var cbEx = cbEx2 - (uint)( IntPtr.Size + sizeof( ulong ) );
-
-		if ( GetProcessMemoryInfo( process.Handle, out counters, cbEx ) )
-			return counters.PrivateUsage;
-
-		return 0UL;
-	}
-
-	[StructLayout( LayoutKind.Sequential )]
-	private struct PROCESS_MEMORY_COUNTERS_EX2
-	{
-		public uint cb;
-		public uint PageFaultCount;
-		public nuint PeakWorkingSetSize;
-		public nuint WorkingSetSize;
-		public nuint QuotaPeakPagedPoolUsage;
-		public nuint QuotaPagedPoolUsage;
-		public nuint QuotaPeakNonPagedPoolUsage;
-		public nuint QuotaNonPagedPoolUsage;
-		public nuint PagefileUsage;
-		public nuint PeakPagefileUsage;
-		public nuint PrivateUsage;
-		public nuint PrivateWorkingSetSize;
-		public ulong SharedCommitUsage;
-	}
-
-	[DllImport( "advapi32.dll", SetLastError = true )]
-	private static extern bool OpenProcessToken ( IntPtr ProcessHandle, uint DesiredAccess, out IntPtr TokenHandle );
-	[DllImport( "kernel32.dll", SetLastError = true )]
-	[return: MarshalAs( UnmanagedType.Bool )]
-	private static extern bool CloseHandle ( IntPtr hObject );
-	[DllImport( "psapi.dll", SetLastError = true )]
-	[return: MarshalAs( UnmanagedType.Bool )]
-	private static extern bool GetProcessMemoryInfo ( IntPtr hProcess, out PROCESS_MEMORY_COUNTERS_EX2 ppsmemCounters, uint cb );
 }
 
 public interface IManagementLockHandle
