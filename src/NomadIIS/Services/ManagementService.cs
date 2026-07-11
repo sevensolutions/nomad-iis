@@ -34,7 +34,6 @@ public sealed class ManagementService : IHostedService
 	private readonly SemaphoreSlim _lock = new( 1, 1 );
 	private ServerManager _serverManager = new ServerManager();
 	private Thread? _jobStatisticsThread;
-	private WmiHelper _wmiHelper = new WmiHelper();
 	private readonly Channel<DriverTaskEvent> _eventsChannel = Channel.CreateUnbounded<DriverTaskEvent>( new UnboundedChannelOptions()
 	{
 		SingleWriter = false,
@@ -86,7 +85,6 @@ public sealed class ManagementService : IHostedService
 	{
 		_cts.Cancel();
 
-		_wmiHelper.Dispose();
 		_serverManager.Dispose();
 
 		return Task.CompletedTask;
@@ -236,21 +234,48 @@ public sealed class ManagementService : IHostedService
 				var jobHandles = _handles.Values.ToArray();
 
 				// Note: We try to find the worker processes directly by it's username which maps to the app pool name.
-				// This is better than using the IIS Management API because it's not using COM objects.
-				var w3wpProcessToAppPoolNameMapping = Process.GetProcessesByName( "w3wp" )
-					.Where( x => !x.HasExited )
-					.Select( x => new { Username = GetProcessUser( x ) ?? string.Empty, Process = x } )
-					.Where( x => !string.IsNullOrEmpty( x.Username ) )
-					.ToDictionary( x => x.Process.Id, x => x.Username );
+				// This is better than using the IIS Management API or WMI because both leak memory when queried continuously.
+				var stats = new Dictionary<string, UsageStatistics>( StringComparer.InvariantCultureIgnoreCase );
 
-				Dictionary<string, UsageStatistics>? stats = null;
+				foreach ( var process in Process.GetProcessesByName( "w3wp" ) )
+				{
+					using ( process )
+					{
+						try
+						{
+							if ( process.HasExited )
+								continue;
 
-				if ( w3wpProcessToAppPoolNameMapping.Count > 0 )
-					stats = _wmiHelper.QueryWorkerProcesses( w3wpProcessToAppPoolNameMapping );
+							var username = GetProcessUser( process );
+
+							if ( string.IsNullOrEmpty( username ) )
+								continue;
+
+							// TimeSpan.Ticks are in 100ns units, the same unit WMI reported the processor times in.
+							var kernelModeTime = (ulong)process.PrivilegedProcessorTime.Ticks;
+							var userModeTime = (ulong)process.UserProcessorTime.Ticks;
+							var workingSetPrivate = GetPrivateWorkingSet( process );
+
+							if ( stats.TryGetValue( username, out var appPoolStats ) )
+							{
+								stats[username] = new UsageStatistics(
+									appPoolStats.KernelModeTime + kernelModeTime,
+									appPoolStats.UserModeTime + userModeTime,
+									appPoolStats.WorkingSetPrivate + workingSetPrivate );
+							}
+							else
+								stats[username] = new UsageStatistics( kernelModeTime, userModeTime, workingSetPrivate );
+						}
+						catch ( Exception )
+						{
+							// The process may have exited in the meantime.
+						}
+					}
+				}
 
 				foreach ( var jobHandle in jobHandles )
 				{
-					if ( jobHandle.AppPoolNames is not null && stats is not null )
+					if ( jobHandle.AppPoolNames is not null && stats.Count > 0 )
 					{
 						var fullStats = new UsageStatistics();
 
@@ -280,10 +305,6 @@ public sealed class ManagementService : IHostedService
 			}
 			finally
 			{
-				// Sadly we need to GC.Collect here because the WMI stuff uses a lot of COM objects.
-				GC.Collect();
-				GC.WaitForPendingFinalizers();
-
 				try
 				{
 					if ( !_cts.IsCancellationRequested )
@@ -320,11 +341,52 @@ public sealed class ManagementService : IHostedService
 		}
 	}
 
+	private static ulong GetPrivateWorkingSet ( Process process )
+	{
+		var cbEx2 = (uint)Marshal.SizeOf<PROCESS_MEMORY_COUNTERS_EX2>();
+
+		if ( GetProcessMemoryInfo( process.Handle, out var counters, cbEx2 ) )
+		{
+			// PrivateWorkingSetSize is only available since Windows Server 2022.
+			// On older versions we fall back to the private bytes.
+			return counters.PrivateWorkingSetSize > 0UL ? counters.PrivateWorkingSetSize : counters.PrivateUsage;
+		}
+
+		// Older Windows versions may reject the EX2 struct size, so retry with the EX layout.
+		var cbEx = cbEx2 - (uint)( IntPtr.Size + sizeof( ulong ) );
+
+		if ( GetProcessMemoryInfo( process.Handle, out counters, cbEx ) )
+			return counters.PrivateUsage;
+
+		return 0UL;
+	}
+
+	[StructLayout( LayoutKind.Sequential )]
+	private struct PROCESS_MEMORY_COUNTERS_EX2
+	{
+		public uint cb;
+		public uint PageFaultCount;
+		public nuint PeakWorkingSetSize;
+		public nuint WorkingSetSize;
+		public nuint QuotaPeakPagedPoolUsage;
+		public nuint QuotaPagedPoolUsage;
+		public nuint QuotaPeakNonPagedPoolUsage;
+		public nuint QuotaNonPagedPoolUsage;
+		public nuint PagefileUsage;
+		public nuint PeakPagefileUsage;
+		public nuint PrivateUsage;
+		public nuint PrivateWorkingSetSize;
+		public ulong SharedCommitUsage;
+	}
+
 	[DllImport( "advapi32.dll", SetLastError = true )]
 	private static extern bool OpenProcessToken ( IntPtr ProcessHandle, uint DesiredAccess, out IntPtr TokenHandle );
 	[DllImport( "kernel32.dll", SetLastError = true )]
 	[return: MarshalAs( UnmanagedType.Bool )]
 	private static extern bool CloseHandle ( IntPtr hObject );
+	[DllImport( "psapi.dll", SetLastError = true )]
+	[return: MarshalAs( UnmanagedType.Bool )]
+	private static extern bool GetProcessMemoryInfo ( IntPtr hProcess, out PROCESS_MEMORY_COUNTERS_EX2 ppsmemCounters, uint cb );
 }
 
 public interface IManagementLockHandle
