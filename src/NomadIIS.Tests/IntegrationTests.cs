@@ -933,7 +933,7 @@ public class IntegrationTests : IClassFixture<NomadIISFixture>
 			          path = "C:\\inetpub\\wwwroot"
 			        }
 
-			        applicationPool {
+			        application_pool {
 			          managed_runtime_version = ""
 			        }
 
@@ -1000,7 +1000,7 @@ public class IntegrationTests : IClassFixture<NomadIISFixture>
 			          path = "C:\\inetpub\\wwwroot"
 			        }
 
-			        applicationPool {
+			        application_pool {
 			          managed_pipeline_mode = "Classic"
 			        }
 
@@ -1067,7 +1067,7 @@ public class IntegrationTests : IClassFixture<NomadIISFixture>
 			          path = "C:\\inetpub\\wwwroot"
 			        }
 
-			        applicationPool {
+			        application_pool {
 			          start_mode = "OnDemand"
 			        }
 
@@ -1229,7 +1229,7 @@ public class IntegrationTests : IClassFixture<NomadIISFixture>
 			          path = "C:\\inetpub\\wwwroot"
 			        }
 
-			        applicationPool {
+			        application_pool {
 			          queue_length = 2000
 			          start_time_limit = "2m"
 			          shutdown_time_limit = "1m30s"
@@ -1300,7 +1300,7 @@ public class IntegrationTests : IClassFixture<NomadIISFixture>
 			          path = "C:\\inetpub\\wwwroot"
 			        }
 
-			        applicationPool {
+			        application_pool {
 			          enable_32bit_app_on_win64 = true
 			        }
 
