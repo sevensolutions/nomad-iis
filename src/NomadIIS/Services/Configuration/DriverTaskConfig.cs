@@ -2,6 +2,7 @@
 using System;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using System.Linq;
 
 namespace NomadIIS.Services.Configuration;
 
@@ -11,7 +12,20 @@ public sealed class DriverTaskConfig
 	public string? TargetWebsite { get; set; }
 
 	[ConfigurationCollectionField( "applicationPools", "applicationPool", 0 )]
-	public DriverTaskConfigApplicationPool[] ApplicationPools { get; set; } = default!;
+	public DriverTaskConfigApplicationPool[] ApplicationPoolsOld { get; set; } = default!;
+
+	[ConfigurationCollectionField( "application_pools", "application_pool", 0 )]
+	public DriverTaskConfigApplicationPool[] ApplicationPoolsNew { get; set; } = default!;
+
+	public DriverTaskConfigApplicationPool[] ApplicationPools
+	{
+		get => ( ApplicationPoolsOld ?? [] ).Concat( ApplicationPoolsNew ?? [] ).ToArray();
+		set
+		{
+			ApplicationPoolsOld = [];
+			ApplicationPoolsNew = value;
+		}
+	}
 
 	[ConfigurationCollectionField( "applications", "application", 1 )]
 	public DriverTaskConfigApplication[] Applications { get; set; } = default!;
@@ -22,6 +36,9 @@ public sealed class DriverTaskConfig
 
 	[ConfigurationCollectionField( "bindings", "binding", 0, 64 )]
 	public DriverTaskConfigBinding[] Bindings { get; set; } = default!;
+
+	[ConfigurationCollectionField( "service_auto_start_providers", "service_auto_start_provider" )]
+	public DriverTaskConfigServiceAutoStartProvider[]? ServiceAutoStartProviders { get; set; }
 }
 
 public sealed class DriverTaskConfigApplicationPool : DriverTaskConfigExtendable
@@ -174,4 +191,15 @@ public abstract class DriverTaskConfigExtendable
 {
 	[ConfigurationCollectionField( "extensions", "extension" )]
 	public DriverTaskConfigExtension[]? Extensions { get; set; }
+}
+
+public sealed class DriverTaskConfigServiceAutoStartProvider
+{
+	[Required]
+	[ConfigurationField( "name" )]
+	public string Name { get; set; } = default!;
+
+	[Required]
+	[ConfigurationField( "type" )]
+	public string Type { get; set; } = default!;
 }

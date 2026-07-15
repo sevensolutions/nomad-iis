@@ -62,6 +62,9 @@ namespace NomadIIS.Services
 		[Key( 5 )]
 		public int? UdpLoggerPort { get; set; }
 
+		[Key( 6 )]
+		public List<string>? ServiceAutoStartProviderNames { get; set; }
+
 		public override string ToString ()
 			=> $"Website: {WebsiteName}, StartDate: {StartDate.ToLocalTime()}";
 	}

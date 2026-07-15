@@ -174,7 +174,7 @@ public class IntegrationTests : IClassFixture<NomadIISFixture>
 			          path = "C:\\inetpub\\wwwroot"
 			        }
 
-			        applicationPool {
+			        application_pool {
 			          managed_pipeline_mode = "Integrated"
 			          managed_runtime_version = "v4.0"
 			          start_mode = "AlwaysRunning"
@@ -341,10 +341,10 @@ public class IntegrationTests : IClassFixture<NomadIISFixture>
 			      driver = "iis"
 
 			      config {
-			        applicationPool {
+			        application_pool {
 			          name = "pool-A"
 			        }
-			        applicationPool {
+			        application_pool {
 			          name = "pool-B"
 			        }
 
@@ -448,13 +448,13 @@ public class IntegrationTests : IClassFixture<NomadIISFixture>
 			      driver = "iis"
 
 			      config {
-			        applicationPool {
+			        application_pool {
 			          name = "unused-A"
 			        }
-			        applicationPool {
+			        application_pool {
 			          name = "unused-B"
 			        }
-			        applicationPool {
+			        application_pool {
 			          name = "pool-B"
 			        }
 
