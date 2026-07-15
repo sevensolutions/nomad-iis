@@ -29,7 +29,6 @@ public sealed class ManagementService : IHostedService
 	private CancellationTokenSource _cts = new CancellationTokenSource();
 	private readonly ConcurrentDictionary<string, IisTaskHandle> _handles = new();
 	private readonly SemaphoreSlim _lock = new( 1, 1 );
-	private ServerManager _serverManager = new ServerManager();
 	private Thread? _jobStatisticsThread;
 	private readonly Channel<DriverTaskEvent> _eventsChannel = Channel.CreateUnbounded<DriverTaskEvent>( new UnboundedChannelOptions()
 	{
@@ -81,8 +80,6 @@ public sealed class ManagementService : IHostedService
 	public Task StopAsync ( CancellationToken cancellationToken )
 	{
 		_cts.Cancel();
-
-		_serverManager.Dispose();
 
 		return Task.CompletedTask;
 	}
@@ -144,13 +141,16 @@ public sealed class ManagementService : IHostedService
 
 		try
 		{
-			handle = new ManagementLockHandle( _logger, _serverManager );
+			using ( var serverManager = new ServerManager() )
+			{
+				handle = new ManagementLockHandle( _logger, serverManager );
 
-			var result = await action( handle );
+				var result = await action( handle );
 
-			_serverManager.CommitChanges();
+				serverManager.CommitChanges();
 
-			return result;
+				return result;
+			}
 		}
 		catch ( Exception ex )
 		{
@@ -163,6 +163,9 @@ public sealed class ManagementService : IHostedService
 		}
 		finally
 		{
+			GC.Collect();
+			GC.WaitForPendingFinalizers();
+
 			_lock.Release();
 		}
 	}
@@ -318,9 +321,9 @@ public sealed class ManagementService : IHostedService
 	// WAS always launches worker processes as: w3wp.exe -ap "PoolName" ...
 	private static readonly Regex _appPoolArgumentRegex = new( @"-ap\s+(?:""([^""]+)""|(\S+))", RegexOptions.Compiled );
 
-	private static string? GetAppPoolNameFromCommandLine ( Process process )
+	private static string? GetAppPoolNameFromCommandLine ( Process w3wpProcess )
 	{
-		var commandLine = NativeFunctions.GetProcessCommandLine( process );
+		var commandLine = NativeFunctions.GetProcessCommandLine( w3wpProcess );
 
 		if ( string.IsNullOrEmpty( commandLine ) )
 			return null;
