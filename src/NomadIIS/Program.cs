@@ -33,7 +33,7 @@ var excludeHosting = Matching.FromSource( "Microsoft.AspNetCore.Hosting" );
 Log.Logger = new LoggerConfiguration()
 	.MinimumLevel.Information()
 	.Filter.ByExcluding( le => excludeRouting( le ) || excludeHosting( le ) )
-	.WriteTo.File( "nomad_iis.log", outputTemplate: "{Timestamp:HH:mm:ss} [{ThreadId}] {Level:u3} {SourceContext}: {Message:lj}{NewLine}{Exception}" )
+	.WriteTo.File( "nomad_iis.log", outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss} [{ThreadId}] {Level:u3} {SourceContext}: {Message:lj}{NewLine}{Exception}" )
 	.CreateLogger();
 
 var builder = WebApplication.CreateBuilder( args );

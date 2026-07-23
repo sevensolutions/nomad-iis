@@ -1,5 +1,4 @@
 ﻿using Grpc.Core;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Plugin;
 using System.Threading.Tasks;
