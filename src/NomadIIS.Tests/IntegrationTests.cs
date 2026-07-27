@@ -117,6 +117,7 @@ public class IntegrationTests : IClassFixture<NomadIISFixture>
 
 				  env {
 			        MY_VARIABLE = "hello"
+					ANOTHER_VARIABLE = "special!@#$%^&*()chars"
 				  }
 			    }
 			  }
@@ -142,6 +143,7 @@ public class IntegrationTests : IClassFixture<NomadIISFixture>
 		{
 			iis.AppPool( poolAndWebsiteName ).ShouldExist();
 			iis.AppPool( poolAndWebsiteName ).ShouldHaveEnvironmentVariable( "MY_VARIABLE", "hello" );
+			iis.AppPool( poolAndWebsiteName ).ShouldHaveEnvironmentVariable( "ANOTHER_VARIABLE", "special!@#$%^&*()chars" );
 		} );
 
 		_output.WriteLine( "Stopping job..." );
@@ -615,12 +617,12 @@ public class IntegrationTests : IClassFixture<NomadIISFixture>
 			        application {
 			          path = "C:\\inetpub\\wwwroot"
 
-			          virtualDirectory {
+			          virtual_directory {
 			            alias = "static"
 			            path = "C:\\inetpub\\wwwroot"
 			          }
 
-			          virtualDirectory {
+			          virtual_directory {
 			            alias = "uploads"
 			            path = "C:\\Windows\\Temp"
 			          }
@@ -934,7 +936,7 @@ public class IntegrationTests : IClassFixture<NomadIISFixture>
 			        }
 
 			        application_pool {
-			          managed_runtime_version = ""
+			          managed_runtime_version = "None"
 			        }
 
 			        binding {
@@ -1345,75 +1347,6 @@ public class IntegrationTests : IClassFixture<NomadIISFixture>
 	}
 
 	[Fact]
-	public async Task JobWithMultipleEnvironmentVariables ()
-	{
-		var jobHcl = """
-			job "job-with-multiple-env-vars" {
-			  datacenters = ["dc1"]
-			  type = "service"
-
-			  group "app" {
-			    count = 1
-
-			    network {
-			      port "httplabel" {}
-			    }
-
-			    task "app" {
-			      driver = "iis"
-
-			      config {
-			        application {
-			          path = "C:\\inetpub\\wwwroot"
-			        }
-
-			        binding {
-			          type = "http"
-			          port = "httplabel"
-			        }
-			      }
-
-			      env {
-			        VAR1 = "value1"
-			        VAR2 = "value2"
-			        VAR3 = "special!@#$%^&*()chars"
-			      }
-			    }
-			  }
-			}
-			""";
-
-		_output.WriteLine( "Submitting job..." );
-
-		var jobId = await _fixture.ScheduleJobAsync( jobHcl );
-
-		_output.WriteLine( $"Job Id: {jobId}" );
-
-		var allocations = await _fixture.ListJobAllocationsAsync( jobId );
-
-		if ( allocations is null || allocations.Length == 0 )
-			Assert.Fail( "No job allocations" );
-
-		var poolAndWebsiteName = $"nomad-{allocations[0].Id}-app";
-
-		_output.WriteLine( $"AppPool and Website Name: {poolAndWebsiteName}" );
-
-		_fixture.AccessIIS( iis =>
-		{
-			iis.AppPool( poolAndWebsiteName ).ShouldExist();
-			iis.AppPool( poolAndWebsiteName ).ShouldHaveEnvironmentVariable( "VAR1", "value1" );
-			iis.AppPool( poolAndWebsiteName ).ShouldHaveEnvironmentVariable( "VAR2", "value2" );
-			iis.AppPool( poolAndWebsiteName ).ShouldHaveEnvironmentVariable( "VAR3", "special!@#$%^&*()chars" );
-		} );
-
-		_output.WriteLine( "Stopping job..." );
-
-		await _fixture.StopJobAsync( jobId );
-
-		_output.WriteLine( "Job stopped." );
-	}
-
-	[Fact]
 	public async Task JobWithSNIBinding ()
 	{
 		var certificateFile = Path.GetTempFileName() + ".pfx";
@@ -1524,7 +1457,7 @@ public class IntegrationTests : IClassFixture<NomadIISFixture>
 			        binding {
 			          type = "http"
 			          port = "httplabel"
-			          ip = "*"
+			          ip_address = "127.0.0.1"
 			        }
 			      }
 			    }
@@ -1551,7 +1484,7 @@ public class IntegrationTests : IClassFixture<NomadIISFixture>
 		{
 			iis.AppPool( poolAndWebsiteName ).ShouldExist();
 			iis.Website( poolAndWebsiteName ).ShouldExist();
-			iis.Website( poolAndWebsiteName ).Binding( 0 ).HasIPAddress( "*" );
+			iis.Website( poolAndWebsiteName ).Binding( 0 ).HasIPAddress( "127.0.0.1" );
 		} );
 
 		_output.WriteLine( "Stopping job..." );
