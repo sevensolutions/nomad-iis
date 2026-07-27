@@ -143,7 +143,7 @@ config {
     type = "MyNamespace.ApplicationPreload, MyAssembly"
   }
 
-  applicationPool {
+  application_pool {
     start_mode = "AlwaysRunning"
   }
 
