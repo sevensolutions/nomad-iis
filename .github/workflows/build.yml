@@ -146,4 +146,4 @@ jobs:
         if ('${{ matrix.profile.artifactName }}' -eq 'nomad_iis_mgmt_api') {
           $args = '-p:DefineConstants="MANAGEMENT_API"'
         }
-        dotnet test src\NomadIIS.Tests\NomadIIS.Tests.csproj ${args}
+        dotnet test src\NomadIIS.Tests\NomadIIS.Tests.csproj ${args} --logger "console;verbosity=detailed"

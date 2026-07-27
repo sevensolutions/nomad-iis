@@ -12,7 +12,7 @@ server {
 
 client {
   enabled = true
-  network_interface = "Ethernet"
+  #network_interface = "Ethernet"
 }
 
 plugin "nomad_iis" {
