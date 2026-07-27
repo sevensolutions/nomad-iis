@@ -82,7 +82,7 @@ public sealed class NomadIISFixture : IAsyncLifetime
 					stdout.AppendLine( line );
 					Debug.WriteLine( line );
 				} ) )
-				.WithStandardOutputPipe( PipeTarget.ToDelegate( line =>
+				.WithStandardErrorPipe( PipeTarget.ToDelegate( line =>
 				{
 					stderr.AppendLine( line );
 					Debug.WriteLine( line );
