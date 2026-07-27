@@ -140,7 +140,7 @@ jobs:
     - name: Run tests
       env:
         RUNNING_IN_CI: true
-        TEST_PLUGIN_DIRECTORY: ..\..\..\..\..\artifacts # Relative to bin\Debug\net9.0
+        TEST_PLUGIN_DIRECTORY: ..\..\..\..\..\artifacts # Relative to bin\Debug\net10.0
       run: |
         $args = ''
         if ('${{ matrix.profile.artifactName }}' -eq 'nomad_iis_mgmt_api') {
