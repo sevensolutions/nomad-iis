@@ -35,7 +35,7 @@ public sealed class NomadIISFixture : IAsyncLifetime
 		_apiHttpClient = new HttpClient()
 		{
 			BaseAddress = new Uri( "http://localhost:5004/api/v1/" ),
-			Timeout = TimeSpan.FromMinutes( 3 ),
+			Timeout = TimeSpan.FromMinutes( 5 ), // Screenshot can take a while
 			DefaultRequestHeaders =
 			{
 				{ "X-Api-Key", "12345" }
