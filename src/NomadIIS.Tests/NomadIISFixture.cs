@@ -11,15 +11,11 @@ using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
-using Xunit.Abstractions;
-using Xunit.Sdk;
 
 namespace NomadIIS.Tests;
 
 public sealed class NomadIISFixture : IAsyncLifetime
 {
-	private readonly IMessageSink _messageSink;
-
 	private readonly HttpClient _httpClient;
 #if MANAGEMENT_API
 	private readonly HttpClient _apiHttpClient;
@@ -27,10 +23,8 @@ public sealed class NomadIISFixture : IAsyncLifetime
 	private CancellationTokenSource _ctsNomad = new CancellationTokenSource();
 	private Thread? _nomadThread;
 
-	public NomadIISFixture ( IMessageSink messageSink )
+	public NomadIISFixture ()
 	{
-		_messageSink = messageSink;
-
 		_httpClient = new HttpClient()
 		{
 			BaseAddress = new Uri( "http://localhost:4646/v1/" ),
@@ -100,7 +94,7 @@ public sealed class NomadIISFixture : IAsyncLifetime
 			}
 			catch ( Exception ex )
 			{
-				_messageSink.OnMessage( new DiagnosticMessage( ex.Message ) );
+				Console.Error.WriteLine( ex.Message );
 			}
 		} );
 
@@ -120,10 +114,10 @@ public sealed class NomadIISFixture : IAsyncLifetime
 		}
 		catch ( TimeoutException ex )
 		{
-			_messageSink.OnMessage( new DiagnosticMessage( ex.Message ) );
+			Console.Error.WriteLine( ex.Message );
 
-			_messageSink.OnMessage( new DiagnosticMessage( "Nomad agent stdout:" + Environment.NewLine + stdout.ToString() ) );
-			_messageSink.OnMessage( new DiagnosticMessage( "Nomad agent stderr:" + Environment.NewLine + stderr.ToString() ) );
+			Console.Error.WriteLine( "Nomad agent stdout:" + Environment.NewLine + stdout.ToString() );
+			Console.Error.WriteLine( "Nomad agent stderr:" + Environment.NewLine + stderr.ToString() );
 
 			throw;
 		}
