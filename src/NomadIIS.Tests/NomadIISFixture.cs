@@ -35,7 +35,7 @@ public sealed class NomadIISFixture : IAsyncLifetime
 		_apiHttpClient = new HttpClient()
 		{
 			BaseAddress = new Uri( "http://localhost:5004/api/v1/" ),
-			Timeout = TimeSpan.FromMinutes( 3 ),
+			Timeout = TimeSpan.FromMinutes( 5 ), // Screenshot can take a while
 			DefaultRequestHeaders =
 			{
 				{ "X-Api-Key", "12345" }
@@ -63,11 +63,17 @@ public sealed class NomadIISFixture : IAsyncLifetime
 		var configFile = Path.GetFullPath( @"Data\configs\default.hcl" );
 #endif
 
+		File.AppendAllLines( "debug.test.txt", [
+			$"Data Directory: {dataDirectory}",
+			$"Plugin Directory: {pluginDirectory}",
+			$"Config File: {configFile}"
+		] );
+
+		var stdout = new StringBuilder();
+		var stderr = new StringBuilder();
+
 		_nomadThread = new Thread( async () =>
 		{
-			var stdout = new StringBuilder();
-			var stderr = new StringBuilder();
-
 			var nomadCommand = Cli.Wrap( Path.Combine( nomadDirectory, "nomad.exe" ) )
 				.WithArguments( $"agent -dev -config=\"{configFile}\" -plugin-dir=\"{pluginDirectory}\"" )
 				.WithWorkingDirectory( nomadDirectory )
@@ -76,7 +82,7 @@ public sealed class NomadIISFixture : IAsyncLifetime
 					stdout.AppendLine( line );
 					Debug.WriteLine( line );
 				} ) )
-				.WithStandardOutputPipe( PipeTarget.ToDelegate( line =>
+				.WithStandardErrorPipe( PipeTarget.ToDelegate( line =>
 				{
 					stderr.AppendLine( line );
 					Debug.WriteLine( line );
@@ -88,12 +94,14 @@ public sealed class NomadIISFixture : IAsyncLifetime
 			}
 			catch ( Exception ex )
 			{
-				Debug.WriteLine( ex.Message );
+				Console.Error.WriteLine( ex.Message );
 			}
 		} );
 
 		_nomadThread.Start();
 
+		try
+		{
 		await TryUntilAsync( async () =>
 		{
 			var health = await GetAgentHealthAsync();
@@ -102,7 +110,17 @@ public sealed class NomadIISFixture : IAsyncLifetime
 				return health;
 
 			return null;
-		} );
+		}, "Timeout waiting for Nomad agent to be healthy" );
+		}
+		catch ( TimeoutException ex )
+		{
+			Console.Error.WriteLine( ex.Message );
+
+			Console.Error.WriteLine( "Nomad agent stdout:" + Environment.NewLine + stdout.ToString() );
+			Console.Error.WriteLine( "Nomad agent stderr:" + Environment.NewLine + stderr.ToString() );
+
+			throw;
+		}
 	}
 
 	public Task DisposeAsync ()
@@ -120,7 +138,7 @@ public sealed class NomadIISFixture : IAsyncLifetime
 		return Task.CompletedTask;
 	}
 
-	private static async Task<T> TryUntilAsync<T> ( Func<Task<T>> action )
+	private static async Task<T> TryUntilAsync<T> ( Func<Task<T>> action, string timeoutMessage = "Timeout waiting for condition" )
 	{
 		var i = 15;
 		while ( i >= 0 )
@@ -142,7 +160,7 @@ public sealed class NomadIISFixture : IAsyncLifetime
 			}
 		}
 
-		throw new TimeoutException();
+		throw new TimeoutException( timeoutMessage );
 	}
 
 	public Task<AgentHealthResponse?> GetAgentHealthAsync ()
@@ -179,7 +197,7 @@ public sealed class NomadIISFixture : IAsyncLifetime
 					return job;
 
 				return null;
-			} );
+			}, $"Timeout waiting for job {jobId} to reach running state" );
 
 			// Wait a bit to let the task stabilize
 			await Task.Delay( 3000 );
@@ -210,7 +228,7 @@ public sealed class NomadIISFixture : IAsyncLifetime
 
 				return null;
 			}
-		} );
+		}, $"Timeout waiting for job {jobId} to be stopped" );
 	}
 
 	public Task<JobResponse?> ReadJobAsync ( string jobId )

@@ -526,7 +526,7 @@ public class IntegrationTests : IClassFixture<NomadIISFixture>
 	}
 
 #if MANAGEMENT_API
-	[Fact]
+	[Fact( Timeout = 300_000 )]
 	public async Task ManagementApi_TakeScreenshot ()
 	{
 		var jobHcl = """
