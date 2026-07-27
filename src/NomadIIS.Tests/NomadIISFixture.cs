@@ -114,7 +114,7 @@ public sealed class NomadIISFixture : IAsyncLifetime
 				return health;
 
 			return null;
-		} );
+		}, "Timeout waiting for Nomad agent to be healthy" );
 	}
 
 	public Task DisposeAsync ()
@@ -132,7 +132,7 @@ public sealed class NomadIISFixture : IAsyncLifetime
 		return Task.CompletedTask;
 	}
 
-	private static async Task<T> TryUntilAsync<T> ( Func<Task<T>> action )
+	private static async Task<T> TryUntilAsync<T> ( Func<Task<T>> action, string timeoutMessage = "Timeout waiting for condition" )
 	{
 		var i = 15;
 		while ( i >= 0 )
@@ -154,7 +154,7 @@ public sealed class NomadIISFixture : IAsyncLifetime
 			}
 		}
 
-		throw new TimeoutException();
+		throw new TimeoutException( timeoutMessage );
 	}
 
 	public Task<AgentHealthResponse?> GetAgentHealthAsync ()
@@ -191,7 +191,7 @@ public sealed class NomadIISFixture : IAsyncLifetime
 					return job;
 
 				return null;
-			} );
+			}, $"Timeout waiting for job {jobId} to reach running state" );
 
 			// Wait a bit to let the task stabilize
 			await Task.Delay( 3000 );
@@ -222,7 +222,7 @@ public sealed class NomadIISFixture : IAsyncLifetime
 
 				return null;
 			}
-		} );
+		}, $"Timeout waiting for job {jobId} to be stopped" );
 	}
 
 	public Task<JobResponse?> ReadJobAsync ( string jobId )
