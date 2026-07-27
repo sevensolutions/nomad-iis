@@ -163,9 +163,6 @@ public sealed class ManagementService : IHostedService
 		}
 		finally
 		{
-			GC.Collect();
-			GC.WaitForPendingFinalizers();
-
 			_lock.Release();
 		}
 	}
