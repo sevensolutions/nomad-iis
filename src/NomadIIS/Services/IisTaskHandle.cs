@@ -4,7 +4,7 @@ using CliWrap.Buffered;
 #endif
 using Hashicorp.Nomad.Plugins.Drivers.Proto;
 using MessagePack;
-using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Microsoft.Web.Administration;
 using NomadIIS.Services.Configuration;
@@ -14,7 +14,6 @@ using System.IO;
 using System.IO.Compression;
 using System.IO.Pipes;
 using System.Linq;
-using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
 using System.Security.AccessControl;
 using System.Security.Cryptography.X509Certificates;
@@ -54,8 +53,6 @@ public sealed class IisTaskHandle : IDisposable
 	private bool _appPoolStoppedIntentionally = false;
 #pragma warning restore CS0414 // Dem Feld "IisTaskHandle._appPoolStoppedIntentionally" wurde ein Wert zugewiesen, der aber nie verwendet wird.
 
-	private NamedPipeClientStream? _stdoutLogStream;
-
 	internal IisTaskHandle ( ManagementService owner, ILogger logger, string taskId )
 	{
 		if ( string.IsNullOrWhiteSpace( taskId ) )
@@ -69,7 +66,6 @@ public sealed class IisTaskHandle : IDisposable
 
 	public string TaskId { get; }
 	public TaskConfig? TaskConfig => _taskConfig;
-	public int? UdpLoggerPort => _state?.UdpLoggerPort;
 	public IReadOnlyDictionary<string, string>? AppPoolNames => _state?.AppPoolNames?.AsReadOnly();
 	public string? WebsiteName => _state?.WebsiteName;
 	public bool IsRecovered => _isRecovered;
@@ -93,9 +89,12 @@ public sealed class IisTaskHandle : IDisposable
 
 			await _owner.LockAsync( async handle =>
 			{
-				// Get a new port for the UDP logger
-				if ( config.EnableUdpLogging )
-					_state.UdpLoggerPort = GetAvailablePort( 10000 );
+				// Register service auto-start providers in applicationHost.config
+				// This must happen before creating applications that reference them.
+				EnsureServiceAutoStartProviders(
+					handle.ServerManager, config.ServiceAutoStartProviders, _logger );
+
+				_state.ServiceAutoStartProviderNames = config.ServiceAutoStartProviders?.Select( p => p.Name ).ToList();
 
 				var appPools = new Dictionary<string, ApplicationPool>();
 
@@ -112,7 +111,7 @@ public sealed class IisTaskHandle : IDisposable
 					{
 						_logger.LogInformation( $"Task {task.Id}: Creating AppPool with name {fullAppPoolName}..." );
 
-						appPool = CreateApplicationPool( handle.ServerManager, fullAppPoolName, _taskConfig, appPoolConfig, _state.UdpLoggerPort, _owner.UdpLoggerPort );
+						appPool = CreateApplicationPool( handle.ServerManager, fullAppPoolName, _taskConfig, appPoolConfig, _owner );
 
 						appPools.Add( appPoolConfig.Name, appPool );
 					}
@@ -235,27 +234,14 @@ public sealed class IisTaskHandle : IDisposable
 			config.ApplicationPools = config.ApplicationPools.Concat( [
 				new DriverTaskConfigApplicationPool()
 				{
-					Name = DefaultAppPoolName,
-
-					// Temporary backwards compatibility until v0.16.0
-					ManagedPipelineMode = config.ManagedPipelineMode,
-					ManagedRuntimeVersion = config.ManagedRuntimeVersion,
-					StartMode = config.StartMode,
-					IdleTimeout = config.IdleTimeout,
-					DisabledOverlappedRecycle = config.DisabledOverlappedRecycle,
-					PeriodicRestart = config.PeriodicRestart,
-					Enable32BitAppOnWin64 = config.Enable32BitAppOnWin64,
-					ServiceUnavailableResponse = config.ServiceUnavailableResponse,
-					QueueLength = config.QueueLength,
-					StartTimeLimit = config.StartTimeLimit,
-					ShutdownTimeLimit = config.ShutdownTimeLimit
+					Name = DefaultAppPoolName
 				}
 			] ).ToArray();
 		}
 
 		// App pool names must be unique
 		if ( config.ApplicationPools.Select( x => x.Name ).Distinct().Count() != config.ApplicationPools.Length )
-			throw new ArgumentException( "Every applicationPool name must be unique." );
+			throw new ArgumentException( "Every application_pool name must be unique." );
 
 		// Validate app pool name length and remove unused app pools
 		foreach ( var appPool in config.ApplicationPools.ToArray() )
@@ -377,6 +363,24 @@ public sealed class IisTaskHandle : IDisposable
 					var appPool = FindApplicationPool( handle.ServerManager, appPoolName.Value );
 					if ( appPool is not null )
 						handle.ServerManager.ApplicationPools.Remove( appPool );
+				}
+			}
+
+			// Clean up service auto-start providers that are no longer referenced
+			// by any other application after our site/applications have been removed.
+			if ( _state.ServiceAutoStartProviderNames is not null && _state.ServiceAutoStartProviderNames.Count > 0 )
+			{
+				try
+				{
+					var providersToCleanup = _state.ServiceAutoStartProviderNames
+						.Select( name => new DriverTaskConfigServiceAutoStartProvider { Name = name, Type = string.Empty } )
+						.ToArray();
+
+					RemoveServiceAutoStartProviders( handle.ServerManager, providersToCleanup, _logger );
+				}
+				catch ( Exception ex )
+				{
+					_logger.LogWarning( ex, "Failed to clean up service auto-start providers." );
 				}
 			}
 
@@ -539,9 +543,6 @@ public sealed class IisTaskHandle : IDisposable
 	{
 		_ctsDisposed.Cancel();
 
-		if ( _stdoutLogStream is not null )
-			_stdoutLogStream.Dispose();
-
 		_owner.Delete( this );
 	}
 
@@ -601,10 +602,12 @@ public sealed class IisTaskHandle : IDisposable
 		=> FindApplicationPool( serverManager, name ) ?? throw new KeyNotFoundException( $"No AppPool with name {name} found." );
 	private static ApplicationPool? FindApplicationPool ( ServerManager serverManager, string name )
 		=> serverManager.ApplicationPools.FirstOrDefault( x => x.Name == name );
-	private static ApplicationPool CreateApplicationPool ( ServerManager serverManager, string name, TaskConfig taskConfig, DriverTaskConfigApplicationPool config, int? udpLocalPort, int? udpRemotePort )
+	private static ApplicationPool CreateApplicationPool ( ServerManager serverManager, string name, TaskConfig taskConfig, DriverTaskConfigApplicationPool config, ManagementService managementService )
 	{
 		var appPool = serverManager.ApplicationPools.Add( name );
-		appPool.AutoStart = true;
+
+		// Validate and set identity
+		ValidateAndSetIdentity( appPool, config, managementService );
 
 		if ( config.ManagedPipelineMode is not null )
 			appPool.ManagedPipelineMode = config.ManagedPipelineMode.Value;
@@ -652,11 +655,7 @@ public sealed class IisTaskHandle : IDisposable
 		foreach ( var env in GetTaskConfigEnvironmentVariables( taskConfig ) )
 			AddEnvironmentVariable( envVarsCollection, env.Key, env.Value );
 
-		if ( udpLocalPort is not null && udpRemotePort is not null )
-		{
-			AddEnvironmentVariable( envVarsCollection, "NOMAD_STDOUT_UDP_REMOTE_PORT", udpRemotePort.Value.ToString() );
-			AddEnvironmentVariable( envVarsCollection, "NOMAD_STDOUT_UDP_LOCAL_PORT", udpLocalPort.Value.ToString() );
-		}
+		AddExtensions( appPool, config );
 
 		return appPool;
 
@@ -674,13 +673,199 @@ public sealed class IisTaskHandle : IDisposable
 		}
 	}
 
+	private static void ValidateAndSetIdentity ( ApplicationPool appPool, DriverTaskConfigApplicationPool config, ManagementService managementService )
+	{
+		var allowedIdentities = managementService.AllowedAppPoolIdentities;
+
+		// Validate identity is allowed
+		if ( allowedIdentities.Length == 0 )
+		{
+			throw new ArgumentException( $"Application pool identity '{config.Identity}' is not allowed. No identities are allowed." );
+		}
+
+		if ( !allowedIdentities.Contains( config.Identity ) )
+		{
+			throw new ArgumentException( $"Application pool identity '{config.Identity}' is not allowed. Allowed identities: {string.Join( ", ", allowedIdentities )}" );
+		}
+
+		// Set the identity based on configuration
+		switch ( config.Identity )
+		{
+			case "ApplicationPoolIdentity":
+				appPool.ProcessModel.IdentityType = ProcessModelIdentityType.ApplicationPoolIdentity;
+				break;
+
+			case "LocalSystem":
+				appPool.ProcessModel.IdentityType = ProcessModelIdentityType.LocalSystem;
+				break;
+
+			case "LocalService":
+				appPool.ProcessModel.IdentityType = ProcessModelIdentityType.LocalService;
+				break;
+
+			case "NetworkService":
+				appPool.ProcessModel.IdentityType = ProcessModelIdentityType.NetworkService;
+				break;
+
+			case "SpecificUser":
+				if ( string.IsNullOrWhiteSpace( config.Username ) )
+					throw new ArgumentException( "Username is required when identity is set to 'SpecificUser'." );
+
+				var allowedUsers = managementService.AllowedAppPoolUsers;
+
+				// Validate username is allowed
+				if ( allowedUsers.Length == 0 )
+				{
+					throw new ArgumentException( $"Application pool user '{config.Username}' is not allowed. No specific users are allowed." );
+				}
+
+				if ( allowedUsers.Length > 0 )
+				{
+					var isWildcardAllowed = allowedUsers.Contains( "*" );
+					var isUserExplicitlyAllowed = allowedUsers.Contains( config.Username );
+
+					if ( !isWildcardAllowed && !isUserExplicitlyAllowed )
+					{
+						throw new ArgumentException( $"Application pool user '{config.Username}' is not allowed. Allowed users: {string.Join( ", ", allowedUsers )}" );
+					}
+				}
+
+				appPool.ProcessModel.IdentityType = ProcessModelIdentityType.SpecificUser;
+				appPool.ProcessModel.UserName = config.Username;
+
+				// Password is optional for GMSA accounts
+				if ( !string.IsNullOrWhiteSpace( config.Password ) )
+				{
+					appPool.ProcessModel.Password = config.Password;
+				}
+				break;
+
+			default:
+				throw new ArgumentException( $"Unknown identity type '{config.Identity}'. Supported values: ApplicationPoolIdentity, LocalSystem, LocalService, NetworkService, SpecificUser." );
+		}
+	}
+
+	private static void AddExtensions ( ConfigurationElement configurationElement, DriverTaskConfigExtendable taskConfig )
+	{
+		if ( taskConfig.Extensions is null )
+			return;
+
+		foreach ( var extension in taskConfig.Extensions )
+			configurationElement.SetAttributeValue( extension.Name, extension.Value );
+	}
+
+	private static void EnsureServiceAutoStartProviders (
+		ServerManager serverManager,
+		DriverTaskConfigServiceAutoStartProvider[]? providers,
+		ILogger logger )
+	{
+		if ( providers is null || providers.Length == 0 )
+			return;
+
+		var config = serverManager.GetApplicationHostConfiguration();
+		var section = config.GetSection( "system.applicationHost/serviceAutoStartProviders" );
+		var collection = section.GetCollection();
+
+		foreach ( var provider in providers )
+		{
+			var existing = collection
+				.FirstOrDefault( e =>
+					string.Equals(
+						(string)e["name"],
+						provider.Name,
+						StringComparison.OrdinalIgnoreCase ) );
+
+			if ( existing is null )
+			{
+				logger.LogInformation(
+					"Adding service auto-start provider '{Name}' with type '{Type}'.",
+					provider.Name, provider.Type );
+
+				var element = collection.CreateElement( "add" );
+				element["name"] = provider.Name;
+				element["type"] = provider.Type;
+				collection.Add( element );
+			}
+			else if ( !string.Equals( (string)existing["type"], provider.Type, StringComparison.Ordinal ) )
+			{
+				logger.LogInformation(
+					"Updating service auto-start provider '{Name}' type from '{OldType}' to '{NewType}'.",
+					provider.Name, (string)existing["type"], provider.Type );
+
+				existing["type"] = provider.Type;
+			}
+			else
+			{
+				logger.LogDebug(
+					"Service auto-start provider '{Name}' already registered with correct type.",
+					provider.Name );
+			}
+		}
+	}
+
+	private static void RemoveServiceAutoStartProviders (
+		ServerManager serverManager,
+		DriverTaskConfigServiceAutoStartProvider[]? providers,
+		ILogger logger )
+	{
+		if ( providers is null || providers.Length == 0 )
+			return;
+
+		var config = serverManager.GetApplicationHostConfiguration();
+		var section = config.GetSection( "system.applicationHost/serviceAutoStartProviders" );
+		var collection = section.GetCollection();
+
+		foreach ( var provider in providers )
+		{
+			// Check if any other site/application still references this provider
+			var stillInUse = serverManager.Sites
+				.SelectMany( s => s.Applications )
+				.Any( a =>
+				{
+					try
+					{
+						var value = a.GetAttributeValue( "serviceAutoStartProvider" )?.ToString();
+						return string.Equals( value, provider.Name, StringComparison.OrdinalIgnoreCase );
+					}
+					catch
+					{
+						return false;
+					}
+				} );
+
+			if ( stillInUse )
+			{
+				logger.LogDebug(
+					"Service auto-start provider '{Name}' is still in use by another application, skipping removal.",
+					provider.Name );
+				continue;
+			}
+
+			var existing = collection
+				.FirstOrDefault( e =>
+					string.Equals(
+						(string)e["name"],
+						provider.Name,
+						StringComparison.OrdinalIgnoreCase ) );
+
+			if ( existing is not null )
+			{
+				logger.LogInformation(
+					"Removing service auto-start provider '{Name}'.",
+					provider.Name );
+
+				collection.Remove( existing );
+			}
+		}
+	}
+
 	private static IEnumerable<KeyValuePair<string, string>> GetTaskConfigEnvironmentVariables ( TaskConfig taskConfig )
 	{
 		var processVariables = Environment
 			.GetEnvironmentVariables( EnvironmentVariableTarget.Process )
 			.Keys.Cast<string>().ToHashSet();
 
-		var userVariables = new Dictionary<string, string>();
+		var userVariables = new Dictionary<string, string>( StringComparer.OrdinalIgnoreCase );
 
 		foreach ( var nomadEnv in taskConfig.Env )
 		{
@@ -773,6 +958,9 @@ public sealed class IisTaskHandle : IDisposable
 
 							if ( !File.Exists( certificateFilePath ) )
 								throw new FileNotFoundException( $"Couldn't find certificate file {certificateFilePath}." );
+
+							if ( new FileInfo( certificateFilePath ).Length == 0 )
+								throw new Exception( $"Certificate file: {certificateFilePath} contains 0 bytes." );
 
 							usedCertificate = await CertificateHelper.InstallPfxCertificateAsync(
 								certificateFilePath, certificateBlock.Password );
@@ -883,6 +1071,12 @@ public sealed class IisTaskHandle : IDisposable
 		if ( appConfig.EnablePreload is not null )
 			application.SetAttributeValue( "preloadEnabled", appConfig.EnablePreload.Value );
 
+		if ( appConfig.ServiceAutoStartEnabled is not null )
+			application.SetAttributeValue( "serviceAutoStartEnabled", appConfig.ServiceAutoStartEnabled.Value );
+
+		if ( appConfig.ServiceAutoStartProvider is not null )
+			application.SetAttributeValue( "serviceAutoStartProvider", appConfig.ServiceAutoStartProvider );
+
 		if ( appConfig.VirtualDirectories is not null )
 		{
 			if ( appConfig.VirtualDirectories.Select( x => x.Alias ).Distinct().Count() != appConfig.VirtualDirectories.Length )
@@ -896,9 +1090,12 @@ public sealed class IisTaskHandle : IDisposable
 				if ( !Path.IsPathRooted( physicalVdirPath ) )
 					physicalVdirPath = Path.Combine( taskConfig.AllocDir, taskConfig.Name, physicalVdirPath );
 
-				application.VirtualDirectories.Add( $"/{vdir.Alias}", physicalVdirPath );
+				var virtualDirectory = application.VirtualDirectories.Add( $"/{vdir.Alias}", physicalVdirPath );
+				AddExtensions( virtualDirectory, vdir );
 			}
 		}
+
+		AddExtensions( application, appConfig );
 
 		return application;
 	}
@@ -967,23 +1164,32 @@ public sealed class IisTaskHandle : IDisposable
 		// https://learn.microsoft.com/en-us/troubleshoot/developer/webapps/iis/www-authentication-authorization/default-permissions-user-rights
 		// https://stackoverflow.com/questions/51277338/remove-users-group-permission-for-folder-inside-programdata
 
-		var appPoolIdentities = _state.AppPoolNames.Select( x => $"IIS AppPool\\{x.Value}" ).ToArray();
+		// Get the actual identities used by the application pools
+		var appPoolIdentities = new List<string>();
 
-		string[] identities = config.PermitIusr ? appPoolIdentities.Concat( ["IUSR"] ).ToArray() : appPoolIdentities;
+		foreach ( var appPoolConfig in config.ApplicationPools )
+		{
+			var identityName = GetAppPoolIdentityName( appPoolConfig, _state.AppPoolNames[appPoolConfig.Name] );
+			if ( identityName != null )
+				appPoolIdentities.Add( identityName );
+		}
+
+		var appPoolIdentitiesArray = appPoolIdentities.ToArray();
+		string[] identities = config.PermitIusr ? appPoolIdentitiesArray.Concat( ["IUSR"] ).ToArray() : appPoolIdentitiesArray;
 
 		var allocDir = new DirectoryInfo( _taskConfig!.AllocDir );
 
 		var builtinUsersSid = TryGetSid( WellKnownSidType.BuiltinUsersSid );
 		var authenticatedUserSid = TryGetSid( WellKnownSidType.AuthenticatedUserSid );
 
-		SetupDirectory( appPoolIdentities, @"alloc", null, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
-		SetupDirectory( appPoolIdentities, @"alloc\data", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
-		SetupDirectory( appPoolIdentities, @"alloc\logs", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
-		SetupDirectory( appPoolIdentities, @"alloc\tmp", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
+		SetupDirectory( appPoolIdentitiesArray, @"alloc", null, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
+		SetupDirectory( appPoolIdentitiesArray, @"alloc\data", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
+		SetupDirectory( appPoolIdentitiesArray, @"alloc\logs", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
+		SetupDirectory( appPoolIdentitiesArray, @"alloc\tmp", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
 		SetupDirectory( null, $@"{_taskConfig.Name}\private", null, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
 		SetupDirectory( identities, $@"{_taskConfig.Name}\local", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
-		SetupDirectory( appPoolIdentities, $@"{_taskConfig.Name}\secrets", FileSystemRights.Read, InheritanceFlags.ObjectInherit, PropagationFlags.InheritOnly );
-		SetupDirectory( appPoolIdentities, $@"{_taskConfig.Name}\tmp", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
+		SetupDirectory( appPoolIdentitiesArray, $@"{_taskConfig.Name}\secrets", FileSystemRights.Read, InheritanceFlags.ObjectInherit, PropagationFlags.InheritOnly );
+		SetupDirectory( appPoolIdentitiesArray, $@"{_taskConfig.Name}\tmp", FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None );
 
 		void SetupDirectory ( string[]? identities, string subDirectory, FileSystemRights? fileSystemRights, InheritanceFlags inheritanceFlags, PropagationFlags propagationFlags )
 		{
@@ -1027,6 +1233,19 @@ public sealed class IisTaskHandle : IDisposable
 		}
 	}
 
+	private static string GetAppPoolIdentityName ( DriverTaskConfigApplicationPool appPoolConfig, string appPoolName )
+	{
+		return appPoolConfig.Identity switch
+		{
+			"ApplicationPoolIdentity" => $"IIS AppPool\\{appPoolName}",
+			"LocalSystem" => "NT AUTHORITY\\SYSTEM",
+			"LocalService" => "NT AUTHORITY\\LOCAL SERVICE",
+			"NetworkService" => "NT AUTHORITY\\NETWORK SERVICE",
+			"SpecificUser" => appPoolConfig.Username ?? throw new ArgumentException( "Username is required when identity is set to 'SpecificUser'." ),
+			_ => throw new ArgumentOutOfRangeException( nameof( appPoolConfig.Identity ), $"Identity type '{appPoolConfig.Identity}' is not supported." )
+		};
+	}
+
 	private SecurityIdentifier? TryGetSid ( WellKnownSidType sidType )
 	{
 		try
@@ -1056,59 +1275,6 @@ public sealed class IisTaskHandle : IDisposable
 		}
 
 		throw new Exception( "No more website IDs available." );
-	}
-
-
-
-	internal async Task ShipLogsAsync ( byte[] data )
-	{
-		if ( _taskConfig?.StdoutPath is null )
-			return;
-
-		if ( _stdoutLogStream is null || !_stdoutLogStream.IsConnected )
-		{
-			if ( _stdoutLogStream is not null )
-				await _stdoutLogStream.DisposeAsync();
-
-			_stdoutLogStream = new NamedPipeClientStream( _taskConfig.StdoutPath.Replace( "//./pipe/", "" ) );
-
-			await _stdoutLogStream.ConnectAsync();
-		}
-
-		await _stdoutLogStream.WriteAsync( data, _ctsDisposed.Token );
-	}
-
-	private static int GetAvailablePort ( int startingPort )
-	{
-		var portArray = new List<int>();
-
-		var properties = IPGlobalProperties.GetIPGlobalProperties();
-
-		// Ignore active connections
-		var connections = properties.GetActiveTcpConnections();
-		portArray.AddRange( from n in connections
-							where n.LocalEndPoint.Port >= startingPort
-							select n.LocalEndPoint.Port );
-
-		// Ignore active TCP listners
-		var endPoints = properties.GetActiveTcpListeners();
-		portArray.AddRange( from n in endPoints
-							where n.Port >= startingPort
-							select n.Port );
-
-		// Ignore active UDP listeners
-		endPoints = properties.GetActiveUdpListeners();
-		portArray.AddRange( from n in endPoints
-							where n.Port >= startingPort
-							select n.Port );
-
-		portArray.Sort();
-
-		for ( var i = startingPort; i < ushort.MaxValue; i++ )
-			if ( !portArray.Contains( i ) )
-				return i;
-
-		return 0;
 	}
 
 	public async Task StartAppPoolAsync ()
@@ -1219,7 +1385,7 @@ public sealed class IisTaskHandle : IDisposable
 		} );
 	}
 
-	public async Task DownloadFileAsync ( HttpResponse response, string path )
+	public Task<IActionResult> DownloadFileAsync ( string path )
 	{
 		if ( _state is null || _taskConfig is null )
 			throw new InvalidOperationException( "Invalid state." );
@@ -1230,24 +1396,55 @@ public sealed class IisTaskHandle : IDisposable
 
 		if ( File.Exists( physicalPath ) )
 		{
-			response.Headers.ContentType = "application/octet-stream";
-			response.Headers.ContentDisposition = $"attachment; filename=\"{Path.GetFileName( physicalPath )}\"";
-			response.StatusCode = StatusCodes.Status200OK;
+			IActionResult result = new PhysicalFileResult( physicalPath, "application/octet-stream" )
+			{
+				FileDownloadName = Path.GetFileName( physicalPath )
+			};
 
-			await response.StartAsync();
+			return Task.FromResult( result );
+		}
+		else if ( Directory.Exists( physicalPath ) )
+		{
+			IActionResult result = new ZipDirectoryResult( physicalPath );
 
-			using var fs = File.OpenRead( physicalPath );
-			await fs.CopyToAsync( response.Body );
+			return Task.FromResult( result );
 		}
 		else
 		{
-			response.Headers.ContentType = "application/zip";
-			response.Headers.ContentDisposition = $"attachment; filename=\"{Path.GetFileName( physicalPath )}.zip\"";
-			response.StatusCode = StatusCodes.Status200OK;
+			IActionResult result = new NotFoundResult();
 
-			await response.StartAsync();
+			return Task.FromResult( result );
+		}
+	}
 
-			ZipFile.CreateFromDirectory( physicalPath, response.Body );
+	private sealed class ZipDirectoryResult : IActionResult
+	{
+		private readonly string _directoryPath;
+
+		public ZipDirectoryResult ( string directoryPath )
+		{
+			_directoryPath = directoryPath;
+		}
+
+		public async Task ExecuteResultAsync ( ActionContext context )
+		{
+			var response = context.HttpContext.Response;
+
+			response.ContentType = "application/zip";
+			response.Headers.ContentDisposition = $"attachment; filename=\"{Path.GetFileName( _directoryPath )}.zip\"";
+
+			using var archive = new ZipArchive( response.Body, ZipArchiveMode.Create, leaveOpen: true );
+
+			foreach ( var filePath in Directory.EnumerateFiles( _directoryPath, "*", SearchOption.AllDirectories ) )
+			{
+				var entryName = Path.GetRelativePath( _directoryPath, filePath ).Replace( '\\', '/' );
+				var entry = archive.CreateEntry( entryName, CompressionLevel.Fastest );
+
+				using var entryStream = entry.Open();
+				using var fileStream = File.OpenRead( filePath );
+
+				await fileStream.CopyToAsync( entryStream );
+			}
 		}
 	}
 	public async Task UploadFileAsync ( Stream stream, bool isZip, string path, bool hot, bool cleanFolder )

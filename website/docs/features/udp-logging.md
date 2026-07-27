@@ -5,7 +5,7 @@ sidebar_position: 7
 # 💬 UDP Logging
 
 :::danger
-This feature will be deprecated and removed in version 0.16.0!
+This feature is deprecated and has been removed in version 0.16.0!
 See [GH-116](https://github.com/sevensolutions/nomad-iis/issues/116) for details.
 :::
 

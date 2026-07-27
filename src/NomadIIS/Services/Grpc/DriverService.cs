@@ -116,7 +116,6 @@ public sealed class DriverService : Driver.DriverBase
 						{ $"driver.{PluginInfo.Name}.iis_aspnet_core_available", new Hashicorp.Nomad.Plugins.Shared.Structs.Attribute(){ BoolVal = aspnetCoreAvailable } },
 						{ $"driver.{PluginInfo.Name}.iis_rewrite_module_available", new Hashicorp.Nomad.Plugins.Shared.Structs.Attribute(){ BoolVal = rewriteModuleAvailable } },
 						{ $"driver.{PluginInfo.Name}.directory_security_enabled", new Hashicorp.Nomad.Plugins.Shared.Structs.Attribute(){ BoolVal = _managementService.DirectorySecurity } },
-						{ $"driver.{PluginInfo.Name}.udp_logging_enabled", new Hashicorp.Nomad.Plugins.Shared.Structs.Attribute(){ BoolVal = _managementService.UdpLoggerPort is not null } },
 						{ $"driver.{PluginInfo.Name}.target_websites_enabled", new Hashicorp.Nomad.Plugins.Shared.Structs.Attribute(){ BoolVal = _managementService.AllowedTargetWebsites.Length > 0 } },
 #if MANAGEMENT_API
 						{ $"driver.{PluginInfo.Name}.management_api_enabled", new Hashicorp.Nomad.Plugins.Shared.Structs.Attribute(){ BoolVal = managementApiPort > 0 } },
@@ -215,9 +214,16 @@ public sealed class DriverService : Driver.DriverBase
 
 		if ( handle is not null )
 		{
-			await handle.DestroyAsync();
-
-			handle.Dispose();
+			try
+			{
+				await handle.DestroyAsync();
+			}
+			finally
+			{
+				// DestroyTask is terminal, so always dispose the handle.
+				// Keeping it around would leak it and a later task with the same id would re-use the stale handle.
+				handle.Dispose();
+			}
 		}
 
 		return new DestroyTaskResponse();
@@ -279,7 +285,17 @@ public sealed class DriverService : Driver.DriverBase
 		// Note: Looks like request.TaskId is always empty here.
 		var handle = _managementService.CreateHandle( request.Handle.Config.Id );
 
-		handle.RecoverState( request );
+		try
+		{
+			handle.RecoverState( request );
+		}
+		catch
+		{
+			// If recovery fails, we should dispose the handle to avoid leaking it.
+			// Nomad will create a new allocation when recovery fails.
+			handle.Dispose();
+			throw;
+		}
 
 		return Task.FromResult( new RecoverTaskResponse() );
 	}

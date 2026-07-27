@@ -1,21 +1,210 @@
-/**
- * CSS files with the .module.css suffix will be treated as CSS modules
- * and scoped locally.
- */
+/* ── Hero ───────────────────────────────────────────────────────────────── */
 
-.container {
-	width: 100dvw;
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	justify-content: center;
-	padding-top: 10em;
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 5rem 1.5rem 4rem;
+  background: radial-gradient(ellipse at 50% 0%, rgba(91, 199, 146, 0.12) 0%, transparent 70%);
 }
 
-.logo {
-  width: 50em;
-  content:url("~/img/logo.svg")
+[data-theme='dark'] .hero {
+  background: radial-gradient(ellipse at 50% 0%, rgba(91, 199, 146, 0.08) 0%, transparent 70%);
 }
-[data-theme='dark'] .logo {
-	content:url("~/img/logo-dark.svg")
+
+.heroBadge {
+  display: inline-block;
+  padding: 0.3rem 0.85rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ifm-color-primary-darkest);
+  background: rgba(91, 199, 146, 0.15);
+  border: 1px solid rgba(91, 199, 146, 0.35);
+  margin-bottom: 2rem;
+}
+
+[data-theme='dark'] .heroBadge {
+  color: var(--ifm-color-primary-lightest);
+  background: rgba(91, 199, 146, 0.1);
+}
+
+.heroLogo {
+  width: min(480px, 80vw);
+  margin-bottom: 1.5rem;
+  content: url('/img/logo.svg');
+}
+
+[data-theme='dark'] .heroLogo {
+  content: url('/img/logo-dark.svg');
+}
+
+.heroTagline {
+  font-size: clamp(1.4rem, 3vw, 2rem);
+  font-weight: 700;
+  margin-bottom: 1rem;
+  color: var(--ifm-heading-color);
+}
+
+.heroSubtitle {
+  max-width: 640px;
+  font-size: 1.05rem;
+  line-height: 1.7;
+  color: var(--ifm-color-emphasis-700);
+  margin-bottom: 2rem;
+}
+
+.heroActions {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 2rem;
+}
+
+.heroSponsor {
+  opacity: 0.85;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+
+.btnPrimary {
+  display: inline-block;
+  padding: 0.7rem 1.6rem;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff !important;
+  background: var(--ifm-color-primary);
+  text-decoration: none !important;
+  transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+  box-shadow: 0 2px 12px rgba(91, 199, 146, 0.35);
+}
+
+.btnPrimary:hover {
+  background: var(--ifm-color-primary-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 18px rgba(91, 199, 146, 0.45);
+}
+
+.btnOutline {
+  display: inline-block;
+  padding: 0.7rem 1.6rem;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--ifm-color-primary) !important;
+  background: transparent;
+  border: 2px solid var(--ifm-color-primary);
+  text-decoration: none !important;
+  transition: background 0.2s, color 0.2s, transform 0.15s;
+}
+
+.btnOutline:hover {
+  background: rgba(91, 199, 146, 0.1);
+  transform: translateY(-1px);
+}
+
+/* ── Highlights section ───────────────────────────────────────────────────── */
+
+.highlights {
+  padding: 4rem 1.5rem;
+  background: var(--ifm-background-surface-color);
+}
+
+.highlightsInner {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.sectionTitle {
+  text-align: center;
+  font-size: clamp(1.4rem, 3vw, 2rem);
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+}
+
+.sectionSubtitle {
+  text-align: center;
+  font-size: 1.05rem;
+  color: var(--ifm-color-emphasis-700);
+  max-width: 620px;
+  margin: 0 auto 3rem;
+  line-height: 1.7;
+}
+
+.featureGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1.25rem;
+}
+
+.featureCard {
+  padding: 1.5rem;
+  border-radius: 12px;
+  border: 1px solid var(--ifm-color-emphasis-200);
+  background: var(--ifm-card-background-color, var(--ifm-background-color));
+  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+}
+
+.featureCard:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
+  border-color: var(--ifm-color-primary);
+}
+
+[data-theme='dark'] .featureCard:hover {
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
+}
+
+.featureIconWrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  background: rgba(91, 199, 146, 0.15);
+  color: var(--ifm-color-primary-dark);
+  margin-bottom: 1rem;
+  flex-shrink: 0;
+}
+
+[data-theme='dark'] .featureIconWrap {
+  background: rgba(91, 199, 146, 0.12);
+  color: var(--ifm-color-primary-light);
+}
+
+.featureTitle {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.featureDescription {
+  font-size: 0.9rem;
+  color: var(--ifm-color-emphasis-700);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* ── CTA strip ────────────────────────────────────────────────────────────── */
+
+.ctaStrip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 4rem 1.5rem;
+  text-align: center;
+  background: radial-gradient(ellipse at 50% 100%, rgba(91, 199, 146, 0.1) 0%, transparent 70%);
+}
+
+.ctaStrip h2 {
+  font-size: clamp(1.3rem, 3vw, 1.8rem);
+  font-weight: 700;
+  margin: 0;
 }

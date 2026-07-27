@@ -18,7 +18,7 @@ public sealed class IisHandle : IDisposable
 		=> new IisAppPoolHandle( this, name );
 	public IisWebsiteHandle Website ( string name )
 		=> new IisWebsiteHandle( this, name );
-	
+
 	public void Dispose ()
 	{
 		_serverManager.Dispose();
@@ -86,6 +86,46 @@ public sealed class IisAppPoolHandle
 		var appPool = GetApplicationPool();
 		Assert.Equal( value, appPool.Recycling.PeriodicRestart.Time );
 	}
+	public void ShouldHaveQueueLength ( long value )
+	{
+		var appPool = GetApplicationPool();
+		Assert.Equal( value, appPool.QueueLength );
+	}
+	public void ShouldHaveStartTimeLimit ( TimeSpan value )
+	{
+		var appPool = GetApplicationPool();
+		Assert.Equal( value, appPool.ProcessModel.StartupTimeLimit );
+	}
+	public void ShouldHaveShutdownTimeLimit ( TimeSpan value )
+	{
+		var appPool = GetApplicationPool();
+		Assert.Equal( value, appPool.ProcessModel.ShutdownTimeLimit );
+	}
+	public void ShouldHaveEnable32BitAppOnWin64 ( bool value )
+	{
+		var appPool = GetApplicationPool();
+		Assert.Equal( value, appPool.Enable32BitAppOnWin64 );
+	}
+	public void ShouldHaveIdentityType ( ProcessModelIdentityType identityType )
+	{
+		var appPool = GetApplicationPool();
+		Assert.Equal( identityType, appPool.ProcessModel.IdentityType );
+	}
+	public void ShouldHaveUsername ( string username )
+	{
+		var appPool = GetApplicationPool();
+		Assert.Equal( username, appPool.ProcessModel.UserName );
+	}
+	public void ShouldHavePassword ( string password )
+	{
+		var appPool = GetApplicationPool();
+		Assert.Equal( password, appPool.ProcessModel.Password );
+	}
+	public void ShouldHaveEmptyPassword ()
+	{
+		var appPool = GetApplicationPool();
+		Assert.True( string.IsNullOrEmpty( appPool.ProcessModel.Password ) );
+	}
 
 	private ApplicationPool GetApplicationPool ()
 	{
@@ -117,6 +157,12 @@ public sealed class IisWebsiteHandle
 	{
 		if ( FindWebsite() is not null )
 			Assert.Fail( $"Website with name \"{_name}\" exists but shouldn't." );
+	}
+
+	public void ShouldHaveBindingCount ( int count )
+	{
+		var website = GetWebsite();
+		Assert.Equal( count, website.Bindings.Count );
 	}
 
 	public IisWebsiteBindingHandle Binding ( int index )
@@ -154,6 +200,26 @@ public sealed class IisWebsiteBindingHandle
 			Assert.Fail( "Binding is not https but should be." );
 	}
 
+	public void HasHostname ( string hostname )
+	{
+		if ( _binding.Host != hostname )
+			Assert.Fail( $"Binding hostname should be {hostname}, but is {_binding.Host}." );
+	}
+
+	public void HasIPAddress ( string ipAddress )
+	{
+		// IIS binding information format: IP:Port:Hostname
+		var bindingInfo = _binding.BindingInformation.Split( ':' );
+		
+		if ( bindingInfo.Length != 3 )
+			Assert.Fail( $"Binding information has unexpected format: {_binding.BindingInformation}" );
+		
+		var actualIP = bindingInfo[0];
+		
+		if ( actualIP != ipAddress )
+			Assert.Fail( $"Binding IP address should be {ipAddress}, but is {actualIP}." );
+	}
+
 	public void CertificateThumbprintIs ( string certificateThumbprint )
 	{
 		if ( _binding.CertificateHash is null || _binding.CertificateHash.Length == 0 )
@@ -188,6 +254,14 @@ public sealed class IisApplicationHandle
 		var application = GetApplication();
 
 		Assert.Equal( poolName, application.ApplicationPoolName );
+	}
+	public void ShouldHaveVirtualDirectory ( string virtualDirectoryPath )
+	{
+		var application = GetApplication();
+		var vdir = application.VirtualDirectories.FirstOrDefault( x => x.Path == virtualDirectoryPath );
+
+		if ( vdir is null )
+			Assert.Fail( $"Application \"{_path}\" doesn't have a virtual directory with path \"{virtualDirectoryPath}\"." );
 	}
 
 	private Application GetApplication ()

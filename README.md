@@ -10,7 +10,7 @@
   </a>
 </p>
 
-A task driver for [HashiCorp Nomad](https://www.nomadproject.io/) to run web-applications in IIS on Windows machines. Unlike most other Nomad task drivers, this one is written in the C# language using ASP.NET 9.
+A task driver for [HashiCorp Nomad](https://www.nomadproject.io/) to run web-applications in IIS on Windows machines. Unlike most other Nomad task drivers, this one is written in the C# language using ASP.NET 10.
 It uses the *Microsoft.Web.Administration*-API to communicate with IIS.
 Feel free to use it as-is or as a reference implementation for your own C#-based Nomad-plugins.
 
@@ -31,7 +31,6 @@ Feel free to use it as-is or as a reference implementation for your own C#-based
 | HTTPS Bindings | ✔ | [Details](https://nomad-iis.sevensolutions.cc/docs/features/https) |
 | Environment Variables | ✔ | [Details](https://nomad-iis.sevensolutions.cc/docs/features/environment-variables) |
 | Resource Statistics | ✔ | |
-| Logging | ✔ | Experimental UDP logging. [Details](https://nomad-iis.sevensolutions.cc/docs/features/udp-logging) |
 | Signals | ✔ | [Details](https://nomad-iis.sevensolutions.cc/docs/features/signals) |
 | Exec (Shell Access) | ❌ | I'am playing around a little bit but don't want to give you hope :/. See [GH-15](https://github.com/sevensolutions/nomad-iis/issues/15) for status. |
 | Filesystem Isolation | 🔶 | [Details](https://nomad-iis.sevensolutions.cc/docs/features/filesystem-isolation) |
@@ -82,3 +81,8 @@ Please also dont forget to ★ the repo.
 Thank You!
 
 [![](https://img.shields.io/static/v1?label=Sponsor&color=blue&message=%E2%9D%A4&logo=GitHub)](https://github.com/sponsors/sevensolutions)
+
+Are you looking for the right hosting provider?  
+Click the link below and get 20€ starting credit when you sign up via this link 😎.
+
+[![Hetzner](https://a11ybadges.com/badge?logo=hetzner)](https://hetzner.cloud/?ref=98cdlRHw6PL5)

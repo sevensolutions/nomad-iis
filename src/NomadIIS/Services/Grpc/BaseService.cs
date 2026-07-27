@@ -1,12 +1,7 @@
 ﻿using Grpc.Core;
 using Hashicorp.Nomad.Plugins.Base.Proto;
-using MessagePack;
 using Microsoft.Extensions.Logging;
-using Microsoft.Web.Administration;
 using NomadIIS.Services.Configuration;
-using System;
-using System.Collections.Generic;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using static Hashicorp.Nomad.Plugins.Base.Proto.BasePlugin;
 

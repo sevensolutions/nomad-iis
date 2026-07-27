@@ -2,6 +2,7 @@
 using System;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using System.Linq;
 
 namespace NomadIIS.Services.Configuration;
 
@@ -11,60 +12,36 @@ public sealed class DriverTaskConfig
 	public string? TargetWebsite { get; set; }
 
 	[ConfigurationCollectionField( "applicationPools", "applicationPool", 0 )]
-	public DriverTaskConfigApplicationPool[] ApplicationPools { get; set; } = default!;
+	public DriverTaskConfigApplicationPool[] ApplicationPoolsOld { get; set; } = default!;
+
+	[ConfigurationCollectionField( "application_pools", "application_pool", 0 )]
+	public DriverTaskConfigApplicationPool[] ApplicationPoolsNew { get; set; } = default!;
+
+	public DriverTaskConfigApplicationPool[] ApplicationPools
+	{
+		get => ( ApplicationPoolsOld ?? [] ).Concat( ApplicationPoolsNew ?? [] ).ToArray();
+		set
+		{
+			ApplicationPoolsOld = [];
+			ApplicationPoolsNew = value;
+		}
+	}
 
 	[ConfigurationCollectionField( "applications", "application", 1 )]
 	public DriverTaskConfigApplication[] Applications { get; set; } = default!;
-
-	[ConfigurationField( "enable_udp_logging" )]
-	public bool EnableUdpLogging { get; set; }
 
 	[DefaultValue( true )]
 	[ConfigurationField( "permit_iusr" )]
 	public bool PermitIusr { get; set; } = true;
 
-	[ConfigurationCollectionField( "bindings", "binding", 0, 2 )]
+	[ConfigurationCollectionField( "bindings", "binding", 0, 64 )]
 	public DriverTaskConfigBinding[] Bindings { get; set; } = default!;
 
-	#region Temporary backwards compatibility until v0.16.0
-
-	[ConfigurationField( "managed_pipeline_mode" )]
-	public ManagedPipelineMode? ManagedPipelineMode { get; set; }
-
-	[ConfigurationField( "managed_runtime_version" )]
-	public string? ManagedRuntimeVersion { get; set; }
-
-	[ConfigurationField( "start_mode" )]
-	public StartMode? StartMode { get; set; }
-
-	[ConfigurationField( "idle_timeout" )]
-	public TimeSpan? IdleTimeout { get; set; }
-
-	[ConfigurationField( "disable_overlapped_recycle" )]
-	public bool? DisabledOverlappedRecycle { get; set; }
-
-	[ConfigurationField( "periodic_restart" )]
-	public TimeSpan? PeriodicRestart { get; set; }
-
-	[ConfigurationField( "enable_32bit_app_on_win64" )]
-	public bool? Enable32BitAppOnWin64 { get; set; }
-
-	[ConfigurationField( "service_unavailable_response" )]
-	public LoadBalancerCapabilities? ServiceUnavailableResponse { get; set; }
-
-	[ConfigurationField( "queue_length" )]
-	public long? QueueLength { get; set; }
-
-	[ConfigurationField( "start_time_limit" )]
-	public TimeSpan? StartTimeLimit { get; set; }
-
-	[ConfigurationField( "shutdown_time_limit" )]
-	public TimeSpan? ShutdownTimeLimit { get; set; }
-
-	#endregion
+	[ConfigurationCollectionField( "service_auto_start_providers", "service_auto_start_provider" )]
+	public DriverTaskConfigServiceAutoStartProvider[]? ServiceAutoStartProviders { get; set; }
 }
 
-public sealed class DriverTaskConfigApplicationPool
+public sealed class DriverTaskConfigApplicationPool : DriverTaskConfigExtendable
 {
 	[ConfigurationField( "name" )]
 	[DefaultValue( IisTaskHandle.DefaultAppPoolName )]
@@ -102,9 +79,19 @@ public sealed class DriverTaskConfigApplicationPool
 
 	[ConfigurationField( "shutdown_time_limit" )]
 	public TimeSpan? ShutdownTimeLimit { get; set; }
+
+	[ConfigurationField( "identity" )]
+	[DefaultValue( "ApplicationPoolIdentity" )]
+	public string Identity { get; set; } = "ApplicationPoolIdentity";
+
+	[ConfigurationField( "username" )]
+	public string? Username { get; set; }
+
+	[ConfigurationField( "password" )]
+	public string? Password { get; set; }
 }
 
-public sealed class DriverTaskConfigApplication
+public sealed class DriverTaskConfigApplication : DriverTaskConfigExtendable
 {
 	[ConfigurationField( "application_pool" )]
 	[DefaultValue( IisTaskHandle.DefaultAppPoolName )]
@@ -120,11 +107,17 @@ public sealed class DriverTaskConfigApplication
 	[ConfigurationField( "enable_preload" )]
 	public bool? EnablePreload { get; set; }
 
+	[ConfigurationField( "service_auto_start_enabled" )]
+	public bool? ServiceAutoStartEnabled { get; set; }
+
+	[ConfigurationField( "service_auto_start_provider" )]
+	public string? ServiceAutoStartProvider { get; set; }
+
 	[ConfigurationCollectionField( "virtual_directories", "virtual_directory" )]
 	public DriverTaskConfigVirtualDirectory[]? VirtualDirectories { get; set; }
 }
 
-public sealed class DriverTaskConfigVirtualDirectory
+public sealed class DriverTaskConfigVirtualDirectory : DriverTaskConfigExtendable
 {
 	[Required]
 	[ConfigurationField( "alias" )]
@@ -181,4 +174,32 @@ public enum DriverTaskConfigBindingType
 {
 	Http,
 	Https
+}
+
+public sealed class DriverTaskConfigExtension
+{
+	[Required]
+	[ConfigurationField( "name" )]
+	public string Name { get; set; } = default!;
+
+	[Required]
+	[ConfigurationField( "value" )]
+	public string Value { get; set; } = default!;
+}
+
+public abstract class DriverTaskConfigExtendable
+{
+	[ConfigurationCollectionField( "extensions", "extension" )]
+	public DriverTaskConfigExtension[]? Extensions { get; set; }
+}
+
+public sealed class DriverTaskConfigServiceAutoStartProvider
+{
+	[Required]
+	[ConfigurationField( "name" )]
+	public string Name { get; set; } = default!;
+
+	[Required]
+	[ConfigurationField( "type" )]
+	public string Type { get; set; } = default!;
 }

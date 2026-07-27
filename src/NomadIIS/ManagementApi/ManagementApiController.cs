@@ -98,9 +98,7 @@ public sealed class ManagementApiController : Controller
 
 		path = HttpUtility.UrlDecode( path );
 
-		await taskHandle.DownloadFileAsync( HttpContext.Response, path );
-
-		return Ok();
+		return await taskHandle.DownloadFileAsync( path );
 	}
 	[HttpPut( "v1/allocs/{allocId}/{taskName}/fs/{path}" )]
 	public async Task<IActionResult> PutFileAsync ( string allocId, string taskName, string path, [FromQuery] bool clean = false )
