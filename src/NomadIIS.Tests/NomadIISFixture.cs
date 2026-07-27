@@ -75,11 +75,11 @@ public sealed class NomadIISFixture : IAsyncLifetime
 			$"Config File: {configFile}"
 		] );
 
+		var stdout = new StringBuilder();
+		var stderr = new StringBuilder();
+
 		_nomadThread = new Thread( async () =>
 		{
-			var stdout = new StringBuilder();
-			var stderr = new StringBuilder();
-
 			var nomadCommand = Cli.Wrap( Path.Combine( nomadDirectory, "nomad.exe" ) )
 				.WithArguments( $"agent -dev -config=\"{configFile}\" -plugin-dir=\"{pluginDirectory}\"" )
 				.WithWorkingDirectory( nomadDirectory )
@@ -106,6 +106,8 @@ public sealed class NomadIISFixture : IAsyncLifetime
 
 		_nomadThread.Start();
 
+		try
+		{
 		await TryUntilAsync( async () =>
 		{
 			var health = await GetAgentHealthAsync();
@@ -115,6 +117,16 @@ public sealed class NomadIISFixture : IAsyncLifetime
 
 			return null;
 		}, "Timeout waiting for Nomad agent to be healthy" );
+		}
+		catch ( TimeoutException ex )
+		{
+			_messageSink.OnMessage( new DiagnosticMessage( ex.Message ) );
+
+			_messageSink.OnMessage( new DiagnosticMessage( "Nomad agent stdout:" + Environment.NewLine + stdout.ToString() ) );
+			_messageSink.OnMessage( new DiagnosticMessage( "Nomad agent stderr:" + Environment.NewLine + stderr.ToString() ) );
+
+			throw;
+		}
 	}
 
 	public Task DisposeAsync ()
