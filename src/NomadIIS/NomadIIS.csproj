@@ -16,19 +16,18 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Grpc.AspNetCore" Version="2.80.0" />
-		<PackageReference Include="Grpc.AspNetCore.HealthChecks" Version="2.80.0" />
-		<PackageReference Include="Grpc.AspNetCore.Server.Reflection" Version="2.80.0" />
-		<PackageReference Include="MessagePack" Version="3.1.8" />
-		<PackageReference Include="Microsoft.Web.Administration" Version="11.1.0" />
-		<PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
-		<PackageReference Include="System.Threading.Channels" Version="10.0.10" />
+		<PackageReference Include="Grpc.AspNetCore" />
+		<PackageReference Include="Grpc.AspNetCore.HealthChecks" />
+		<PackageReference Include="Grpc.AspNetCore.Server.Reflection" />
+		<PackageReference Include="MessagePack" />
+		<PackageReference Include="Microsoft.Web.Administration" />
+		<PackageReference Include="Serilog.AspNetCore" />
 	</ItemGroup>
 
 	<ItemGroup Condition="$(DefineConstants.Contains('MANAGEMENT_API'))">
-		<PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.21.0" />
-		<PackageReference Include="Microsoft.Playwright" Version="1.61.0" />
-		<PackageReference Include="CliWrap" Version="3.10.3" />
+		<PackageReference Include="System.IdentityModel.Tokens.Jwt" />
+		<PackageReference Include="Microsoft.Playwright" />
+		<PackageReference Include="CliWrap" />
 	</ItemGroup>
 
 	<ItemGroup>

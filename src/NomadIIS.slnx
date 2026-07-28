@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/Projektmappenelemente/">
+    <File Path="../.editorconfig" />
+    <File Path="../.github/dependabot.yml" />
+    <File Path="../.gitignore" />
+    <File Path="../examples/agent.dev.hcl" />
+    <File Path="../examples/agent.hcl" />
+    <File Path="../examples/aspnet_sample_app.hcl" />
+    <File Path="../examples/static_sample_app.hcl" />
+    <File Path="../README.md" />
+    <File Path="Directory.Packages.props" />
+  </Folder>
+  <Project Path="NomadIIS.Tests/NomadIIS.Tests.csproj" />
+  <Project Path="NomadIIS/NomadIIS.csproj" />
+</Solution>
