@@ -3,6 +3,13 @@ name: Build
 on:
   push:
     branches: [ "main" ]
+    paths-ignore:
+      - "LICENSE"
+      - "README.md"
+      - "SECURITY.md"
+      - "CONTRIBUTING.md"
+      - "CODE_OF_CONDUCT.md"
+      - "website/**"
   pull_request:
     branches: [ "main" ]
     paths-ignore:
