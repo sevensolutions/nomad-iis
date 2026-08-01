@@ -107,7 +107,10 @@ https://developer.hashicorp.com/nomad/tutorials/windows
 
 Download the latest version of the Nomad-IIS plugin from the Releases page at GitHub.
 
-[Download](https://github.com/sevensolutions/nomad-iis/releases)
+<a class="button button--primary button--lg" href="https://github.com/sevensolutions/nomad-iis/releases">Download</a>
+
+<br />
+<br />
 
 :::tip
 If you want to use the [Management API](../features/management-api.md), you need to download `nomad_iis_mgmt_api.zip`.

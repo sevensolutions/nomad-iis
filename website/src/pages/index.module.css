@@ -1,3 +1,42 @@
+/* ── Release banner ───────────────────────────────────────────────────────── */
+
+.releaseBanner {
+  background: linear-gradient(90deg, var(--ifm-color-primary-darker), var(--ifm-color-primary));
+}
+
+.releaseBannerInner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0.65rem 2.5rem 0.65rem 1rem;
+  position: relative;
+  font-size: 0.9rem;
+  color: #fff;
+}
+
+.releaseBannerIcon {
+  flex-shrink: 0;
+}
+
+.releaseBannerText {
+  font-weight: 500;
+}
+
+.releaseBannerLink {
+  font-weight: 700;
+  color: #fff !important;
+  text-decoration: underline !important;
+  text-underline-offset: 2px;
+}
+
+.releaseBannerLink:hover {
+  opacity: 0.85;
+}
+
 /* ── Hero ───────────────────────────────────────────────────────────────── */
 
 .hero {

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import Layout from '@theme/Layout';
@@ -10,10 +11,30 @@ import {
   Wrench,
   Link2,
   Radio,
+  PartyPopper,
+  X,
   type LucideIcon,
 } from 'lucide-react';
 
 import styles from './index.module.css';
+
+function ReleaseBanner() {
+ 	return (
+    <div className={styles.releaseBanner}>
+      <div className={styles.releaseBannerInner}>
+        <PartyPopper size={18} strokeWidth={2} className={styles.releaseBannerIcon} />
+        <span className={styles.releaseBannerText}>
+          <strong>v1.21.0</strong> is finally here — our first stable release!
+        </span>
+        <Link
+          className={styles.releaseBannerLink}
+          to="https://github.com/sevensolutions/nomad-iis/releases/tag/v1.21.0">
+          See what's new →
+        </Link>
+      </div>
+    </div>
+  );
+}
 
 const features: { icon: LucideIcon; title: string; description: string }[] = [
   {
@@ -84,6 +105,8 @@ export default function Home(): JSX.Element {
     <Layout
       title={siteConfig.title}
       description="A TaskDriver plugin for HashiCorp Nomad to run IIS workloads on Windows.">
+
+      <ReleaseBanner />
 
       {/* ── Hero ── */}
       <section className={styles.hero}>
