@@ -249,19 +249,25 @@ jobs:
       uses: actions/attest@v4
       with:
         subject-path: |
+          nomad_iis/nomad_iis.exe
           nomad_iis.zip
+          nomad_iis_mgmt_api/nomad_iis.exe
           nomad_iis_mgmt_api.zip
 
     # Generate signed SBOM attestations for the release assets
     - name: Attest SBOM (nomad_iis)
       uses: actions/attest@v4
       with:
-        subject-path: nomad_iis.zip
+        subject-path: |
+          nomad_iis/nomad_iis.exe
+          nomad_iis.zip
         sbom-path: nomad_iis-sbom/nomad_iis.sbom.json
     - name: Attest SBOM (nomad_iis_mgmt_api)
       uses: actions/attest@v4
       with:
-        subject-path: nomad_iis_mgmt_api.zip
+        subject-path: |
+          nomad_iis_mgmt_api/nomad_iis.exe
+          nomad_iis_mgmt_api.zip
         sbom-path: nomad_iis_mgmt_api-sbom/nomad_iis_mgmt_api.sbom.json
 
     # Create the Release
