@@ -5,18 +5,18 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageVersion Include="Grpc.AspNetCore" Version="2.80.0" />
-		<PackageVersion Include="Grpc.AspNetCore.HealthChecks" Version="2.80.0" />
-		<PackageVersion Include="Grpc.AspNetCore.Server.Reflection" Version="2.80.0" />
+		<PackageVersion Include="Grpc.AspNetCore" Version="2.83.0" />
+		<PackageVersion Include="Grpc.AspNetCore.HealthChecks" Version="2.83.0" />
+		<PackageVersion Include="Grpc.AspNetCore.Server.Reflection" Version="2.83.0" />
 		<PackageVersion Include="MessagePack" Version="3.1.8" />
 		<PackageVersion Include="Microsoft.Web.Administration" Version="11.1.0" />
 		<PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
-		<PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.21.0" />
-		<PackageVersion Include="Microsoft.Playwright" Version="1.61.0" />
-		<PackageVersion Include="CliWrap" Version="3.10.3" />
-		<PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
+		<PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.22.0" />
+		<PackageVersion Include="Microsoft.Playwright" Version="1.62.0" />
+		<PackageVersion Include="CliWrap" Version="3.10.4" />
+		<PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
 		<PackageVersion Include="xunit" Version="2.9.3" />
-		<PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+		<PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
 		<PackageVersion Include="coverlet.collector" Version="10.0.1" />
 	</ItemGroup>
 </Project>
