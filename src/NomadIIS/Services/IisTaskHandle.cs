@@ -53,6 +53,8 @@ public sealed class IisTaskHandle : IDisposable
 	private bool _appPoolStoppedIntentionally = false;
 #pragma warning restore CS0414 // Dem Feld "IisTaskHandle._appPoolStoppedIntentionally" wurde ein Wert zugewiesen, der aber nie verwendet wird.
 
+	private LogShipper? _logShipper;
+
 	internal IisTaskHandle ( ManagementService owner, ILogger logger, string taskId )
 	{
 		if ( string.IsNullOrWhiteSpace( taskId ) )
@@ -86,6 +88,10 @@ public sealed class IisTaskHandle : IDisposable
 			config = MessagePackHelper.Deserialize<DriverTaskConfig>( task.MsgpackDriverConfig );
 
 			ValidateAndCoerceTaskConfiguration( config );
+
+			// Must happen before the IIS objects are created, because enabling ANCM stdout
+			// logging rewrites web.config which would otherwise restart the application.
+			_state.LogShipping = SetupLogShipping( task, config );
 
 			await _owner.LockAsync( async handle =>
 			{
@@ -210,7 +216,102 @@ public sealed class IisTaskHandle : IDisposable
 			// Note: We do not rethrow here because the website has already been set-up.
 		}
 
+		// A freshly started task reads its log files from the beginning, because they have
+		// just been created by the application we started.
+		StartLogShipper( startAtEnd: false );
+
 		return _state;
+	}
+
+	/// <summary>
+	/// Resolves the log shipping settings and prepares everything the application needs to
+	/// produce the log files. Returns null when log shipping is not configured.
+	/// </summary>
+	private LogShippingState? SetupLogShipping ( TaskConfig task, DriverTaskConfig config )
+	{
+		var logging = config.Logging;
+
+		if ( logging is null || !logging.Enabled )
+			return null;
+
+		var taskDirectory = Path.Combine( task.AllocDir, task.Name );
+
+		string pattern;
+
+		if ( logging.AspNetCoreStdout )
+		{
+			var logDirectory = Path.Combine( taskDirectory, AspNetCoreModuleHelper.StdoutLogDirectory );
+
+			Directory.CreateDirectory( logDirectory );
+
+			// ANCM resolves a relative stdoutLogFile against the application directory, but our
+			// log directory is shared by all applications of the task, so pass an absolute path.
+			var logFilePrefix = Path.Combine( logDirectory, AspNetCoreModuleHelper.StdoutLogFilePrefix );
+
+			var patched = 0;
+
+			foreach ( var app in config.Applications )
+			{
+				var physicalPath = ResolveApplicationPath( task, app.Path );
+
+				if ( AspNetCoreModuleHelper.TryEnableStdoutLogging( physicalPath, logFilePrefix, _logger ) )
+					patched++;
+			}
+
+			if ( patched == 0 )
+			{
+				_logger.LogWarning( $"Task {task.Id}: aspnetcore_stdout is enabled but no application contains an aspNetCore section in its web.config. No logs will be shipped." );
+
+				return null;
+			}
+
+			pattern = AspNetCoreModuleHelper.StdoutLogPattern;
+		}
+		else
+		{
+			// Already sanitized by ValidateAndCoerceTaskConfiguration.
+			pattern = logging.File!;
+		}
+
+		return new LogShippingState()
+		{
+			RootDirectory = taskDirectory,
+			Pattern = pattern,
+			PollInterval = logging.PollInterval,
+			MaxBytesPerSecond = logging.MaxBytesPerSecond
+		};
+	}
+
+	private void StartLogShipper ( bool startAtEnd )
+	{
+		var settings = _state?.LogShipping;
+
+		if ( settings is null || _taskConfig is null || string.IsNullOrEmpty( _taskConfig.StdoutPath ) )
+			return;
+
+		_logShipper = new LogShipper(
+			_logger,
+			_taskConfig.Id,
+			_taskConfig.StdoutPath,
+			settings.RootDirectory,
+			settings.Pattern,
+			settings.PollInterval,
+			settings.MaxBytesPerSecond,
+			startAtEnd );
+
+		// Runs until the handle is disposed. Exceptions are handled inside RunAsync.
+		_ = Task.Run( () => _logShipper.RunAsync( _ctsDisposed.Token ) );
+	}
+
+	private static string ResolveApplicationPath ( TaskConfig taskConfig, string path )
+	{
+		var physicalPath = path.Replace( '/', '\\' );
+
+		// If the path is not an absolute path, make it relative to the task-directory.
+		if ( !Path.IsPathRooted( physicalPath ) )
+			physicalPath = Path.Combine( taskConfig.AllocDir, taskConfig.Name, physicalPath );
+
+		return physicalPath;
 	}
 
 	private void ValidateAndCoerceTaskConfiguration ( DriverTaskConfig config )
@@ -251,6 +352,22 @@ public sealed class IisTaskHandle : IDisposable
 
 			if ( !config.Applications.Any( x => x.ApplicationPool == appPool.Name ) )
 				config.ApplicationPools = config.ApplicationPools.Except( [appPool] ).ToArray();
+		}
+
+		var logging = config.Logging;
+		if ( logging is not null && logging.Enabled )
+		{
+			var hasFile = !string.IsNullOrWhiteSpace( logging.File );
+
+			if ( !hasFile && !logging.AspNetCoreStdout )
+				throw new ArgumentException( "The logging block needs either file or aspnetcore_stdout to be set." );
+			if ( hasFile && logging.AspNetCoreStdout )
+				throw new ArgumentException( "file and aspnetcore_stdout cannot be combined in the logging block." );
+			if ( logging.MaxBytesPerSecond <= 0 )
+				throw new ArgumentException( "max_bytes_per_second must be greater than zero." );
+
+			if ( hasFile )
+				logging.File = FileSystemHelper.SanitizeRelativePath( logging.File! );
 		}
 
 		if ( !string.IsNullOrEmpty( config.TargetWebsite ) )
@@ -435,6 +552,11 @@ public sealed class IisTaskHandle : IDisposable
 		_isRecovered = true;
 
 		_logger.LogInformation( $"Recovered task {_taskConfig.Id} from state (v{request.Handle.Version}): {_state}" );
+
+		// Resume at the end of the existing files. Everything written before the driver
+		// restarted has already been persisted by logmon, so reading from the start would
+		// duplicate it.
+		StartLogShipper( startAtEnd: true );
 	}
 
 	public async Task SignalAsync ( string signal )
@@ -542,6 +664,13 @@ public sealed class IisTaskHandle : IDisposable
 	public void Dispose ()
 	{
 		_ctsDisposed.Cancel();
+
+		if ( _logShipper is not null )
+		{
+			// RunAsync observes the cancellation above, this only releases the pipe.
+			_ = _logShipper.DisposeAsync().AsTask();
+			_logShipper = null;
+		}
 
 		_owner.Delete( this );
 	}
@@ -1040,13 +1169,8 @@ public sealed class IisTaskHandle : IDisposable
 			throw new ArgumentNullException( $"Missing application path." );
 
 		var alias = $"/{appConfig.Alias}";
-		var physicalPath = appConfig.Path.Replace( '/', '\\' );
 
-		// If the path is not an absolute path, make it relative to the task-directory.
-		if ( !Path.IsPathRooted( physicalPath ) )
-			physicalPath = Path.Combine( taskConfig.AllocDir, taskConfig.Name, physicalPath );
-
-		var diPhysicalPath = new DirectoryInfo( physicalPath );
+		var diPhysicalPath = new DirectoryInfo( ResolveApplicationPath( taskConfig, appConfig.Path ) );
 
 		// Check if we want to use a placeholder app
 		if ( Directory.Exists( managementService.PlaceholderAppPath ) )

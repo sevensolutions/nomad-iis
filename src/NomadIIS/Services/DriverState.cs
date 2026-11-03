@@ -64,6 +64,36 @@ public class DriverStateV2
 	[Key( 6 )]
 	public List<string>? ServiceAutoStartProviderNames { get; set; }
 
+	/// <summary>
+	/// The resolved log shipping settings. These have to live in the driver state because
+	/// MsgpackDriverConfig is empty when nomad asks us to recover a task, so the task
+	/// configuration is not available at that point.
+	/// </summary>
+	[Key( 7 )]
+	public LogShippingState? LogShipping { get; set; }
+
 	public override string ToString ()
 		=> $"Website: {WebsiteName}, StartDate: {StartDate.ToLocalTime()}";
+}
+
+[MessagePackObject]
+public class LogShippingState
+{
+	/// <summary>
+	/// Absolute directory the pattern is resolved against.
+	/// </summary>
+	[Key( 0 )]
+	public string RootDirectory { get; set; } = default!;
+
+	/// <summary>
+	/// File name pattern, relative to <see cref="RootDirectory"/>, may contain a wildcard.
+	/// </summary>
+	[Key( 1 )]
+	public string Pattern { get; set; } = default!;
+
+	[Key( 2 )]
+	public TimeSpan PollInterval { get; set; }
+
+	[Key( 3 )]
+	public long MaxBytesPerSecond { get; set; }
 }

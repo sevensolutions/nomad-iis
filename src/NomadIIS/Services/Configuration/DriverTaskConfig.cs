@@ -39,6 +39,46 @@ public sealed class DriverTaskConfig
 
 	[ConfigurationCollectionField( "service_auto_start_providers", "service_auto_start_provider" )]
 	public DriverTaskConfigServiceAutoStartProvider[]? ServiceAutoStartProviders { get; set; }
+
+	[ConfigurationCollectionField( "logging", "logging", 0, 1 )]
+	public DriverTaskConfigLogging[] Loggings { get; set; } = default!;
+
+	public DriverTaskConfigLogging? Logging
+		=> Loggings is not null && Loggings.Length == 1 ? Loggings[0] : null;
+}
+
+public sealed class DriverTaskConfigLogging
+{
+	[DefaultValue( true )]
+	[ConfigurationField( "enabled" )]
+	public bool Enabled { get; set; } = true;
+
+	/// <summary>
+	/// The log file to tail, relative to the task directory. May contain a wildcard, which is
+	/// required for appenders that put a timestamp or process id in the file name.
+	/// </summary>
+	[ConfigurationField( "file" )]
+	public string? File { get; set; }
+
+	/// <summary>
+	/// Enables ASP.NET Core Module stdout logging for every application of this task and tails
+	/// the resulting files. This captures the real stdout of the .NET process without the
+	/// application having to be configured for it.
+	/// </summary>
+	[DefaultValue( false )]
+	[ConfigurationField( "aspnetcore_stdout" )]
+	public bool AspNetCoreStdout { get; set; }
+
+	[DefaultValue( "1s" )]
+	[ConfigurationField( "poll_interval" )]
+	public TimeSpan PollInterval { get; set; } = TimeSpan.FromSeconds( 1 );
+
+	/// <summary>
+	/// Upper bound on how much log data is forwarded to nomad per second.
+	/// </summary>
+	[DefaultValue( 1048576 )]
+	[ConfigurationField( "max_bytes_per_second" )]
+	public long MaxBytesPerSecond { get; set; } = 1048576;
 }
 
 public sealed class DriverTaskConfigApplicationPool : DriverTaskConfigExtendable

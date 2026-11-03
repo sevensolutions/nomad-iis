@@ -19,6 +19,7 @@ The old one will be removed in the next version. Please make sure you migrate yo
 | permit_iusr                      | bool       | no       | true          | Specifies whether you want to permit the [IUSR-account](https://learn.microsoft.com/en-us/iis/get-started/planning-for-security/understanding-built-in-user-and-group-accounts-in-iis#understanding-the-new-iusr-account) on the _local_ directory. When you disable this, you may need to tweak your _web.config_ a bit. Read [this](./faq.md#iusr-account) for details. |
 | _binding_                        | block list | yes      | _none_        | Defines one or two port bindings. See _binding_ schema below for details.                                                                                                                                                                                                                                                                                                 |
 | _service_auto_start_provider_    | block list | no       | _none_        | Registers one or more service auto-start providers in the global IIS `applicationHost.config`. See _service_auto_start_provider_ schema below for details.                                                                                                                                                                                                                |
+| _logging_                        | block list | no       | _none_        | Ships an application log file to the Nomad client so it appears in `nomad alloc logs` and the Nomad UI. See _logging_ schema below and the details [here](../features/logging.md).                                                        |
 
 ## `application_pool` Block
 
@@ -152,6 +153,43 @@ config {
     service_auto_start_enabled  = true
     service_auto_start_provider = "MyPreloadProvider"
   }
+}
+```
+
+</details>
+
+## `logging` Block
+
+:::info
+Only one `logging` block is supported per task. Read [this](../features/logging.md) for background and limitations.
+:::
+
+| Option               | Type   | Required | Default Value | Description                                                                                                                                                                                                      |
+| -------------------- | ------ | -------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| enabled              | bool   | no       | true          | Allows disabling log shipping without removing the block.                                                                                                                                                        |
+| file                 | string | no       | _none_        | The log file to tail, relative to the task directory. May contain a wildcard (e.g. `local/logs/app-*.log`), which is needed for appenders that put a date or process id in the file name.                        |
+| aspnetcore_stdout    | bool   | no       | false         | Enables ASP.NET Core Module stdout logging for every application of the task and tails the result. This captures the real stdout of the .NET process. Mutually exclusive with `file`.                            |
+| poll_interval        | string | no       | 1s            | How often the log files are checked for new content. The smallest possible value is 100ms.                                                                                                                       |
+| max_bytes_per_second | number | no       | 1048576       | Upper bound on how much log data is forwarded per second, so that a chatty application cannot flood the Nomad client.                                                                                             |
+
+<details>
+<summary>Short Example</summary>
+
+```hcl
+config {
+  application {
+    path = "local"
+  }
+
+  # Capture the stdout of an ASP.NET Core app
+  logging {
+    aspnetcore_stdout = true
+  }
+
+  # ...or tail a rolling log file written by the app
+  #logging {
+  #  file = "local/logs/app-*.log"
+  #}
 }
 ```
 

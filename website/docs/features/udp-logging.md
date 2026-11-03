@@ -7,6 +7,9 @@ sidebar_position: 7
 :::danger
 This feature is deprecated and has been removed in version 0.16.0!
 See [GH-116](https://github.com/sevensolutions/nomad-iis/issues/116) for details.
+
+Use [Logging](./logging.md) instead, which tails a log file written by the app rather than
+requiring the app to send its log events over UDP.
 :::
 
 Unfortunately, IIS doesn't attach a Console to the *w3wp* processes and therefore *STDOUT* and *STDERR* streams are not available.
