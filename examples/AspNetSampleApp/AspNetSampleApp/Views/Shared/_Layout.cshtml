@@ -1,39 +1,33 @@
 ﻿<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>@ViewBag.Title - Sample ASP.NET-Application</title>
-    @Styles.Render("~/Content/css")
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>@ViewBag.Title - Sample ASP.NET Application</title>
+    <link rel="stylesheet" href="~/Content/Site.css" />
+    <script src="~/Scripts/site.js" defer></script>
 </head>
 <body>
-    <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-dark bg-dark">
+    <header class="site-header">
         <div class="container">
-            @Html.ActionLink("Sample App", "Index", "Home", new { area = "" }, new { @class = "navbar-brand" })
-
-            <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" title="Navigation umschalten" aria-controls="navbarSupportedContent"
-                    aria-expanded="false" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            
-            <div class="collapse navbar-collapse d-sm-inline-flex justify-content-between">
-                <ul class="navbar-nav flex-grow-1">
-                    <li>@Html.ActionLink("Home", "Index", "Home", new { area = "" }, new { @class = "nav-link" })</li>
-                </ul>
-            </div>
+            <a class="brand" href="@Url.Action("Index", "Home", new { area = "" })">
+                <picture>
+                    <source srcset="~/Content/images/logo-dark.svg" media="(prefers-color-scheme: dark)" />
+                    <img class="brand-logo" src="~/Content/images/logo.svg" alt="Nomad IIS" width="137" height="32" />
+                </picture>
+                <span class="brand-name">Sample App</span>
+            </a>
+            <span class="machine" title="Name of the machine serving this page">@Environment.MachineName</span>
         </div>
-    </nav>
-    <div class="container body-content">
-        @RenderBody()
-        <hr />
-        <footer>
-            <p>&copy; @DateTime.Now.Year - Sample ASP.NET-Application</p>
-        </footer>
-    </div>
+    </header>
 
-    @Scripts.Render("~/bundles/jquery")
-    @Scripts.Render("~/bundles/bootstrap")
-    @RenderSection("scripts", required: false)
+    <main class="container">
+        @RenderBody()
+    </main>
+
+    <footer class="site-footer">
+        <div class="container">&copy; @DateTime.Now.Year Sample ASP.NET Application</div>
+    </footer>
 </body>
 </html>

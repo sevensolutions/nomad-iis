@@ -1,4 +1,6 @@
 ﻿using AspNetSampleApp.Models;
+using log4net;
+using log4net.Appender;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -13,15 +15,18 @@ namespace AspNetSampleApp.Controllers
 {
 	public class HomeController : Controller
 	{
+		private static readonly ILog Log = LogManager.GetLogger( typeof( HomeController ) );
+
 		public ActionResult Index ()
 		{
-			return View( PopulateEnvironmentVariables( new HomeModel() ) );
+			return View( PopulateModel( new HomeModel() ) );
 		}
 
 		[HttpPost]
 		public ActionResult CheckPermissions ( string path, string submitButton )
 		{
 			var result = "";
+			var failed = false;
 
 			if ( !string.IsNullOrEmpty( path ) )
 			{
@@ -32,14 +37,62 @@ namespace AspNetSampleApp.Controllers
 				catch ( Exception ex )
 				{
 					result = $"💣 {ex.Message}";
+					failed = true;
 				}
 			}
 			else
-				result = "No path specified!";
-
-			return View( "Index", PopulateEnvironmentVariables( new HomeModel()
 			{
-				PermissionCheckResult = result
+				result = "No path specified!";
+				failed = true;
+			}
+
+			return View( "Index", PopulateModel( new HomeModel()
+			{
+				Path = path,
+				PermissionCheckResult = result,
+				PermissionCheckFailed = failed
+			} ) );
+		}
+
+		[HttpPost]
+		[ValidateInput( false )] // The message is free text. It only ends up in the log and HTML-encoded in the view.
+		public ActionResult WriteLog ( string message )
+		{
+			// Keep one message on one line, so it can't forge additional log entries.
+			var singleLineMessage = message?.Replace( "\r", " " ).Replace( "\n", " " ).Trim();
+
+			var result = "";
+			var failed = false;
+
+			if ( !string.IsNullOrEmpty( singleLineMessage ) )
+			{
+				// log4net doesn't report write errors to the caller, so check that the file actually changed.
+				var logFilePath = GetLogFilePath();
+				var lengthBefore = GetFileLength( logFilePath );
+
+				Log.Info( singleLineMessage );
+
+				if ( GetFileLength( logFilePath ) != lengthBefore )
+				{
+					result = "✔ Message written to the log!";
+				}
+				else
+				{
+					result = $"💣 The message could not be written to {logFilePath}.";
+					failed = true;
+				}
+			}
+			else
+			{
+				result = "No message specified!";
+				failed = true;
+			}
+
+			return View( "Index", PopulateModel( new HomeModel()
+			{
+				LogMessage = failed ? message : null,
+				LogResult = result,
+				LogFailed = failed
 			} ) );
 		}
 
@@ -79,20 +132,39 @@ namespace AspNetSampleApp.Controllers
 			}
 		}
 
+		private static string GetLogFilePath ()
+		{
+			return LogManager.GetRepository().GetAppenders().OfType<FileAppender>().FirstOrDefault()?.File;
+		}
+
+		private static long GetFileLength ( string path )
+		{
+			var file = new FileInfo( path );
+
+			return file.Exists ? file.Length : 0;
+		}
+
+		private static HomeModel PopulateModel ( HomeModel model )
+		{
+			model.LogFilePath = GetLogFilePath();
+
+			return PopulateEnvironmentVariables( model );
+		}
+
 		private static HomeModel PopulateEnvironmentVariables ( HomeModel model )
 		{
 			try
 			{
-				var sb = new StringBuilder();
+				var variables = new SortedDictionary<string, string>( StringComparer.OrdinalIgnoreCase );
 
 				foreach ( DictionaryEntry v in Environment.GetEnvironmentVariables() )
-					sb.AppendLine( $"{v.Key} = {v.Value}" );
+					variables[(string)v.Key] = (string)v.Value;
 
-				model.EnvironmentVariables = sb.ToString();
+				model.EnvironmentVariables = variables;
 			}
 			catch ( Exception ex )
 			{
-				model.EnvironmentVariables = $"💣 {ex.Message}";
+				model.EnvironmentVariablesError = $"💣 {ex.Message}";
 			}
 
 			return model;
