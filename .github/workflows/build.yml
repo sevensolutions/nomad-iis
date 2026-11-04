@@ -76,10 +76,7 @@ jobs:
       run: dotnet tool install --global CycloneDX
 
     - name: Generate SBOM
-      shell: pwsh
-      run: |
-        $version = Get-Content -Path ./version -Raw
-        dotnet-CycloneDX "./src/NomadIIS/NomadIIS.csproj" -o . -fn "${{ matrix.profile.artifactName }}.sbom.json" -F Json -tfm net10.0 -rt win-x64 -dpr -egl -gbt "${{ github.token }}" -sv "$version"
+      run: dotnet-CycloneDX "./src/NomadIIS/NomadIIS.csproj" -o . -fn "${{ matrix.profile.artifactName }}.sbom.json" -F Json -tfm net10.0 -rt win-x64 -dpr
 
     # Copy to output
     - name: Copy to output folder
