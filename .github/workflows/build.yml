@@ -57,9 +57,8 @@ jobs:
     # Extract and publish version
     - name: extract version
       run: |
-        Get-Content "./src/NomadIIS/PluginInfo.cs" | Select-String 'public static readonly string Version = "([0-9]+\.[0-9]+\.[0-9])";' | ForEach-Object {
-          $version = $_.Matches[0].Groups[1].Value
-        }
+        [xml]$project = Get-Content "./src/NomadIIS/NomadIIS.csproj"
+        $version = $project.Project.PropertyGroup.Version
         $version | Out-File -Path version -NoNewline
     - name: Upload version
       if: ${{ matrix.profile.artifactName == 'nomad_iis' }} # We only need to do this once
@@ -233,7 +232,7 @@ jobs:
 
         if [ "${{ github.event.inputs.version }}" != "${version}" ]
         then
-          echo "The specified release version doesn't match the version in the build. Please update PluginInfo.cs first."
+          echo "The specified release version doesn't match the version in the build. Please update the project version in src/NomadIIS/NomadIIS.csproj first."
           exit 1
         fi
 

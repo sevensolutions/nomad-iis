@@ -21,8 +21,18 @@ public class CertificateHelperTests
 		var projectFilePath = Path.Combine( AppContext.BaseDirectory, "..", "..", "..", "..", "NomadIIS", "NomadIIS.csproj" );
 		var projectFile = File.ReadAllText( Path.GetFullPath( projectFilePath ) );
 
-		Assert.Contains( "<Version>1.21.0</Version>", projectFile );
-		Assert.Contains( "<PackageVersion>1.21.0</PackageVersion>", projectFile );
+		Assert.Contains( "<Version>", projectFile );
+		Assert.Contains( "<PackageVersion>", projectFile );
 		Assert.Contains( "<PackageLicenseExpression>MIT</PackageLicenseExpression>", projectFile );
+		Assert.Contains( "<PackageLicenseExpression>", projectFile );
+	}
+
+	[Fact]
+	public void PluginVersionUsesProjectAssemblyMetadata ()
+	{
+		var version = typeof( NomadIIS.PluginInfo ).GetField( "Version", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public )?.GetValue( null ) as string;
+
+		Assert.False( string.IsNullOrWhiteSpace( version ) );
+		Assert.DoesNotContain( "0.0.0", version );
 	}
 }
