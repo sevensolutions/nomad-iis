@@ -5,6 +5,11 @@
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>disable</ImplicitUsings>
 		<AssemblyName>nomad_iis</AssemblyName>
+		<Version>1.21.0</Version>
+		<PackageVersion>1.21.0</PackageVersion>
+		<PackageLicenseExpression>MIT</PackageLicenseExpression>
+		<PackageProjectUrl>https://github.com/sevensolutions/nomad-iis</PackageProjectUrl>
+		<RepositoryUrl>https://github.com/sevensolutions/nomad-iis</RepositoryUrl>
 		<IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
 		<Product>Windows IIS Driver for HashiCorp Nomad</Product>
 		<ProductName>Windows IIS Driver for HashiCorp Nomad</ProductName>
