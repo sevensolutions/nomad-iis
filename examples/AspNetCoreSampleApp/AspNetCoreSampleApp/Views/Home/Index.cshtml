@@ -1,0 +1,97 @@
+﻿@model HomeModel
+@{
+    ViewBag.Title = "Home";
+}
+
+<section class="card" aria-labelledby="permissions-title">
+	<h1 id="permissions-title">Permission Tester</h1>
+	<p class="lead">Check which directories and files this web application has access to.</p>
+
+	<form action="@Url.Action("CheckPermissions", "Home")" method="post">
+		<label for="path">Path</label>
+		<input type="text" id="path" name="path" value="@Model.Path" placeholder="C:\inetpub\wwwroot\file.txt" spellcheck="false" autocomplete="off" required />
+
+		<div class="actions">
+			<button type="submit" name="submitButton" value="FileExists">Check File Exists</button>
+			<button type="submit" name="submitButton" value="ReadFile">Read File</button>
+			<button type="submit" name="submitButton" value="ListDirectory">List Directory</button>
+			<span class="actions-divider" aria-hidden="true"></span>
+			<button type="submit" name="submitButton" value="WriteFile" title="Overwrites the file with &quot;Hello World&quot;">Write File</button>
+			<button type="submit" class="danger" name="submitButton" value="DeleteFile">Delete File</button>
+		</div>
+	</form>
+
+	@if (Model.PermissionCheckResult != null)
+	{
+		<div class="result @(Model.PermissionCheckFailed ? "result-failed" : "")" role="status">
+			<div class="result-header">
+				<span>Result</span>
+				<button type="button" class="link" data-copy="#result-text" hidden>Copy</button>
+			</div>
+			<pre id="result-text">@Model.PermissionCheckResult</pre>
+		</div>
+	}
+</section>
+
+<section class="card" id="logging" aria-labelledby="logging-title">
+	<h1 id="logging-title">Logging</h1>
+	<p class="lead">Write a message using the built-in <code>ILogger&lt;HomeController&gt;</code>.</p>
+
+	<form action="@Url.Action("WriteLog", "Home")#logging" method="post">
+		<label for="log-message">Message</label>
+		<input type="text" id="log-message" name="message" value="@Model.LogMessage" autocomplete="off" required />
+
+		<div class="actions">
+			<button type="submit">Write to Log</button>
+		</div>
+	</form>
+
+	<p class="hint">IIS doesn't attach a console, so under IIS the output is captured in <code>logs\stdout_*.log</code> in the site directory. That file is buffered, so a message may only show up once the buffer is full or the app stops. With <code>dotnet run</code> it goes to the console.</p>
+
+	@if (Model.LogResult != null)
+	{
+		<div class="result @(Model.LogFailed ? "result-failed" : "")" role="status">
+			<pre>@Model.LogResult</pre>
+		</div>
+	}
+</section>
+
+<section class="card" aria-labelledby="environment-title">
+	<h1 id="environment-title">Environment Variables</h1>
+	<p class="lead">All environment variables this web application has access to.</p>
+
+	@if (Model.EnvironmentVariablesError != null)
+	{
+		<div class="result result-failed" role="status">
+			<pre>@Model.EnvironmentVariablesError</pre>
+		</div>
+	}
+	else
+	{
+		<div class="filter" id="environment-filter" hidden>
+			<label for="environment-search">Filter</label>
+			<input type="search" id="environment-search" placeholder="Filter by name or value" spellcheck="false" autocomplete="off" />
+			<output id="environment-count" for="environment-search"></output>
+		</div>
+
+		<div class="table-wrapper">
+			<table id="environment-table">
+				<thead>
+					<tr>
+						<th scope="col">Name</th>
+						<th scope="col">Value</th>
+					</tr>
+				</thead>
+				<tbody>
+					@foreach (var variable in Model.EnvironmentVariables)
+					{
+						<tr>
+							<th scope="row">@variable.Key</th>
+							<td>@variable.Value</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	}
+</section>
