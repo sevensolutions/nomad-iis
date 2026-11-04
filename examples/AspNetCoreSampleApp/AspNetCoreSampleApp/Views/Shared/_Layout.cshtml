@@ -1,0 +1,33 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>@ViewBag.Title - Sample ASP.NET Core Application</title>
+    <link rel="stylesheet" href="~/css/site.css" />
+    <script src="~/js/site.js" defer></script>
+</head>
+<body>
+    <header class="site-header">
+        <div class="container">
+            <a class="brand" href="@Url.Action("Index", "Home")">
+                <picture>
+                    <source srcset="~/images/logo-dark.svg" media="(prefers-color-scheme: dark)" />
+                    <img class="brand-logo" src="~/images/logo.svg" alt="Nomad IIS" width="137" height="32" />
+                </picture>
+                <span class="brand-name">ASP.NET Core Sample App</span>
+            </a>
+            <span class="machine" title="Name of the machine serving this page">@Environment.MachineName</span>
+        </div>
+    </header>
+
+    <main class="container">
+        @RenderBody()
+    </main>
+
+    <footer class="site-footer">
+        <div class="container">&copy; @DateTime.Now.Year Sample ASP.NET Core Application</div>
+    </footer>
+</body>
+</html>
