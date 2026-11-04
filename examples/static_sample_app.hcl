@@ -18,7 +18,7 @@ job "static-sample-app" {
       driver = "iis"
 
       artifact {
-        source = "https://github.com/sevensolutions/nomad-iis/raw/main/examples/static-sample-app.zip"
+        source = "https://github.com/sevensolutions/nomad-iis/releases/latest/download/static-sample-app.zip"
         destination = "local"
       }
 
