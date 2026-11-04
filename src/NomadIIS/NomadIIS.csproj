@@ -13,7 +13,7 @@
 		<IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
 		<Product>Windows IIS Driver for HashiCorp Nomad</Product>
 		<ProductName>Windows IIS Driver for HashiCorp Nomad</ProductName>
-		<Copyright>(C) Copyright 2025, Daniel Peinhopf</Copyright>
+		<Copyright>(C) Copyright 2026, Daniel Peinhopf</Copyright>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)' == 'Debug'">
