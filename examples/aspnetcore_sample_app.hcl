@@ -26,6 +26,10 @@ job "aspnetcore-sample-app" {
         application {
           path = "local"
         }
+		
+        application_pool {
+          managed_runtime_version = "None"
+        }
 
         binding {
           type = "http"
