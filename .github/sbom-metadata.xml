@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<bom xmlns="http://cyclonedx.org/schema/bom/1.7">
+  <metadata>
+    <component type="application">
+      <licenses>
+        <license>
+          <id>MIT</id>
+        </license>
+      </licenses>
+    </component>
+  </metadata>
+</bom>
