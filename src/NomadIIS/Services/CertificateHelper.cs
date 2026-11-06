@@ -118,7 +118,7 @@ internal static class CertificateHelper
 		if ( pfxBytes is null )
 			throw new ArgumentException( nameof( pfxBytes ) );
 
-		var certificate = new X509Certificate2( pfxBytes, password,
+		var certificate = X509CertificateLoader.LoadPkcs12( pfxBytes, password,
 			X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.Exportable );
 
 		return certificate;
@@ -146,8 +146,9 @@ internal static class CertificateHelper
 		var certBase64 = ExtractBase64Content( pemContent, "CERTIFICATE" );
 		var certBytes = Convert.FromBase64String( certBase64 );
 
-		return new X509Certificate2( certBytes, (string?)null,
-			X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.Exportable );
+		// The PEM certificate contains only the public part; the private key is attached later via CopyWithPrivateKey,
+		// so key storage flags don't apply here.
+		return X509CertificateLoader.LoadCertificate( certBytes );
 	}
 	private static RSA LoadPrivateKeyFromPem ( string pemContent )
 	{
