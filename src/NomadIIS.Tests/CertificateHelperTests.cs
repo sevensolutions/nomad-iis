@@ -1,6 +1,4 @@
-﻿using System;
-using System.IO;
-using NomadIIS.Services;
+﻿using NomadIIS.Services;
 
 namespace NomadIIS.Tests;
 
@@ -14,5 +12,4 @@ public class CertificateHelperTests
 		Assert.NotNull( certificate );
 		Assert.Equal( "CN=localhost", certificate.Subject );
 	}
-
 }
