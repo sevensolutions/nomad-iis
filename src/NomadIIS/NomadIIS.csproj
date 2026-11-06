@@ -5,10 +5,12 @@
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>disable</ImplicitUsings>
 		<AssemblyName>nomad_iis</AssemblyName>
+		<Version>1.21.0</Version>
+		<RepositoryUrl>https://github.com/sevensolutions/nomad-iis</RepositoryUrl>
 		<IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
 		<Product>Windows IIS Driver for HashiCorp Nomad</Product>
 		<ProductName>Windows IIS Driver for HashiCorp Nomad</ProductName>
-		<Copyright>(C) Copyright 2025, Daniel Peinhopf</Copyright>
+		<Copyright>(C) Copyright 2026, Daniel Peinhopf</Copyright>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)' == 'Debug'">

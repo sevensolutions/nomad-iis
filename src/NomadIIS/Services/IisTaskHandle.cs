@@ -1002,6 +1002,9 @@ public sealed class IisTaskHandle : IDisposable
 
 							usedCertificate = await CertificateHelper.InstallPfxCertificateAsync( temFile, randomPassword );
 
+							if ( usedCertificate is null )
+								throw new Exception( $"Failed to install self-signed certificate because it wasn't found after install." );
+
 							await SendTaskEventAsync( $"Installed self-signed certificate: {usedCertificate.Value.Certificate.Thumbprint}" );
 						}
 						else
