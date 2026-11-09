@@ -98,6 +98,51 @@ jobs:
         name: ${{ matrix.profile.artifactName }}-sbom
         path: ./${{ matrix.profile.artifactName }}.sbom.json
 
+  build-samples:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Install .NET Core
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 10.0.x
+
+    # The ASP.NET sample targets .NET Framework 4.8 and can't be built with the dotnet CLI
+    - name: Install MSBuild
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Publish ASP.NET sample app
+      run: |
+        msbuild ./examples/AspNetSampleApp/AspNetSampleApp.sln -t:Restore -p:RestorePackagesConfig=true
+        msbuild ./examples/AspNetSampleApp/AspNetSampleApp/AspNetSampleApp.csproj -p:Configuration=Release -p:DeployOnBuild=true -p:PublishProfile=FolderProfile "-p:PublishUrl=$env:GITHUB_WORKSPACE\dist\aspnet-sample-app"
+
+    - name: Publish ASP.NET Core sample app
+      run: dotnet publish ./examples/AspNetCoreSampleApp/AspNetCoreSampleApp/AspNetCoreSampleApp.csproj -c Release -o ./dist/aspnetcore-sample-app
+
+    - name: Upload ASP.NET sample app
+      uses: actions/upload-artifact@v4
+      with:
+        name: aspnet-sample-app
+        path: ./dist/aspnet-sample-app
+        if-no-files-found: error
+
+    - name: Upload ASP.NET Core sample app
+      uses: actions/upload-artifact@v4
+      with:
+        name: aspnetcore-sample-app
+        path: ./dist/aspnetcore-sample-app
+        if-no-files-found: error
+
+    - name: Upload static sample app
+      uses: actions/upload-artifact@v4
+      with:
+        name: static-sample-app
+        path: ./examples/StaticSampleApp
+        if-no-files-found: error
+
   test:
     runs-on: windows-latest
     needs: ["build"]
@@ -184,7 +229,7 @@ jobs:
 
   release:
     runs-on: ubuntu-latest
-    needs: ["build"]
+    needs: ["build", "build-samples"]
     if: ${{ github.event.inputs.release == 'true' }}
 
     permissions:
@@ -219,6 +264,18 @@ jobs:
       with:
         name: nomad_iis_mgmt_api-sbom
         path: nomad_iis_mgmt_api-sbom
+    - uses: actions/download-artifact@v4
+      with:
+        name: aspnet-sample-app
+        path: aspnet-sample-app
+    - uses: actions/download-artifact@v4
+      with:
+        name: aspnetcore-sample-app
+        path: aspnetcore-sample-app
+    - uses: actions/download-artifact@v4
+      with:
+        name: static-sample-app
+        path: static-sample-app
 
     # Read version
     - name: read and verify version
@@ -242,6 +299,18 @@ jobs:
       with:
         files: ./nomad_iis_mgmt_api
         dest: nomad_iis_mgmt_api.zip
+    - uses: ./.github/actions/action-zip
+      with:
+        files: ./aspnet-sample-app
+        dest: aspnet-sample-app.zip
+    - uses: ./.github/actions/action-zip
+      with:
+        files: ./aspnetcore-sample-app
+        dest: aspnetcore-sample-app.zip
+    - uses: ./.github/actions/action-zip
+      with:
+        files: ./static-sample-app
+        dest: static-sample-app.zip
 
     # Generate signed build provenance attestations for the release assets
     - name: Attest build provenance
@@ -252,6 +321,9 @@ jobs:
           nomad_iis.zip
           nomad_iis_mgmt_api/nomad_iis.exe
           nomad_iis_mgmt_api.zip
+          aspnet-sample-app.zip
+          aspnetcore-sample-app.zip
+          static-sample-app.zip
 
     # Generate signed SBOM attestations for the release assets
     - name: Attest SBOM (nomad_iis)
@@ -281,3 +353,6 @@ jobs:
           nomad_iis_mgmt_api.zip
           nomad_iis-sbom/nomad_iis.sbom.json
           nomad_iis_mgmt_api-sbom/nomad_iis_mgmt_api.sbom.json
+          aspnet-sample-app.zip
+          aspnetcore-sample-app.zip
+          static-sample-app.zip

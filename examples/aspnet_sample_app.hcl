@@ -18,7 +18,7 @@ job "aspnet-sample-app" {
       driver = "iis"
 
       artifact {
-        source = "https://github.com/sevensolutions/nomad-iis/raw/main/examples/aspnet-sample-app.zip"
+        source = "https://github.com/sevensolutions/nomad-iis/releases/latest/download/aspnet-sample-app.zip"
         destination = "local"
       }
 
