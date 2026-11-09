@@ -117,7 +117,13 @@ var app = builder.Build();
 
 #if MANAGEMENT_API
 if ( managementApiPort > 0 )
-	app.UseAuthentication();
+{
+	// Only authenticate requests targeting the management API port.
+	// Otherwise every (e.g. gRPC) request would run through the API-key handler and flood the log.
+	app.UseWhen(
+		context => context.Request.Host.Port == managementApiPort,
+		branch => branch.UseAuthentication() );
+}
 #endif
 
 app.UseRouting();
