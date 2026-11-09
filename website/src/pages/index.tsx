@@ -106,7 +106,7 @@ export default function Home(): JSX.Element {
       title={siteConfig.title}
       description="A TaskDriver plugin for HashiCorp Nomad to run IIS workloads on Windows.">
 
-      <ReleaseBanner />
+      {/* <ReleaseBanner /> */}
 
       {/* ── Hero ── */}
       <section className={styles.hero}>
